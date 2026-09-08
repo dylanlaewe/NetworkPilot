@@ -1,0 +1,2 @@
+import {renderToStaticMarkup} from "react-dom/server";import{describe,expect,it}from"vitest";import{DraftSafetyNotice}from"./draft-safety-notice";
+describe("Draft Studio safety notice",()=>{it("states every simulation boundary",()=>{const html=renderToStaticMarkup(<DraftSafetyNotice/>);for(const text of ["Fictional prospects","No email delivery","public company metadata only","Approval does not send anything","No email adapter exists","Draft only"])expect(html).toContain(text);expect(html).not.toContain(">Send<");});});

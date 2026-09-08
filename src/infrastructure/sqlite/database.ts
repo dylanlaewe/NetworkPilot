@@ -3,13 +3,17 @@ import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { DecisionReasonCode, Industry, OutreachEvent, OutreachEventType, Prospect, QualificationDecision } from "@/domain/outreach";
 import type { PersistedDecision, RunSummary, SimulationRepository, SimulationRunView } from "@/application/simulation/types";
+import type { DraftRecord, DraftStatus, DraftStudioRepository, SelectedDraftRecipient } from "@/application/drafts/types";
+import type { PersonalizationEvidence } from "@/domain/drafting";
+import type { ScoreComponent, TargetCompany } from "@/domain/targeting";
 
 export const DEFAULT_DATABASE_PATH = "data/networkpilot.sqlite";
 
 type RunRow = { id: string; campaign_date: string; campaign_timezone: string; started_at_utc: string; completed_at_utc: string; status: RunSummary["status"]; target: number; selected_count: number; shortfall: number };
 type DecisionRow = { prospect_id: string; reason_code: DecisionReasonCode; accepted: number; prospect_name_snapshot: string; company_name_snapshot: string; industry_snapshot: Industry; email_snapshot: string; years_experience_snapshot: number; relevance_score_snapshot: number };
 
-export class SqliteSimulationRepository implements SimulationRepository {
+type DraftRow={id:string;prospect_id:string;run_id:string|null;template_id:string;template_version:string;subject:string;body:string;fact_ids_json:string;evidence_ids_json:string;targeting_score_version:string;targeting_score:number;score_components_json:string;status:DraftStatus;created_at_utc:string;updated_at_utc:string;industry:string;role_family_id:string;company_name:string;prospect_name:string};
+export class SqliteSimulationRepository implements SimulationRepository, DraftStudioRepository {
   readonly native: Database.Database;
   constructor(databasePath = process.env.NETWORKPILOT_DATABASE_PATH ?? DEFAULT_DATABASE_PATH) {
     if (databasePath !== ":memory:") mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -61,4 +65,22 @@ export class SqliteSimulationRepository implements SimulationRepository {
   recentRuns(limit: number): RunSummary[] { return (this.native.prepare("SELECT * FROM simulation_runs ORDER BY campaign_date DESC LIMIT ?").all(limit) as RunRow[]).map((row) => this.summary(row)); }
   countSuppressions(): number { return (this.native.prepare("SELECT COUNT(*) count FROM suppression_entries").get() as { count: number }).count; }
   countProspects(): number { return (this.native.prepare("SELECT COUNT(*) count FROM prospects").get() as { count: number }).count; }
+  listCompletedRuns():RunSummary[] { return (this.native.prepare("SELECT * FROM simulation_runs WHERE status='completed' ORDER BY campaign_date DESC").all() as RunRow[]).map((row)=>this.summary(row)); }
+  listSelectedRecipients(runId:string):SelectedDraftRecipient[] {
+    const rows=this.native.prepare(`SELECT p.id,p.first_name,p.last_name,c.name company_name,c.industry,p.years_experience,p.relevance_score FROM qualification_decisions q JOIN prospects p ON p.id=q.prospect_id JOIN companies c ON c.id=p.company_id WHERE q.run_id=? AND q.reason_code='selected' AND p.fictional=1 ORDER BY q.relevance_score_snapshot DESC,p.id`).all(runId) as Array<{id:string;first_name:string;last_name:string;company_name:string;industry:string;years_experience:number;relevance_score:number}>;
+    return rows.map((r)=>({id:r.id,firstName:r.first_name,prospectName:`${r.first_name} ${r.last_name}`,companyName:r.company_name,industry:r.industry,industryId:"",roleFamilyId:"",personaId:"",yearsExperience:r.years_experience,relevanceScore:r.relevance_score}));
+  }
+  listEvidence(prospectId:string):PersonalizationEvidence[] { return (this.native.prepare("SELECT * FROM personalization_evidence WHERE prospect_id=? ORDER BY id").all(prospectId) as Array<{id:string;source_type:"fictional-simulation";source_reference:string;reviewed_at_utc:string;factual_claim:string;verification_status:"verified"|"unverified"}>).map((r)=>({id:r.id,sourceType:r.source_type,sourceReference:r.source_reference,reviewedAt:r.reviewed_at_utc,claim:r.factual_claim,verificationStatus:r.verification_status})); }
+  saveDraft(input:Parameters<DraftStudioRepository["saveDraft"]>[0]):DraftRecord {
+    this.native.prepare("INSERT OR IGNORE INTO drafts(id,prospect_id,run_id,context_key,template_id,template_version,subject,body,fact_ids_json,evidence_ids_json,targeting_score_version,targeting_score,score_components_json,status,created_at_utc,updated_at_utc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.id,input.recipient.id,input.runId,input.runId,input.rendered.templateId,input.rendered.templateVersion,input.rendered.subject,input.rendered.body,JSON.stringify(input.rendered.referencedFactIds),JSON.stringify(input.rendered.evidenceIds),input.score.version,input.score.total,JSON.stringify(input.score.components),input.status,input.rendered.generatedAt,input.rendered.generatedAt);
+    const saved=this.listDrafts().find((draft)=>draft.id===input.id); if(!saved) throw new Error("Draft persistence failed"); return saved;
+  }
+  listDrafts(filters:Parameters<DraftStudioRepository["listDrafts"]>[0]={}):DraftRecord[] {
+    const clauses:string[]=[];const values:string[]=[];
+    if(filters?.runId){clauses.push("d.run_id=?");values.push(filters.runId);}if(filters?.industry){clauses.push("c.industry=?");values.push(filters.industry);}if(filters?.templateId){clauses.push("d.template_id=?");values.push(filters.templateId);}if(filters?.status){clauses.push("d.status=?");values.push(filters.status);}
+    const rows=this.native.prepare(`SELECT d.*,c.industry,c.name company_name,p.first_name||' '||p.last_name prospect_name,CASE c.industry WHEN 'Technology' THEN 'data-analytics' WHEN 'Defense' THEN 'technical-product' ELSE 'industry-professional' END role_family_id FROM drafts d JOIN prospects p ON p.id=d.prospect_id JOIN companies c ON c.id=p.company_id ${clauses.length?`WHERE ${clauses.join(" AND ")}`:""} ORDER BY d.created_at_utc DESC,d.id`).all(...values) as DraftRow[];
+    return rows.filter((r)=>!filters?.roleFamilyId||r.role_family_id===filters.roleFamilyId).map((r)=>{const evidenceIds=JSON.parse(r.evidence_ids_json) as string[];return{id:r.id,prospectId:r.prospect_id,runId:r.run_id,templateId:r.template_id,templateVersion:r.template_version,subject:r.subject,body:r.body,factIds:JSON.parse(r.fact_ids_json) as string[],evidenceIds,evidence:this.listEvidence(r.prospect_id).filter((item)=>evidenceIds.includes(item.id)),scoreVersion:r.targeting_score_version,score:r.targeting_score,scoreComponents:JSON.parse(r.score_components_json) as ScoreComponent[],status:r.status,createdAt:r.created_at_utc,updatedAt:r.updated_at_utc,industry:r.industry,roleFamilyId:r.role_family_id,companyName:r.company_name,prospectName:r.prospect_name};});
+  }
+  updateDraftStatus(id:string,status:"approved-for-simulation"|"rejected",at:Date):void { const result=this.native.prepare("UPDATE drafts SET status=?,updated_at_utc=? WHERE id=? AND (status IN ('generated','needs-review') OR status=?)").run(status,at.toISOString(),id,status);if(result.changes!==1)throw new Error(`Draft cannot transition to ${status}: ${id}`); }
+  listTargetCompanies():TargetCompany[] { return (this.native.prepare("SELECT * FROM target_companies ORDER BY company_tier,canonical_name").all() as Array<{id:string;canonical_name:string;industry_id:string;company_tier:TargetCompany["tier"];enabled:number;recognition_score:number;career_upside_score:number;technical_interest_score:number;geographic_relevance_json:string;rationale:string;provenance:string;last_reviewed_date:string;operator_notes:string}>).map((r)=>({id:r.id,canonicalName:r.canonical_name,industryId:r.industry_id,tier:r.company_tier,enabled:Boolean(r.enabled),recognitionScore:r.recognition_score,careerUpsideScore:r.career_upside_score,technicalInterestScore:r.technical_interest_score,geographicRelevance:JSON.parse(r.geographic_relevance_json) as string[],rationale:r.rationale,provenance:r.provenance,lastReviewedDate:r.last_reviewed_date,operatorNotes:r.operator_notes})); }
 }

@@ -15,6 +15,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The default campaign timezone is `America/New_York`.
 
+The simulation-only Draft Studio is available at [http://localhost:3000/draft-studio](http://localhost:3000/draft-studio). Run `npm run db:migrate` and `npm run db:seed` again after upgrading so the public target-company registry, fictional evidence, and draft schema are present.
+
 ## Local database
 
 The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABASE_PATH` to another local file when needed. Database files, SQLite journals, environment files, and build output are ignored by Git.
@@ -45,3 +47,9 @@ The engine prioritizes relevance, limits a run to one person per company, applie
 There are no integrations with LinkedIn, CareerShift, Apollo, Gmail, Microsoft, AI APIs, inboxes, or any other provider. There is no scraping, browser automation, contact sourcing, external drafting, credential handling, or email delivery. The UI contains no Send action. All names and companies produced by the seed are explicitly fabricated, and all addresses use `example.com`.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/schema.md](docs/schema.md).
+
+## Targeting and deterministic drafts
+
+Desired early-career job roles are modeled separately from senior networking-recipient personas. Targeting combines configurable company, current-role, function, experience, industry, geography, shared-signal, and data-quality components in the explainable `targeting-v1` score. Public target-company metadata is stored separately from fictional employment data.
+
+Drafts are generated without AI from versioned modular templates. Every biographical statement references an approved atomic Dylan fact. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.

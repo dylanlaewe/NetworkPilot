@@ -1,0 +1,42 @@
+import type { ContactPersona, GeographyPreference, IndustryPreference, RoleFamily, TargetCompany, TargetRole } from "./types";
+
+export const ROLE_FAMILIES: RoleFamily[] = [
+  { id: "data-analytics", displayName: "Data & analytics", priorityTier: "highest", enabled: true, industries: ["technology-ai", "consulting", "financial-services", "commodities-energy", "defense-aerospace"], themes: ["SQL", "Power BI", "ETL", "data integration", "analytics"], notes: "Strongest fit with Dylan’s CS degree and BI/data engineering internship." },
+  { id: "technical-product", displayName: "Technical & product", priorityTier: "secondary", enabled: true, industries: ["technology-ai", "consulting", "defense-aerospace"], themes: ["software", "automation", "AI", "APIs", "product"], notes: "Builds on technical implementation and cross-system work." },
+  { id: "business-delivery", displayName: "Business, strategy & delivery", priorityTier: "secondary", enabled: true, industries: ["consulting", "financial-services", "commodities-energy", "defense-aerospace"], themes: ["operations", "strategy", "projects", "program delivery"], notes: "Fits cross-functional problem solving and delivery interests." },
+  { id: "industry-professional", displayName: "Industry-specific professional", priorityTier: "specialized", enabled: true, industries: ["consulting", "financial-services", "commodities-energy"], themes: ["markets", "risk", "consulting", "industry analytics"], notes: "Applies technical and analytical skills in focused sectors." },
+];
+
+const role = (id: string, familyId: string, displayName: string, priorityTier: TargetRole["priorityTier"], industries: string[], themes: string[], notes: string): TargetRole => ({ id, familyId, displayName, priorityTier, enabled: true, industries, themes, seniorityBand: displayName.includes("Associate") || displayName.includes("Junior") ? "associate" : "early-career", notes, positiveTitlePatterns: [displayName.toLowerCase(), id.replaceAll("-", " ")], negativeTitlePatterns: ["director", "vice president", "vp", "chief", "head of", "people manager"] });
+const D = ["technology-ai", "consulting", "financial-services", "commodities-energy", "defense-aerospace"];
+export const TARGET_ROLES: TargetRole[] = [
+  ...["Data Analyst","Business Intelligence Analyst","Product Analyst","Analytics Engineer","Data Engineer","Business Intelligence Engineer","Data Integration Developer/Engineer","Data & AI Specialist","Associate Data Scientist","Junior or Associate Data Engineer"].map((name,i)=>role(`data-${i+1}`,"data-analytics",name,"highest",D,["data","analytics","SQL"],"Realistic current role aligned with academic and internship experience.")),
+  ...["Software Engineer","Early-Career AI/ML Engineer","Solutions Engineer","Technical Product Analyst","Product Operations Analyst","Technical Business Analyst","Implementation Engineer","Automation Engineer"].map((name,i)=>role(`technical-${i+1}`,"technical-product",name,"secondary",["technology-ai","consulting","defense-aerospace"],["engineering","automation","product"],"Appropriate technical or product-adjacent early-career path.")),
+  ...["Business Analyst","Strategy Analyst","Strategy & Operations Analyst","Innovation Analyst","Project Coordinator","Project Manager","Program Analyst","Associate Program Manager","Technical Project Manager","Operations Analyst"].map((name,i)=>role(`delivery-${i+1}`,"business-delivery",name,"secondary",D,["delivery","operations","strategy"],"Realistic scope when role experience requirements fit.")),
+  ...["Consulting Analyst","Consulting Associate","Technology Consultant","Data/Analytics Consultant","Finance Analyst","Financial Data Analyst","Risk Analyst","Analytics or Data Associate","Commodities Analyst","Energy Analyst","Market Analyst","Trading Operations Analyst","Commodity Data Analyst"].map((name,i)=>role(`industry-${i+1}`,"industry-professional",name,"specialized",D,["industry","analysis","markets"],"Sector-specific path grounded in analytical and technical strengths.")),
+];
+
+export const LONG_TERM_DIRECTION = { id: "leadership-direction", enabledForCurrentRoleEligibility: false, themes: ["data", "analytics", "engineering", "AI and automation", "product and business problem-solving", "project and program delivery", "leadership", "ownership", "responsibility"] } as const;
+
+export const CONTACT_PERSONAS: ContactPersona[] = [
+  ["experienced-practitioner","Experienced practitioner",5,15,100],["senior-ic","Senior individual contributor",8,20,95],["team-manager","Team manager",8,20,85],["functional-director","Director or functional leader",12,25,65],["consulting-principal","Principal/partner in consulting",12,30,70],["project-leader","Project or program leader",7,20,85],["cross-functional-leader","Cross-functional product/business leader",8,22,80],["select-vp","Select VP-level leader",15,30,35]
+].map(([id,displayName,min,max,priority])=>({ id:String(id), displayName:String(displayName), enabled:true, minimumYearsExperience:Number(min), maximumYearsExperience:Number(max), priority:Number(priority), notes:"Networking recipient persona, never a desired job-role seniority signal." }));
+
+export const INDUSTRY_PREFERENCES: IndustryPreference[] = [
+  ["technology-ai","Technology and AI/software","primary",100],["consulting","Consulting","primary",95],["financial-services","Financial services and fintech","primary",90],["commodities-energy","Commodities, energy markets, and trading","primary",90],["defense-aerospace","Defense, autonomy, and aerospace","primary",90],
+  ["insurance","Insurance","secondary",65],["healthcare-life-sciences","Healthcare and life sciences","secondary",65],["energy-renewables","Energy and renewables","secondary",70],["infrastructure-telecom","Infrastructure and telecommunications","secondary",70],["complex-operations","Operationally complex businesses","secondary",60]
+].map(([id,displayName,tier,score])=>({ id:String(id), displayName:String(displayName), tier:tier as "primary"|"secondary", enabled:true, score:Number(score) }));
+
+export const GEOGRAPHY_PREFERENCES: GeographyPreference[] = [
+  { id:"boston-ma",displayName:"Boston and Massachusetts",enabled:true,score:100,notes:"Primary Northeast preference." },{ id:"nyc",displayName:"New York City",enabled:true,score:95,notes:"Primary metro preference." },{ id:"new-jersey",displayName:"New Jersey",enabled:true,score:90,notes:"Strong regional relevance." },{ id:"remote-us",displayName:"Remote-friendly United States",enabled:true,score:85,notes:"Remote-friendly interest." },{ id:"broader-us",displayName:"Broader United States",enabled:true,score:45,notes:"Consider exceptional companies and roles nationally." },
+];
+
+const companyGroups: Array<[string,string,string[]]> = [
+  ["consulting","tier-1",["McKinsey & Company","Boston Consulting Group","Bain & Company"]],["consulting","tier-2",["Accenture","Deloitte","PwC","EY","KPMG","Oliver Wyman"]],
+  ["financial-services","tier-1",["JPMorganChase","Goldman Sachs","Morgan Stanley","BlackRock","Bloomberg"]],["financial-services","tier-2",["Citi","Bank of America","Fidelity Investments","State Street","Capital One"]],
+  ["commodities-energy","tier-1",["Vitol","Trafigura","Mercuria","Glencore"]],["commodities-energy","tier-2",["Cargill","Shell","BP","Chevron"]],
+  ["technology-ai","tier-1",["Microsoft","Google","Amazon","Apple","NVIDIA","Palantir"]],["technology-ai","tier-2",["Datadog","Snowflake","ServiceNow","IBM"]],
+  ["defense-aerospace","tier-1",["RTX","Lockheed Martin","Northrop Grumman","Anduril","Shield AI"]],["defense-aerospace","tier-2",["General Dynamics","L3Harris Technologies","BAE Systems","Boeing"]],
+];
+const slug = (value:string)=>value.toLowerCase().replaceAll("&","and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+export const TARGET_COMPANIES: TargetCompany[] = companyGroups.flatMap(([industryId,tier,names])=>names.map((canonicalName,index)=>({ id:slug(canonicalName), canonicalName, industryId, tier:tier as "tier-1"|"tier-2", enabled:true, recognitionScore:tier==="tier-1"?95:78, careerUpsideScore:tier==="tier-1"?95:84, technicalInterestScore:75+index*2, geographicRelevance:["boston-ma","nyc","new-jersey","remote-us","broader-us"], rationale:"Editable starting target based on recognition, career upside, or sector-specific technical interest.", provenance:"Headquarters-approved Milestone 3 starting registry", lastReviewedDate:"2026-09-07", operatorNotes:"Public company metadata only; not a hiring claim." })));

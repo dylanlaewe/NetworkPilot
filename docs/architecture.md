@@ -39,3 +39,15 @@ Stable decision codes are: `suppressed`, `opted-out`, `email-unverified`, `insuf
 The only implemented write action is named and displayed as a fictional simulation. It creates local `simulated-sent` rows; no transport adapter exists. `actually-sent` is a reserved domain vocabulary value and is unused by every application path. There are no provider SDKs, secrets, external data adapters, browser automation, inbox processors, or delivery controls.
 
 A future live system would require separate authorization, source, research/drafting, scheduler, delivery, and reply adapters plus explicit mode gating and threat review. Those components are architectural placeholders only and are not connected in this milestone.
+
+## Targeting and draft studio
+
+Current desired roles are early-career opportunities Dylan could pursue; recipient personas are experienced people who may provide useful perspective. The two are distinct domain types, so targeting a director never implies applying for a director role. Long-term leadership, ownership, and delivery responsibility are recorded as direction rather than current-role eligibility.
+
+The editable public-company strategy registry is isolated from the fictional `companies` and `prospects` tables. Tier 1 and Tier 2 companies receive preference, Tier 3 requires exceptional role upside, and excluded, unreviewed, disabled, or unknown companies fail a hard gate. Company recognition is only one score component; sector-specific technical and mission interest remain first-class.
+
+`targeting-v1` produces eight named weighted components, stable explanations, a total, and hard-gate results. Role fit and recipient seniority are separately scored. Industry and geography are preferences rather than absolute filters. Weights must be finite, non-negative, and total 100; ranking ties resolve by stable candidate ID.
+
+The sender fact registry contains only approved atomic statements about Dylan’s education, internship, skills, integration work, interests, geography, and long-term direction. Versioned modular templates reference fact IDs. Personalization sentences can use only verified fictional evidence and preserve evidence IDs; unverified or absent evidence falls back without inference.
+
+Draft rows snapshot rendered content, template/version, fact IDs, evidence IDs, targeting score/version/components, and lifecycle state. Their idempotency key combines prospect, run context, template, and template version. Generated, needs-review, approved-for-simulation, rejected, and superseded states contain no delivery state. Draft approval has no relationship to the separate future delivery boundary.

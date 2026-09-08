@@ -105,7 +105,7 @@ describe("SQLite fictional simulation", () => {
 
   it("persists the chosen target and an insufficient-pool shortfall", () => {
     const repo = repository(); seedFictionalData(repo);
-    repo.native.exec("DELETE FROM suppression_entries; DELETE FROM prospects WHERE id NOT IN ('fictional-person-003','fictional-person-004')");
+    repo.native.exec("DELETE FROM suppression_entries; DELETE FROM personalization_evidence; DELETE FROM prospects WHERE id NOT IN ('fictional-person-003','fictional-person-004')");
     const run = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 });
     expect(run.target).toBe(15); expect(run.selectedCount).toBe(2); expect(run.shortfall).toBe(13); repo.close();
   });
