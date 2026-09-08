@@ -23,13 +23,14 @@ export function scoreCandidateDataQuality(input:CandidateInput):number{
   return Math.round(checks.filter((value)=>value!==undefined&&String(value).trim().length>0).length/checks.length*100);
 }
 
-export function matchCompanyRegistry(input:Pick<CandidateInput,"employerName"|"employerDomain"|"publicCompanyRegistryMatch">,registry:readonly TargetCompany[],domains:Readonly<Record<string,string>>={}):{company:TargetCompany|null;explanationCode:string;method?:"domain"|"simulation-alias"}{
-  if(input.publicCompanyRegistryMatch?.matchedBy==="simulation-alias"){const company=registry.find((item)=>item.id===input.publicCompanyRegistryMatch?.companyId&&item.enabled);return company&&input.publicCompanyRegistryMatch.reviewed?{company,explanationCode:"company-fictional-alias-reviewed",method:"simulation-alias"}:{company:null,explanationCode:"company-alias-unreviewed"};}
+export function matchCompanyRegistry(input:Pick<CandidateInput,"employerName"|"employerDomain"|"publicCompanyRegistryMatch">,registry:readonly TargetCompany[],domains:Readonly<Record<string,string>>={}):{company:TargetCompany|null;explanationCode:string;method?:"domain"|"exact-name"|"simulation-alias"}{
+  const usable=(company:TargetCompany|undefined)=>company?.enabled&&company.tier!=="excluded"&&company.tier!=="unreviewed";
+  if(input.publicCompanyRegistryMatch?.matchedBy==="simulation-alias"){const company=registry.find((item)=>item.id===input.publicCompanyRegistryMatch?.companyId);return usable(company)&&input.publicCompanyRegistryMatch.reviewed?{company:company!,explanationCode:"company-fictional-alias-reviewed",method:"simulation-alias"}:{company:null,explanationCode:input.publicCompanyRegistryMatch.reviewed?"company-prohibited":"company-alias-unreviewed"};}
   const normalizedName=tokens(input.employerName).join(" ");const nameMatch=registry.find((item)=>tokens(item.canonicalName).join(" ")===normalizedName);
   const normalizedDomain=input.employerDomain?.toLowerCase().replace(/^www\./,"");const domainMatch=normalizedDomain?registry.find((item)=>domains[item.id]?.toLowerCase()===normalizedDomain):undefined;
   if(normalizedDomain&&nameMatch&&domainMatch?.id!==nameMatch.id)return{company:null,explanationCode:"company-domain-conflict"};
   if(normalizedDomain&&!domainMatch)return{company:null,explanationCode:"company-domain-unreviewed"};
-  const company=domainMatch??nameMatch;return company?.enabled?{company,explanationCode:domainMatch?"company-domain-match":"company-name-exact-match",method:domainMatch?"domain":undefined}:{company:null,explanationCode:"company-unknown"};
+  const company=domainMatch??nameMatch;return usable(company)?{company:company!,explanationCode:domainMatch?"company-domain-match":"company-name-exact-match",method:domainMatch?"domain":"exact-name"}:{company:null,explanationCode:company?"company-prohibited":"company-unknown"};
 }
 
 export function classifyCandidate(input: CandidateInput): CandidateClassification {
@@ -37,13 +38,14 @@ export function classifyCandidate(input: CandidateInput): CandidateClassificatio
   const titleTokens = tokens(title);
   const explanations: string[] = ["title-normalized"];
   const years = interpretYearsExperience(input);
-  if (titleTokens.some((token) => ["chief", "ceo", "cfo", "cto", "cio", "coo"].includes(token))) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "c-suite-title"], reviewCode: "c-suite-rejected" };
-  if (titleTokens.some((token) => ["intern", "student"].includes(token)) || hasSequence(titleTokens, "entry level")) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "entry-level-peer"], reviewCode: "entry-level-peer-rejected" };
+  const executiveToken=titleTokens.some((token) => ["chief", "ceo", "cfo", "cto", "cio", "coo", "president", "founder", "owner"].includes(token))||hasSequence(titleTokens,"co founder")||hasSequence(titleTokens,"executive chair");
+  if (executiveToken) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "executive-title"], reviewCode: "c-suite-rejected" };
+  if (titleTokens.some((token) => ["intern", "student", "junior"].includes(token)) || hasSequence(titleTokens, "entry level")) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "entry-level-peer"], reviewCode: "entry-level-peer-rejected" };
   const isVp = titleTokens.includes("vp") || hasSequence(titleTokens, "vice president");
   if (isVp && (years === undefined || years < 15)) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "vp-policy"], reviewCode: "vp-not-selective-fit" };
-  const role = TARGET_ROLES.find((candidate) => candidate.enabled && candidate.positiveTitlePatterns.some((pattern) => hasSequence(titleTokens, pattern)))
-    ?? TARGET_ROLES.find((candidate) => candidate.enabled && candidate.themes.some((theme) => titleTokens.includes(theme.toLowerCase())));
-  const personaId = isVp ? "select-vp" : titleTokens.includes("director") ? "functional-director" : titleTokens.includes("manager") ? "team-manager" : titleTokens.includes("principal") ? "consulting-principal" : years !== undefined && years >= 8 ? "senior-ic" : years !== undefined && years >= 5 ? "experienced-practitioner" : undefined;
+  const roleFamilyId=titleTokens.some((token)=>["commodities","commodity","energy","market","markets","finance","financial","risk","consultant","consulting"].includes(token))?"industry-professional":titleTokens.some((token)=>["program","project","operations","strategy","delivery"].includes(token))?"business-delivery":titleTokens.some((token)=>["data","analytics","analyst","intelligence"].includes(token))?"data-analytics":titleTokens.some((token)=>["software","engineer","engineering","automation","solutions","product","technical"].includes(token))?"technical-product":undefined;
+  const role = TARGET_ROLES.find((candidate) => candidate.enabled&&candidate.familyId===roleFamilyId);
+  const personaId = isVp ? "select-vp" : titleTokens.includes("director") ? "functional-director" : titleTokens.includes("manager") ? "team-manager" : (titleTokens.includes("program")||titleTokens.includes("project"))&&titleTokens.includes("leader")?"project-leader":titleTokens.includes("principal")&&titleTokens.some((token)=>["consultant","consulting"].includes(token))?"consulting-principal":years !== undefined && years >= 8 ? "senior-ic" : years !== undefined && years >= 5 ? "experienced-practitioner" : undefined;
   const industryId = INDUSTRY_PREFERENCES.find((industry) => industry.id === input.industry)?.id;
   const geographyId = GEOGRAPHY_PREFERENCES.find((geography) => geography.id === input.geography)?.id;
   const persona = CONTACT_PERSONAS.find((item) => item.id === personaId);

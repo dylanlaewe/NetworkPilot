@@ -7,6 +7,8 @@ const candidate=(professionalTitle:string,overrides:Partial<CandidateInput>={}):
 describe("candidate normalization",()=>{
   it("normalizes title tokens without unsafe substring matching",()=>{expect(normalizeTitle("Sr. Data Engineer")).toBe("senior data engineer");expect(classifyCandidate(candidate("Chiefly Data Engineer")).reviewCode).not.toBe("c-suite-rejected");});
   it("rejects C-suite titles",()=>expect(classifyCandidate(candidate("Chief Data Officer")).reviewCode).toBe("c-suite-rejected"));
+  it.each(["CEO","CFO","CTO","CIO","COO","President","Founder","Co-Founder","Owner","Executive Chair"])("rejects executive variant %s",(title)=>expect(classifyCandidate(candidate(title)).reviewCode).toBe("c-suite-rejected"));
+  it.each(["Chiefly Data Engineer","Ownership Analyst"])("does not reject partial token %s as executive",(title)=>expect(classifyCandidate(candidate(title)).reviewCode).not.toBe("c-suite-rejected"));
   it("applies selective VP handling",()=>{expect(classifyCandidate(candidate("VP Data Analytics",{yearsExperience:12})).reviewCode).toBe("vp-not-selective-fit");expect(classifyCandidate(candidate("VP Data Analytics",{yearsExperience:18})).personaId).toBe("select-vp");});
   it("rejects entry-level peers",()=>expect(classifyCandidate(candidate("Entry Level Data Analyst",{yearsExperience:1})).reviewCode).toBe("entry-level-peer-rejected"));
   it("keeps recipient persona separate from desired role",()=>{const result=classifyCandidate(candidate("Senior Data Engineer"));expect(result.personaId).toBe("senior-ic");expect(result.desiredRoleId).not.toContain("senior");});
