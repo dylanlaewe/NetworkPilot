@@ -2,7 +2,7 @@ export type CompanyId = string;
 export type ProspectId = string;
 export const INDUSTRIES = ["Consulting", "Finance", "Commodities", "Technology", "Defense"] as const;
 export type Industry = (typeof INDUSTRIES)[number];
-export interface Prospect { id: ProspectId; firstName: string; lastName: string; companyId: CompanyId; companyName: string; industry: Industry; email: string; emailVerified: boolean; yearsExperience: number; suppressed: boolean; optedOut: boolean; relevanceScore: number; }
+export interface Prospect { id: ProspectId; firstName: string; lastName: string; companyId: CompanyId; companyName: string; industry: Industry; email: string; emailVerified: boolean; yearsExperience: number; suppressed: boolean; optedOut: boolean; /** @deprecated Migration-only input; targeting-first planning never reads it. */ relevanceScore: number; }
 export const OUTREACH_EVENT_TYPES = ["qualified", "rejected", "selected", "drafted", "simulated-sent", "actually-sent", "replied", "suppressed", "cancelled"] as const;
 export type OutreachEventType = (typeof OUTREACH_EVENT_TYPES)[number];
 export const CONTACT_IMPACTING_EVENT_TYPES: ReadonlySet<OutreachEventType> = new Set(["simulated-sent", "actually-sent"]);

@@ -14,7 +14,15 @@ Recipient personas cover experienced practitioners, senior individual contributo
 
 Primary industries are technology/AI, consulting, financial services/fintech, commodities/energy markets/trading, and defense/autonomy/aerospace. Secondary industries include insurance, healthcare/life sciences, renewables, infrastructure/telecommunications, and operationally complex businesses. Boston/Massachusetts, New York City, New Jersey, and remote-friendly US opportunities receive preference; national opportunities remain viable when role and company fit are exceptional.
 
-The public target-company registry is an editable starting strategy, not a hiring claim. It contains no people or contact details and is never used as the employer table for fictional prospects. Tier 1 is marquee, Tier 2 is highly respected or especially compelling, Tier 3 needs exceptional role-specific upside, and excluded/unreviewed companies fail the default gate.
+The public target-company registry is an editable starting strategy, not a hiring claim. It contains no people or contact details and is never used as the employer table for fictional prospects. Reviewed simulation aliases let imaginary scenarios exercise registry policy without representing anyone as a real employee. Tier 1 and Tier 2 are normally eligible, Tier 3 needs exceptional role-specific upside, and excluded, disabled, unknown, or unreviewed companies fail closed. Recognition cannot compensate for unrelated function.
+
+## Normalization and targeting-first planning
+
+The provider-neutral candidate contract accepts structured normalized fields, source provenance, and a raw-record fingerprint—not arbitrary raw payloads. Pure token-aware rules classify titles, role family, desired role, recipient persona, industry, geography, experience, data quality, and company registry match. Ambiguity fails closed or enters review. C-suite and entry-level peers are rejected, selective VPs require appropriate experience, and senior recipient titles never become desired senior job roles. A domain conflict defeats a matching company name.
+
+Hard gates precede `targeting-v1` scoring. Eligible candidates rank by targeting total and stable candidate ID; legacy generic relevance does not participate. Deterministic industry and role-family soft caps encourage representation across enabled primary industries, then relax only for qualified candidates if the pool cannot fill the target. Every relaxation is persisted. One-company-per-day and seven-day cooldown remain hard.
+
+The persisted plan owns the historical truth: versions, provenance, professional context, company match, every targeting input and component, explanations, hard-gate result, pre-diversification rank, final status, and reason. Its lifecycle is created, evaluated, planned, drafted, simulation-approved, cancelled, or failed. Draft Studio consumes selected snapshots verbatim and rejects tampered or excluded candidates.
 
 ## Deterministic composition
 
@@ -28,4 +36,4 @@ The renderer may quote one short verified fictional evidence claim and returns i
 
 Fictional people and employers have their own targeting-profile tables, separate from the public registry. Seeded attributes vary across title, function, persona, experience, geography, industry, role/functional alignment, shared signal, data completeness, and fictional-company desirability. They include intentionally strong, moderate, unrelated, entry-level, outside-geography, shared-signal, and incomplete-data scenarios. These values are labeled simulation inputs, not claims about real people or companies.
 
-At generation, references are validated against enabled domain configuration and public company IDs are prohibited. The score consumes only the persisted recipient-specific profile. The draft then snapshots all input values, components, explanations, versions, facts, and evidence so later source edits cannot change historical review.
+At planning, references are validated against enabled configuration and reviewed registry strategy. Draft generation consumes only the persisted selected plan snapshot. It then stores content, facts, evidence, and the identical targeting context so later source edits cannot change historical review. Approval is simulation-only; provider access and delivery remain nonexistent.

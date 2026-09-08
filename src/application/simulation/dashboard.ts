@@ -6,5 +6,6 @@ export function getDashboardData(repository: SimulationRepository, instant: Date
   const timezone = repository.getSetting("campaignTimezone") ?? DEFAULT_SELECTION_CONFIG.campaignTimezone;
   const calendar = campaignCalendar(instant, timezone);
   const readiness = getFictionalDatasetReadiness(repository);
-  return { today: calendar.date, isWeekday: calendar.isWeekday, timezone, latestRun: repository.findRunByDate(calendar.date), recentRuns: repository.recentRuns(7), suppressionCount: repository.countSuppressions(), prospectCount: readiness.prospectCount, simulationReady: readiness.ready };
+  const latestRun=repository.findRunByDate(calendar.date);
+  return { today: calendar.date, isWeekday: calendar.isWeekday, timezone, latestRun, latestPlan:latestRun?repository.findCampaignPlan(latestRun.id):null, recentRuns: repository.recentRuns(7), suppressionCount: repository.countSuppressions(), prospectCount: readiness.prospectCount, simulationReady: readiness.ready };
 }

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { FICTIONAL_TARGETING_PROFILE_INVALID, generateDraftsForRun } from "@/application/drafts";
+import { generateDraftsForRun } from "@/application/drafts";
 import { runDailySimulation } from "@/application/simulation/run-daily-simulation";
 import { TARGET_COMPANIES } from "@/domain/targeting";
 import { SqliteSimulationRepository } from "./database";
@@ -54,12 +54,11 @@ describe("draft persistence and fictional targeting profiles", () => {
     expect(new Set(first.map((draft) => draft.templateId)).size).toBeGreaterThan(3); repository.close();
   });
 
-  it("fails closed and atomically when a selected recipient profile is missing or inconsistent", () => {
+  it("drafts from the immutable plan snapshot after mutable source profiles are removed", () => {
     const { repository, run } = setup(); const selected = repository.listSelectedRecipients(run.id)[0];
     repository.native.prepare("DELETE FROM fictional_targeting_profiles WHERE prospect_id=?").run(selected.id);
-    try { generateDraftsForRun(repository, run.id, () => new Date()); throw new Error("expected invalid profile"); }
-    catch (error) { expect((error as {code?:string}).code).toBe(FICTIONAL_TARGETING_PROFILE_INVALID); }
-    expect(repository.listDrafts()).toEqual([]); repository.close();
+    const drafts=generateDraftsForRun(repository, run.id, () => new Date());
+    expect(drafts.some((draft)=>draft.prospectId===selected.id)).toBe(true);expect(drafts.find((draft)=>draft.prospectId===selected.id)?.score).toBe(selected.planSnapshot?.totalScore);repository.close();
   });
 
   it("preserves complete historical display and score context after source mutation", () => {
@@ -71,6 +70,8 @@ describe("draft persistence and fictional targeting profiles", () => {
     const historical = repository.listDrafts().find((draft) => draft.id === original.id)!;
     expect(historical.recipientSnapshot).toEqual(snapshot); expect(historical.score).toBe(original.score); expect(historical.scoreComponents).toEqual(original.scoreComponents); expect(historical.templateId).toBe(original.templateId); repository.close();
   });
+
+  it("copies the selected plan score exactly and cannot draft a rejected decision",()=>{const {repository,run}=setup();const plan=repository.findCampaignPlan(run.id)!;const drafts=generateDraftsForRun(repository,run.id,()=>new Date("2026-09-07T16:00:00Z"));for(const draft of drafts){const planned=plan.selected.find((item)=>item.prospectId===draft.prospectId)!;expect(draft.score).toBe(planned.totalScore);expect(draft.scoreComponents).toEqual(planned.components);expect(draft.explanationCodes).toEqual(planned.explanationCodes);}const rejected=plan.decisions.find((item)=>!item.selected)!;repository.native.prepare("UPDATE campaign_plan_decisions SET selected=1 WHERE plan_id=? AND prospect_id=?").run(run.id,rejected.prospectId);expect(()=>generateDraftsForRun(repository,run.id,()=>new Date())).toThrow("not eligible in the persisted plan");expect(repository.listDrafts()).toHaveLength(drafts.length);repository.close();});
 
   it("keeps public companies and fictional employers structurally and referentially separate", () => {
     const { repository, run } = setup(); generateDraftsForRun(repository, run.id, () => new Date());
@@ -98,7 +99,11 @@ describe("draft persistence and fictional targeting profiles", () => {
     expect(() => repository.native.prepare("UPDATE drafts SET status='sent' WHERE id=?").run(drafts[0].id)).toThrow(); repository.close();
   });
 
+  it("advances lifecycle only after every draft is simulation-approved",()=>{const {repository,run}=setup();const drafts=generateDraftsForRun(repository,run.id,()=>new Date());expect(repository.findCampaignPlan(run.id)?.status).toBe("drafted");for(const draft of drafts)repository.updateDraftStatus(draft.id,"approved-for-simulation",new Date());expect(repository.findCampaignPlan(run.id)?.status).toBe("simulation-approved");expect((repository.native.prepare("SELECT COUNT(*) count FROM outreach_events").get() as {count:number}).count).toBe(0);repository.close();});
+
+  it("rolls back all drafts and lifecycle on an injected persistence failure",()=>{const {repository,run}=setup();repository.native.exec("CREATE TRIGGER fail_second_draft BEFORE INSERT ON drafts WHEN (SELECT COUNT(*) FROM drafts)=1 BEGIN SELECT RAISE(ABORT,'injected draft failure'); END");expect(()=>generateDraftsForRun(repository,run.id,()=>new Date())).toThrow("injected draft failure");expect(repository.listDrafts()).toEqual([]);expect(repository.findCampaignPlan(run.id)?.status).toBe("planned");repository.close();});
+
   it("rejects missing or non-completed run contexts without drafts", () => {
-    const { repository } = setup(); expect(() => generateDraftsForRun(repository, "missing-run", () => new Date())).toThrow("Completed fictional simulation run not found"); expect(repository.listDrafts()).toEqual([]); repository.close();
+    const { repository } = setup(); expect(() => generateDraftsForRun(repository, "missing-run", () => new Date())).toThrow("Completed targeting-first campaign plan not found"); expect(repository.listDrafts()).toEqual([]); repository.close();
   });
 });

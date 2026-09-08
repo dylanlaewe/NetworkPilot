@@ -60,7 +60,7 @@ describe("SQLite fictional simulation", () => {
   it("creates every migration table", () => {
     const repo = repository();
     const tables = (repo.native.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{name:string}>).map((r) => r.name);
-    expect(tables).toEqual(expect.arrayContaining(["companies", "prospects", "simulation_runs", "qualification_decisions", "outreach_events", "suppression_entries", "campaign_settings", "schema_migrations"]));
+    expect(tables).toEqual(expect.arrayContaining(["companies", "prospects", "simulation_runs", "campaign_plans", "campaign_plan_decisions", "campaign_plan_lifecycle", "outreach_events", "suppression_entries", "campaign_settings", "schema_migrations"]));
     repo.close();
   });
 
@@ -79,6 +79,12 @@ describe("SQLite fictional simulation", () => {
     expect(repo.recentRuns(10)).toHaveLength(1); repo.close();
   });
 
+  it("keeps the persisted targeting plan idempotent and versioned",()=>{
+    const repo=repository();seedFictionalData(repo);const first=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});const snapshot=structuredClone(repo.findCampaignPlan(first.id));
+    repo.native.prepare("UPDATE fictional_targeting_profiles SET role_alignment=1").run();const second=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0.99});
+    expect(second.existing).toBe(true);expect(repo.findCampaignPlan(first.id)).toEqual(snapshot);expect(snapshot).toMatchObject({planVersion:"campaign-plan-v1",targetingVersion:"targeting-v1",status:"planned"});repo.close();
+  });
+
   it("keeps an existing same-day run readable if dataset readiness is later lost", () => {
     const repo = repository(); seedFictionalData(repo);
     const first = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 });
@@ -94,12 +100,12 @@ describe("SQLite fictional simulation", () => {
     expect(() => repo.createRun({ ...base, id: "b" })).toThrow(); repo.close();
   });
 
-  it("rolls back an incomplete transaction", () => {
+  it("rolls back an incomplete targeting-plan transaction", () => {
     const repo = repository(); seedFictionalData(repo);
-    repo.native.exec("CREATE TRIGGER fail_simulated_send BEFORE INSERT ON outreach_events BEGIN SELECT RAISE(ABORT, 'injected event failure'); END");
-    expect(() => runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 })).toThrow("injected event failure");
+    repo.native.exec("CREATE TRIGGER fail_plan_decision BEFORE INSERT ON campaign_plan_decisions BEGIN SELECT RAISE(ABORT, 'injected plan failure'); END");
+    expect(() => runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 })).toThrow("injected plan failure");
     expect(repo.findRunByDate("2026-09-07")).toBeNull();
-    expect((repo.native.prepare("SELECT COUNT(*) count FROM qualification_decisions").get() as {count:number}).count).toBe(0);
+    expect((repo.native.prepare("SELECT COUNT(*) count FROM campaign_plans").get() as {count:number}).count).toBe(0);
     repo.close();
   });
 
@@ -116,6 +122,12 @@ describe("SQLite fictional simulation", () => {
     expect(run).toMatchObject({ status: "weekend-no-send", target: 0, selectedCount: 0, shortfall: 0 });
     expect((repo.native.prepare("SELECT COUNT(*) count FROM outreach_events").get() as {count:number}).count).toBe(0); repo.close();
   });
+
+  it("creates no delivery or contact-impacting event while planning",()=>{const repo=repository();seedFictionalData(repo);runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});expect((repo.native.prepare("SELECT COUNT(*) count FROM outreach_events").get() as {count:number}).count).toBe(0);expect(repo.findCampaignPlan("run-2026-09-07")?.selected).toHaveLength(15);repo.close();});
+
+  it("persists complete immutable ranking and company-match provenance",()=>{const repo=repository();seedFictionalData(repo);const run=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});const plan=repo.findCampaignPlan(run.id)!;const selected=plan.selected[0];expect(selected).toMatchObject({planVersion:"campaign-plan-v1",targetingVersion:"targeting-v1",selected:true,selectionReason:"selected-by-targeting-rank",sourceType:"fictional-fixture"});expect(selected.rankBeforeDiversification).toBeTypeOf("number");expect(selected.components).toHaveLength(8);expect(selected.companyMatch).toMatchObject({method:"simulation-alias",fictionalScenario:true});expect(selected.professionalTitle).toBeTruthy();expect(selected.desiredRoleFamily).toBeTruthy();expect(selected.recipientPersona).toBeTruthy();repo.native.prepare("UPDATE fictional_targeting_profiles SET professional_title='Changed Later',role_alignment=1 WHERE prospect_id=?").run(selected.prospectId);expect(repo.findCampaignPlan(run.id)?.selected[0]).toEqual(selected);repo.close();});
+
+  it("supports cancellation without contact-impacting history",()=>{const repo=repository();seedFictionalData(repo);const run=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});repo.updateCampaignPlanStatus(run.id,"cancelled",instant("2026-09-07"));expect(repo.findCampaignPlan(run.id)?.status).toBe("cancelled");expect(repo.listOutreachEvents()).toHaveLength(0);expect(()=>repo.updateCampaignPlanStatus(run.id,"planned",new Date())).toThrow("Invalid campaign plan transition");repo.close();});
 
   it("preserves historical decision snapshots after prospect changes", () => {
     const repo = repository(); seedFictionalData(repo);
@@ -134,12 +146,15 @@ describe("SQLite fictional simulation", () => {
     expect(run.decisions.some((d) => d.reasonCode === "suppressed")).toBe(true); repo.close();
   });
 
-  it("uses simulated-send events for company cooldown", () => {
+  it("persists a fail-closed decision when a normalized profile is missing",()=>{const repo=repository();seedFictionalData(repo);repo.native.prepare("DELETE FROM fictional_targeting_profiles WHERE prospect_id='fictional-person-001'").run();const run=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});const decision=repo.findCampaignPlan(run.id)?.decisions.find((item)=>item.prospectId==="fictional-person-001");expect(decision).toMatchObject({selected:false,hardGateRejectionCode:"classification-ambiguous",selectionReason:"classification-ambiguous"});repo.close();});
+
+  it("uses non-contacting plan reservations for company cooldown", () => {
     const repo = repository(); seedFictionalData(repo);
     const first = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 });
     const selected = first.selected[0]!;
     const companyId = (repo.native.prepare("SELECT company_id FROM prospects WHERE id=?").get(selected.prospectId) as {company_id:string}).company_id;
     repo.native.prepare("INSERT INTO prospects VALUES(?,?,?,?,?,?,?,?,?,1)").run("fictional-alternate", "Fictional", "Alternate", companyId, "fictional.alternate@example.com", 1, 12, 0, 999);
+    repo.native.prepare("INSERT INTO fictional_targeting_profiles SELECT 'fictional-alternate',professional_title,role_family_id,desired_role_id,persona_id,geography_id,industry_id,role_alignment,functional_relevance,shared_signal,data_quality,role_specific_upside,profile_version FROM fictional_targeting_profiles WHERE prospect_id=?").run(selected.prospectId);
     const second = runDailySimulation(repo, { instant: instant("2026-09-08"), random: () => 0 });
     expect(second.decisions.find((d) => d.prospectId === "fictional-alternate")?.reasonCode).toBe("company-in-cooldown"); repo.close();
   });

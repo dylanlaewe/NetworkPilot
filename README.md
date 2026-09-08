@@ -29,9 +29,9 @@ The reset command refuses to run unless `NODE_ENV` is `development` or `test`, p
 
 ## Simulation workflow
 
-The dashboard action creates one atomic simulation for the campaign-local calendar date. Before creating a new run, the application layer requires the exact fictional-dataset marker and a non-empty prospect dataset; otherwise the action stays disabled and no randomness or database write occurs. Weekday runs choose and persist a target from 15–20, record a reason-coded snapshot for every evaluated prospect, and create `simulated-sent` events for selections. Repeating the action returns the existing completed run. Weekend attempts create a stored no-send result.
+The dashboard action creates one atomic targeting-first campaign plan for the campaign-local calendar date. Before creating a new plan, the application layer requires the exact fictional-dataset marker and a non-empty prospect dataset; otherwise the action stays disabled and no randomness or database write occurs. Weekday runs choose and persist a target from 15–20, normalize fictional candidates, apply hard gates, score, diversify, and snapshot every decision. Repeating the action returns the existing plan unchanged. Weekend attempts create a stored no-send result.
 
-The engine prioritizes relevance, limits a run to one person per company, applies a configurable seven-day company cooldown, and filters prior contact, suppressions, opt-outs, unverified addresses, and insufficient experience. Only `simulated-sent` and future `actually-sent` events consume a contact; selected, drafted, cancelled, or abandoned work does not.
+The engine ranks by versioned `targeting-v1`; the deprecated generic `relevanceScore` is retained only for migration compatibility and never controls planning. It limits a plan to one person per company, applies a configurable seven-day company cooldown, and filters prior reservations/contact, suppressions, opt-outs, unverified addresses, insufficient experience, ambiguous classification, and unreviewed companies. Planning creates no outreach or delivery event.
 
 ## Scripts
 
@@ -44,14 +44,14 @@ The engine prioritizes relevance, limits a run to one person per company, applie
 
 ## Safety boundary
 
-There are no integrations with LinkedIn, CareerShift, Apollo, Gmail, Microsoft, AI APIs, inboxes, or any other provider. There is no scraping, browser automation, contact sourcing, external drafting, credential handling, or email delivery. The UI contains no Send action. All names and companies produced by the seed are explicitly fabricated, and all addresses use `example.com`.
+There are no integrations with LinkedIn, CareerShift, Apollo, Gmail, Microsoft, AI APIs, inboxes, or any other provider. There is no scraping, browser automation, contact sourcing, external drafting, credential handling, or email delivery. The UI contains no Send action. All people and employers produced by the seed are explicitly fabricated. Registry references are labeled simulation aliases and never claim that a fictional person works at a real company.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/schema.md](docs/schema.md).
 
 ## Targeting and deterministic drafts
 
-Desired early-career job roles are modeled separately from senior networking-recipient personas. Targeting combines configurable company, current-role, function, experience, industry, geography, shared-signal, and data-quality components in the explainable `targeting-v1` score. Public target-company metadata is stored separately from fictional employment data.
+Desired early-career job roles are modeled separately from senior networking-recipient personas. Targeting combines configurable company, current-role, function, experience, industry, geography, shared-signal, and data-quality components in the explainable `targeting-v1` score. Public target-company metadata is stored separately from fictional employment data. Deterministic soft caps improve industry and role-family representation, relax only when needed to fill the qualified target, and persist every relaxation.
 
-Drafts are generated without AI from 24 versioned variants across eight outreach lanes. Dylan graduated in May 2026 with a B.S. in Computer Science; templates vary truthful recent-graduate phrasing instead of describing graduation as future. Every biographical sentence is composed from registered fragments whose complete, ordered fact IDs are persisted. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.
+Drafts are generated only from selected persisted plan snapshots—without rescoring mutable profiles—and without AI from 24 versioned variants across eight outreach lanes. Dylan graduated in May 2026 with a B.S. in Computer Science; templates vary truthful recent-graduate phrasing instead of describing graduation as future. Every biographical sentence is composed from registered fragments whose complete, ordered fact IDs are persisted. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.
 
 Variant rotation uses a documented FNV-1a 32-bit hash of the template catalog version, simulation run ID, fictional prospect ID, and outreach lane. It uses no wall clock or randomness, so identical context regenerates the same version while recipients distribute across variants.

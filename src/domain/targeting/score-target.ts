@@ -17,6 +17,7 @@ export function scoreTarget(candidate: TargetCandidate, weights: TargetingWeight
   if (!candidate.persona.enabled) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["persona-disabled"],rejectionCode:"persona-disabled" };
   if (candidate.yearsExperience<candidate.persona.minimumYearsExperience) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["recipient-insufficient-experience"],rejectionCode:"recipient-insufficient-experience" };
   if (!candidate.industry.enabled) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["industry-disabled"],rejectionCode:"industry-disabled" };
+  if (candidate.roleAlignment<40 || candidate.functionalRelevance<40) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["recipient-function-unrelated"],rejectionCode:"recipient-function-unrelated" };
   if (candidate.company.tier==="tier-3" && candidate.roleSpecificUpside<85) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["tier-3-needs-exceptional-fit"],rejectionCode:"tier-3-needs-exceptional-fit" };
   const experienceFit = candidate.yearsExperience<5?20:candidate.yearsExperience<=20?100:65;
   const experience = experienceFit*.7+candidate.persona.priority*.3;
