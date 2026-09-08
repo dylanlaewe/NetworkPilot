@@ -9,12 +9,13 @@ export function importCandidateBatch(repository:IngestionRepository,companies:re
   if(input.datasetClassification==="authorized-provider")throw new Error("live-provider-import-disabled");
   if(!idPattern.test(input.batchId)||!idPattern.test(input.adapterId)||!fingerprintPattern.test(input.sourceFingerprint))throw new Error("import-identity-invalid");
   const existing=repository.findImportBatchByFingerprint(input.sourceFingerprint);if(existing)return existing;
+  const fail=(reason:string):never=>{const timestamp=now.toISOString();const batch:ImportBatch={id:input.batchId,adapterId:input.adapterId,adapterVersion:input.adapterVersion,datasetClassification:input.datasetClassification,state:"failed",recordCount:input.records.length,acceptedCount:0,duplicateCount:0,reviewRequiredCount:0,rejectedCount:input.records.length,sourceFingerprint:input.sourceFingerprint,safeSourceSnapshot:safeSnapshot(input.records),normalizationVersion:"provider-normalization-v1",classificationVersion:"role-classification-v2",validationOutcomes:["fixture-only","atomic-import-rollback"],failureReasonCodes:[reason],startedAt:timestamp,completedAt:timestamp};repository.transaction(()=>repository.saveImport(batch,[]));throw new Error(reason);};
   const identities=new Map<string,string>();let duplicates=0;
   const candidates:ImportedCandidateSnapshot[]=[];
   for(const source of input.records){
-    if(!idPattern.test(source.sourceProviderId)||!idPattern.test(source.providerRecordId)||!fingerprintPattern.test(source.sourceFingerprint)||source.datasetClassification!==input.datasetClassification)throw new Error("source-record-invalid");
+    if(!idPattern.test(source.sourceProviderId)||!idPattern.test(source.providerRecordId)||!fingerprintPattern.test(source.sourceFingerprint)||source.datasetClassification!==input.datasetClassification)return fail("source-record-invalid");
     const key=`${source.sourceProviderId}:${source.providerRecordId}`,known=identities.get(key)??repository.findImportedCandidate(source.sourceProviderId,source.providerRecordId)?.source.sourceFingerprint;
-    if(known===source.sourceFingerprint){duplicates++;continue;}if(known)throw new Error(`source-record-conflict:${key}`);identities.set(key,source.sourceFingerprint);
+    if(known===source.sourceFingerprint){duplicates++;continue;}if(known)return fail(`source-record-conflict:${key}`);identities.set(key,source.sourceFingerprint);
     const classification=classifySpecificRole(source.currentTitle),experience=interpretExperience(source.experienceEvidence);
     const name=canonical(source.currentOrganization.name),domain=source.currentOrganization.domain&&canonical(source.currentOrganization.domain);
     const alias=source.simulationAlias?.reviewed?companies.find((c)=>c.id===source.simulationAlias?.strategyCompanyId):undefined;
