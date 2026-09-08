@@ -1,14 +1,78 @@
-import { describe,expect,it } from "vitest";
-import { DYLAN_FACTS } from "./facts";
-import { draftWordCount,PROHIBITED_DRAFT_PHRASES,renderDraft,selectTemplate } from "./render-draft";
-import { DRAFT_TEMPLATES } from "./templates";
-import type { DraftRecipient,PersonalizationEvidence } from "./types";
-const recipient:DraftRecipient={id:"fictional-person",firstName:"Fictional",companyName:"Imaginary Venture",roleFamilyId:"data-analytics",industryId:"technology-ai",personaId:"experienced-practitioner"};
-const evidence=(verificationStatus:"verified"|"unverified"):PersonalizationEvidence=>({id:"fictional-evidence",sourceType:"fictional-simulation",sourceReference:"fictional://evidence",reviewedAt:"2026-09-07T00:00:00.000Z",claim:"their fictional team is improving an analytics workflow",verificationStatus});
-describe("deterministic drafts",()=>{
-  it("selects genuinely different templates by persona, industry, and role family",()=>{expect(selectTemplate(recipient).id).toBe("data-practitioner");expect(selectTemplate({...recipient,personaId:"team-manager"}).id).toBe("career-path-leader");expect(selectTemplate({...recipient,roleFamilyId:"industry-professional",industryId:"commodities-energy",personaId:"experienced-practitioner"}).id).toBe("commodities-energy");});
-  it.each(DRAFT_TEMPLATES)("renders $id within the expected word range without prohibited language",(template)=>{const draft=renderDraft(recipient,[],()=>new Date("2026-09-07T00:00:00Z"),template);expect(draftWordCount(draft.body)).toBeGreaterThanOrEqual(70);expect(draftWordCount(draft.body)).toBeLessThanOrEqual(130);for(const phrase of PROHIBITED_DRAFT_PHRASES)expect(draft.body.toLowerCase()).not.toContain(phrase);expect(draft.status).toBe("draft-only-simulation");});
-  it("references only approved atomic facts required by the template",()=>{const draft=renderDraft(recipient,[],()=>new Date(),DRAFT_TEMPLATES[0]);const approved=new Set(DYLAN_FACTS.map((f)=>f.id));expect(draft.referencedFactIds).toEqual(expect.arrayContaining(DRAFT_TEMPLATES[0].factIds));expect(draft.referencedFactIds.every((id)=>approved.has(id))).toBe(true);});
-  it("renders and traces verified fictional evidence",()=>{const draft=renderDraft(recipient,[evidence("verified")],()=>new Date());expect(draft.body).toContain(evidence("verified").claim);expect(draft.evidenceIds).toEqual(["fictional-evidence"]);expect(draft.usedEvidence).toBe(true);});
-  it("uses a clean fallback for missing or unverified evidence",()=>{for(const items of [[],[evidence("unverified")]]){const draft=renderDraft(recipient,items,()=>new Date());expect(draft.evidenceIds).toEqual([]);expect(draft.usedEvidence).toBe(false);expect(draft.body).not.toContain(evidence("unverified").claim);}});
+import { describe, expect, it } from "vitest";
+import { DYLAN_FACTS, FACT_FRAGMENTS } from "./facts";
+import { draftWordCount, fnv1a32, PROHIBITED_DRAFT_PHRASES, renderDraft, selectTemplate, validateTemplateProvenance } from "./render-draft";
+import { DRAFT_TEMPLATES, TEMPLATE_CATALOG_VERSION } from "./templates";
+import type { DraftRecipient, PersonalizationEvidence } from "./types";
+
+const recipient = (id = "fictional-person"): DraftRecipient => ({ id, firstName: "Fictional", companyName: "Imaginary Venture", roleFamilyId: "data-analytics", industryId: "technology-ai", personaId: "experienced-practitioner" });
+const evidence = (verificationStatus: "verified" | "unverified"): PersonalizationEvidence => ({ id: "fictional-evidence", sourceType: "fictional-simulation", sourceReference: "fictional://evidence", reviewedAt: "2026-09-07T00:00:00.000Z", claim: "their fictional team is improving an analytics workflow", verificationStatus });
+
+describe("deterministic drafts", () => {
+  it("defines three substantive variants for every outreach lane", () => {
+    const lanes = new Set(DRAFT_TEMPLATES.map((item) => item.laneId));
+    expect(lanes.size).toBe(8);
+    for (const lane of lanes) {
+      const variants = DRAFT_TEMPLATES.filter((item) => item.laneId === lane);
+      expect(variants).toHaveLength(3);
+      expect(new Set(variants.map((item) => item.structure)).size).toBe(3);
+      expect(new Set(variants.map((item) => item.fragmentIds.join("|"))).size).toBe(3);
+      expect(new Set(variants.map((item) => item.subject)).size).toBe(3);
+    }
+  });
+
+  it.each(DRAFT_TEMPLATES)("renders $id with accurate provenance and safe length", (template) => {
+    const draft = renderDraft(recipient(), [], () => new Date("2026-09-07T00:00:00Z"), template);
+    expect(draftWordCount(draft.body)).toBeGreaterThanOrEqual(70);
+    expect(draftWordCount(draft.body)).toBeLessThanOrEqual(130);
+    expect(draft.status).toBe("draft-only-simulation");
+    expect(draft.referencedFactIds).toEqual(template.factIds);
+    expect(new Set(draft.referencedFactIds).size).toBe(draft.referencedFactIds.length);
+    for (const fragmentId of template.fragmentIds) for (const marker of FACT_FRAGMENTS.find((item) => item.id === fragmentId)!.claimMarkers) expect(draft.body).toContain(marker);
+    for (const phrase of [...PROHIBITED_DRAFT_PHRASES, "completing a", "with a May 2026 graduation", "will graduate", "expect to graduate"]) expect(draft.body.toLowerCase()).not.toContain(phrase.toLowerCase());
+  });
+
+  it("aligns every fragment claim with explicitly approved fact IDs", () => {
+    const uniqueMarkers: Record<string, string> = { "identity-graduated": "My name is", "identity-recent-grad": "recent computer science graduate", "identity-since-may": "since graduating in May 2026", internship: "Bresco Broadband", "technical-skills": "ETL, automation", systems: "more than 20 business", interests: "AI and automation", "leadership-direction": "leadership, ownership", northeast: "Boston, New York City", remote: "remote-friendly opportunities" };
+    for (const template of DRAFT_TEMPLATES) {
+      const facts = validateTemplateProvenance(template, DYLAN_FACTS);
+      const draft = renderDraft(recipient(), [], () => new Date(), template);
+      const derived = [...new Set(template.fragmentIds.flatMap((id) => FACT_FRAGMENTS.find((item) => item.id === id)!.factIds))];
+      expect([...facts.keys()]).toEqual(derived);
+      expect([...facts.values()].every((fact) => fact.approved && fact.enabled)).toBe(true);
+      for (const [fragmentId, marker] of Object.entries(uniqueMarkers)) expect(draft.body.includes(marker)).toBe(template.fragmentIds.includes(fragmentId));
+    }
+  });
+
+  it("fails closed for unknown, disabled, unapproved, duplicate, or mismatched fact metadata", () => {
+    const template = DRAFT_TEMPLATES[0];
+    expect(() => renderDraft(recipient(), [], () => new Date(), template, DYLAN_FACTS.map((fact) => fact.id === template.factIds[0] ? { ...fact, enabled: false } : fact))).toThrow("disabled");
+    expect(() => renderDraft(recipient(), [], () => new Date(), template, DYLAN_FACTS.map((fact) => fact.id === template.factIds[0] ? { ...fact, approved: false } : fact))).toThrow("unapproved");
+    expect(() => renderDraft(recipient(), [], () => new Date(), { ...template, factIds: [...template.factIds, "unknown"] })).toThrow("metadata mismatch");
+    expect(() => renderDraft(recipient(), [], () => new Date(), { ...template, factIds: [template.factIds[0], template.factIds[0]] })).toThrow("metadata mismatch");
+  });
+
+  it("uses a specified FNV-1a 32-bit hash and stable context rotation", () => {
+    expect(fnv1a32("hello")).toBe(0x4f9f2cab);
+    const context = { runId: "run-2026-09-07" };
+    expect(selectTemplate(recipient("person-1"), context)).toEqual(selectTemplate(recipient("person-1"), context));
+    expect(selectTemplate(recipient("person-1"), context).catalogVersion).toBe(TEMPLATE_CATALOG_VERSION);
+  });
+
+  it("distributes different recipients across all three lane variants", () => {
+    const variants = new Set(Array.from({ length: 60 }, (_, index) => selectTemplate(recipient(`person-${index}`), { runId: "run-2026-09-07" }).variantId));
+    expect(variants).toEqual(new Set(["direct-practical", "career-curiosity", "common-ground"]));
+  });
+
+  it("routes manager personas and industry lanes independently from role family", () => {
+    expect(selectTemplate({ ...recipient(), personaId: "team-manager" }, { runId: "run" }).laneId).toBe("career-path-leader");
+    expect(selectTemplate({ ...recipient(), industryId: "commodities-energy", roleFamilyId: "industry-professional" }, { runId: "run" }).laneId).toBe("commodities-energy");
+  });
+
+  it("renders and traces only verified fictional evidence", () => {
+    const template = DRAFT_TEMPLATES[0];
+    const verified = renderDraft(recipient(), [evidence("verified")], () => new Date(), template);
+    expect(verified.body).toContain(evidence("verified").claim);
+    expect(verified.evidenceIds).toEqual(["fictional-evidence"]);
+    for (const items of [[], [evidence("unverified")]]) expect(renderDraft(recipient(), items, () => new Date(), template).evidenceIds).toEqual([]);
+  });
 });

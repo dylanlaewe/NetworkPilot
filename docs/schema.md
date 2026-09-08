@@ -12,6 +12,8 @@ erDiagram
   SIMULATION_RUNS ||--o{ DRAFTS : contextualizes
   PROSPECTS ||--o{ DRAFTS : receives
   PROSPECTS ||--o{ PERSONALIZATION_EVIDENCE : has
+  PROSPECTS ||--o| FICTIONAL_TARGETING_PROFILES : simulated_by
+  COMPANIES ||--o| FICTIONAL_COMPANY_PROFILES : simulated_by
 
   SIMULATION_RUNS {
     text campaign_date UK
@@ -48,6 +50,22 @@ erDiagram
     real recognition_score
     real career_upside_score
     text provenance
+  }
+  FICTIONAL_TARGETING_PROFILES {
+    text professional_title
+    text role_family_id
+    text persona_id
+    text geography_id
+    real role_alignment
+    real functional_relevance
+    real shared_signal
+    real data_quality
+  }
+  FICTIONAL_COMPANY_PROFILES {
+    text scenario_tier
+    real recognition_score
+    real career_upside_score
+    real technical_interest_score
   }
 ```
 

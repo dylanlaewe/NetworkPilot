@@ -1,29 +1,48 @@
 import { renderDraft, selectTemplate } from "@/domain/drafting";
-import { CONTACT_PERSONAS, INDUSTRY_PREFERENCES, ROLE_FAMILIES, TARGET_ROLES, scoreTarget } from "@/domain/targeting";
+import { CONTACT_PERSONAS, GEOGRAPHY_PREFERENCES, INDUSTRY_PREFERENCES, ROLE_FAMILIES, TARGET_COMPANIES, TARGET_ROLES, scoreTarget } from "@/domain/targeting";
 import type { TargetCandidate, TargetCompany } from "@/domain/targeting";
-import type { DraftRecord, DraftStudioRepository, SelectedDraftRecipient } from "./types";
+import type { DraftRecord, DraftStudioRepository, RecipientTargetingSnapshot, SelectedDraftRecipient } from "./types";
 
-const industryMap:Record<string,string>={Consulting:"consulting",Finance:"financial-services",Commodities:"commodities-energy",Technology:"technology-ai",Defense:"defense-aerospace"};
-const familyMap:Record<string,string>={Consulting:"industry-professional",Finance:"industry-professional",Commodities:"industry-professional",Technology:"data-analytics",Defense:"technical-product"};
-export function strategyForRecipient(recipient:SelectedDraftRecipient):TargetCandidate {
-  const industryId=industryMap[recipient.industry]??"complex-operations";
-  const familyId=familyMap[recipient.industry]??"data-analytics";
-  const role=TARGET_ROLES.find((item)=>item.familyId===familyId&&item.enabled)!;
-  const persona=CONTACT_PERSONAS.find((item)=>item.id==="experienced-practitioner")!;
-  const industry=INDUSTRY_PREFERENCES.find((item)=>item.id===industryId)!;
-  const company:TargetCompany={id:`fictional-scenario-${recipient.id}`,canonicalName:recipient.companyName,industryId,tier:"tier-2",enabled:true,recognitionScore:72,careerUpsideScore:78,technicalInterestScore:82,geographicRelevance:["remote-us"],rationale:"Fictional simulation-only company scenario.",provenance:"Deterministic fictional dataset",lastReviewedDate:"2026-09-07",operatorNotes:"Not part of the real target-company registry."};
-  return {id:recipient.id,company,role,persona,industry,geographyScore:70,roleAlignment:88,functionalRelevance:85,yearsExperience:recipient.yearsExperience,sharedSignal:55,dataQuality:100,roleSpecificUpside:90};
+export const FICTIONAL_TARGETING_PROFILE_INVALID = "FICTIONAL_TARGETING_PROFILE_INVALID" as const;
+export class InvalidFictionalTargetingProfileError extends Error {
+  readonly code = FICTIONAL_TARGETING_PROFILE_INVALID;
+  constructor(detail: string) { super(`Invalid fictional targeting profile: ${detail}`); this.name = "InvalidFictionalTargetingProfileError"; }
 }
-export function generateDraftsForRun(repository:DraftStudioRepository,runId:string,now:()=>Date):DraftRecord[] {
-  if(!repository.listCompletedRuns().some((run)=>run.id===runId))throw new Error(`Completed fictional simulation run not found: ${runId}`);
-  return repository.listSelectedRecipients(runId).map((recipient)=>{
-    const familyId=familyMap[recipient.industry]??"data-analytics";
-    const enriched={...recipient,roleFamilyId:familyId,industryId:industryMap[recipient.industry]??"complex-operations",personaId:"experienced-practitioner"};
-    const template=selectTemplate(enriched);
-    const rendered=renderDraft(enriched,repository.listEvidence(recipient.id),now,template);
-    const score=scoreTarget(strategyForRecipient(enriched));
-    return repository.saveDraft({id:`draft-${runId}-${recipient.id}-${template.id}-${template.version}`,recipient:enriched,runId,rendered,score,status:"generated"});
+
+export function candidateFromProfile(recipient: SelectedDraftRecipient): { candidate: TargetCandidate; snapshot: RecipientTargetingSnapshot } {
+  const profile = recipient.targetingProfile;
+  const companyProfile = recipient.companyProfile;
+  const numericInputs = [profile.roleAlignment, profile.functionalRelevance, profile.sharedSignal, profile.dataQuality, profile.roleSpecificUpside, companyProfile.recognitionScore, companyProfile.careerUpsideScore, companyProfile.technicalInterestScore];
+  if (!profile.professionalTitle || !profile.profileVersion || !companyProfile.profileVersion || numericInputs.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) throw new InvalidFictionalTargetingProfileError("missing or out-of-range fictional attributes");
+  const roleFamily = ROLE_FAMILIES.find((item) => item.id === profile.roleFamilyId && item.enabled);
+  const role = TARGET_ROLES.find((item) => item.id === profile.desiredRoleId && item.enabled);
+  const persona = CONTACT_PERSONAS.find((item) => item.id === profile.personaId && item.enabled);
+  const industry = INDUSTRY_PREFERENCES.find((item) => item.id === profile.industryId && item.enabled);
+  const geography = GEOGRAPHY_PREFERENCES.find((item) => item.id === profile.geographyId && item.enabled);
+  if (!roleFamily) throw new InvalidFictionalTargetingProfileError("unknown or disabled role family");
+  if (!role || role.familyId !== roleFamily.id) throw new InvalidFictionalTargetingProfileError("desired role does not match role family");
+  if (!persona) throw new InvalidFictionalTargetingProfileError("unknown or disabled persona");
+  if (!industry) throw new InvalidFictionalTargetingProfileError("unknown or disabled industry");
+  if (!geography) throw new InvalidFictionalTargetingProfileError("unknown or disabled geography");
+  if (companyProfile.industryId !== industry.id) throw new InvalidFictionalTargetingProfileError("fictional company industry is inconsistent");
+  if (companyProfile.companyId !== recipient.companyId || TARGET_COMPANIES.some((item) => item.id === companyProfile.companyId)) throw new InvalidFictionalTargetingProfileError("fictional company reference is inconsistent or public");
+  const company: TargetCompany = { id: companyProfile.companyId, canonicalName: recipient.companyName, industryId: industry.id, tier: companyProfile.scenarioTier, enabled: true, recognitionScore: companyProfile.recognitionScore, careerUpsideScore: companyProfile.careerUpsideScore, technicalInterestScore: companyProfile.technicalInterestScore, geographicRelevance: [geography.id], rationale: "Persisted fictional simulation profile", provenance: "fictional-targeting-profile", lastReviewedDate: "2026-09-07", operatorNotes: "Fictional scoring input; not a real-world claim." };
+  const candidate: TargetCandidate = { id: recipient.id, company, role, persona, industry, geographyScore: geography.score, roleAlignment: profile.roleAlignment, functionalRelevance: profile.functionalRelevance, yearsExperience: recipient.yearsExperience, sharedSignal: profile.sharedSignal, dataQuality: profile.dataQuality, roleSpecificUpside: profile.roleSpecificUpside };
+  const snapshot: RecipientTargetingSnapshot = { fictional: true, prospectId: recipient.id, prospectName: recipient.prospectName, professionalTitle: profile.professionalTitle, companyId: recipient.companyId, companyName: recipient.companyName, companyTier: companyProfile.scenarioTier, roleFamilyId: roleFamily.id, desiredRoleId: role.id, personaId: persona.id, industryId: industry.id, industryDisplayName: industry.displayName, geographyId: geography.id, geographyDisplayName: geography.displayName, yearsExperience: recipient.yearsExperience, roleAlignment: profile.roleAlignment, functionalRelevance: profile.functionalRelevance, sharedSignal: profile.sharedSignal, dataQuality: profile.dataQuality, roleSpecificUpside: profile.roleSpecificUpside, companyRecognition: companyProfile.recognitionScore, companyCareerUpside: companyProfile.careerUpsideScore, companyTechnicalInterest: companyProfile.technicalInterestScore, targetingProfileVersion: profile.profileVersion, companyProfileVersion: companyProfile.profileVersion };
+  return { candidate, snapshot };
+}
+
+export function generateDraftsForRun(repository: DraftStudioRepository, runId: string, now: () => Date): DraftRecord[] {
+  if (!repository.listCompletedRuns().some((run) => run.id === runId)) throw new Error(`Completed fictional simulation run not found: ${runId}`);
+  const prepared = repository.listSelectedRecipients(runId).map((recipient) => {
+    const { candidate, snapshot } = candidateFromProfile(recipient);
+    const template = selectTemplate(recipient, { runId });
+    const rendered = renderDraft(recipient, repository.listEvidence(recipient.id), now, template);
+    const score = scoreTarget(candidate);
+    if (!score.eligible) throw new InvalidFictionalTargetingProfileError(score.rejectionCode ?? "target failed scoring gate");
+    return { id: `draft-${runId}-${recipient.id}-${template.id}-${template.version}`, recipient, runId, rendered, score, snapshot, status: "generated" as const };
   });
+  return repository.transaction(() => prepared.map((draft) => repository.saveDraft(draft)));
 }
-export function getDraftStudioData(repository:DraftStudioRepository):import("./types").DraftStudioData { return {runs:repository.listCompletedRuns(),drafts:repository.listDrafts(),companies:repository.listTargetCompanies()}; }
-export const ENABLED_ROLE_FAMILIES=ROLE_FAMILIES.filter((family)=>family.enabled);
+export function getDraftStudioData(repository: DraftStudioRepository): import("./types").DraftStudioData { return { runs: repository.listCompletedRuns(), drafts: repository.listDrafts(), companies: repository.listTargetCompanies() }; }
+export const ENABLED_ROLE_FAMILIES = ROLE_FAMILIES.filter((family) => family.enabled);

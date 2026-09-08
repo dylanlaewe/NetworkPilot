@@ -15,6 +15,7 @@ export function scoreTarget(candidate: TargetCandidate, weights: TargetingWeight
   if (!candidate.company.enabled || candidate.company.tier==="excluded" || candidate.company.tier==="unreviewed") return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["company-prohibited"],rejectionCode:"company-prohibited" };
   if (!candidate.role.enabled) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["role-disabled"],rejectionCode:"role-disabled" };
   if (!candidate.persona.enabled) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["persona-disabled"],rejectionCode:"persona-disabled" };
+  if (candidate.yearsExperience<candidate.persona.minimumYearsExperience) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["recipient-insufficient-experience"],rejectionCode:"recipient-insufficient-experience" };
   if (!candidate.industry.enabled) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["industry-disabled"],rejectionCode:"industry-disabled" };
   if (candidate.company.tier==="tier-3" && candidate.roleSpecificUpside<85) return { eligible:false,total:0,version:TARGETING_SCORE_VERSION,components:[],explanationCodes:["tier-3-needs-exceptional-fit"],rejectionCode:"tier-3-needs-exceptional-fit" };
   const experienceFit = candidate.yearsExperience<5?20:candidate.yearsExperience<=20?100:65;

@@ -1,23 +1,9 @@
-import { factById } from "./facts";
-import { DRAFT_TEMPLATES } from "./templates";
-import type { DraftRecipient, DraftTemplate, PersonalizationEvidence, RenderedDraft } from "./types";
-
-export const PROHIBITED_DRAFT_PHRASES = ["i hope this email finds you well","i came across your impressive profile","your journey is truly inspiring","pick your brain","synergy","leverage your expertise"];
-export function selectTemplate(recipient:DraftRecipient):DraftTemplate {
-  return DRAFT_TEMPLATES.find((template)=>template.id==="career-path-leader"&&template.personaIds.includes(recipient.personaId))
-    ??DRAFT_TEMPLATES.find((template)=>template.industryIds.includes(recipient.industryId)&&(template.roleFamilyIds.length===0||template.roleFamilyIds.includes(recipient.roleFamilyId)))
-    ??DRAFT_TEMPLATES.find((template)=>template.roleFamilyIds.includes(recipient.roleFamilyId))
-    ??DRAFT_TEMPLATES[0];
-}
-export function draftWordCount(body:string):number { return body.trim().split(/\s+/).filter(Boolean).length; }
-export function renderDraft(recipient:DraftRecipient,evidence:PersonalizationEvidence[],now:()=>Date,template=selectTemplate(recipient)):RenderedDraft {
-  const facts=template.factIds.map(factById);
-  const verified=evidence.filter((item)=>item.verificationStatus==="verified");
-  const evidenceSentence=verified[0]?`I noted that ${verified[0].claim}. `:"";
-  const introduction=`My name is ${factById("sender-name").value}, and I’m completing a ${factById("degree").value} with a ${factById("graduation").value}.`;
-  const experience=`Through my ${factById("internship").value}, I’ve gained ${facts.some((f)=>f.id==="technical-work")?factById("technical-work").value:factById("systems-scale").value}.`;
-  const body=[`Hi ${recipient.firstName},`,introduction,experience,`${evidenceSentence}${template.reason}`,template.question,"Thank you for considering it,","Dylan"].join("\n\n");
-  const lowered=body.toLowerCase();
-  if(PROHIBITED_DRAFT_PHRASES.some((phrase)=>lowered.includes(phrase))) throw new Error("Template contains prohibited outreach language");
-  return { subject:template.subject.replace("{{company}}",recipient.companyName),body,templateId:template.id,templateVersion:template.version,referencedFactIds:["sender-name",...template.factIds],evidenceIds:verified.slice(0,1).map((item)=>item.id),generatedAt:now().toISOString(),status:"draft-only-simulation",usedEvidence:verified.length>0 };
-}
+import{DYLAN_FACTS,fragmentById,resolveApprovedFacts}from"./facts";import{DRAFT_TEMPLATES,TEMPLATE_CATALOG_VERSION}from"./templates";import type{DraftContext,DraftRecipient,DraftTemplate,OutreachLane,PersonalizationEvidence,RenderedDraft,SenderFact}from"./types";
+export const PROHIBITED_DRAFT_PHRASES=["i hope this email finds you well","i came across your impressive profile","your journey is truly inspiring","pick your brain","synergy","leverage your expertise"];
+const leaderPersonas=new Set(["team-manager","functional-director","project-leader","cross-functional-leader","select-vp","consulting-principal"]);
+export function laneForRecipient(recipient:DraftRecipient):OutreachLane{if(leaderPersonas.has(recipient.personaId))return"career-path-leader";if(recipient.industryId==="consulting")return"consulting";if(recipient.industryId==="financial-services")return"finance";if(["commodities-energy","energy-renewables"].includes(recipient.industryId))return"commodities-energy";if(recipient.industryId==="defense-aerospace")return"defense-technology";if(recipient.roleFamilyId==="technical-product")return"engineering-technical";if(recipient.roleFamilyId==="business-delivery")return"project-operations";return"data-analytics";}
+export function fnv1a32(value:string):number{let hash=0x811c9dc5;for(let index=0;index<value.length;index+=1){hash^=value.charCodeAt(index);hash=Math.imul(hash,0x01000193)>>>0;}return hash;}
+export function selectTemplate(recipient:DraftRecipient,context:DraftContext):DraftTemplate{const lane=laneForRecipient(recipient);const eligible=DRAFT_TEMPLATES.filter((item)=>item.laneId===lane).sort((a,b)=>a.id.localeCompare(b.id));if(!eligible.length)throw new Error(`No template variants for lane: ${lane}`);const key=`${TEMPLATE_CATALOG_VERSION}|${context.runId}|${recipient.id}|${lane}`;return eligible[fnv1a32(key)%eligible.length];}
+export function draftWordCount(body:string):number{return body.trim().split(/\s+/).filter(Boolean).length;}
+export function validateTemplateProvenance(template:DraftTemplate,registry:SenderFact[]):Map<string,SenderFact>{const derived=[...new Set(template.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];if(JSON.stringify(derived)!==JSON.stringify(template.factIds))throw new Error(`Template fact metadata mismatch: ${template.id}`);return resolveApprovedFacts(template.factIds,registry);}
+export function renderDraft(recipient:DraftRecipient,evidence:PersonalizationEvidence[],now:()=>Date,template:DraftTemplate,registry:SenderFact[]=DYLAN_FACTS):RenderedDraft{const facts=validateTemplateProvenance(template,registry);const fragments=template.fragmentIds.map((id)=>fragmentById(id).render(facts));const verified=evidence.find((item)=>item.verificationStatus==="verified");const personalization=verified?`I noted that ${verified.claim}.`:"";let paragraphs:string[];if(template.structure==="reason-first")paragraphs=[template.reason,fragments[0],...fragments.slice(1)];else if(template.structure==="experience-first")paragraphs=[fragments.at(-1)!,...fragments.slice(0,-1),template.reason];else paragraphs=[...fragments,template.reason];if(personalization)paragraphs.splice(1,0,personalization);const body=[`Hi ${recipient.firstName},`,...paragraphs,template.question,"Thank you for considering it,","Dylan"].join("\n\n");const lowered=body.toLowerCase();if(PROHIBITED_DRAFT_PHRASES.some((phrase)=>lowered.includes(phrase)))throw new Error("Template contains prohibited outreach language");return{subject:template.subject.replace("{{company}}",recipient.companyName),body,templateId:template.id,templateVersion:template.version,templateCatalogVersion:template.catalogVersion,referencedFactIds:[...facts.keys()],evidenceIds:verified?[verified.id]:[],generatedAt:now().toISOString(),status:"draft-only-simulation",usedEvidence:Boolean(verified)};}
