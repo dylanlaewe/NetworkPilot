@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import {readFileSync} from "node:fs";import {join} from "node:path";
+describe("Apollo operator status",()=>{it("is status-only and does not expose credentials or provider actions",()=>{const source=readFileSync(join(process.cwd(),"src/app/page.tsx"),"utf8");expect(source).toContain("Apollo read-only adapter");expect(source).toContain("no live access validated");expect(source).toContain("No provider action is available");expect(source).not.toContain("APOLLO_API_KEY");expect(source).not.toMatch(/>Send</);});});

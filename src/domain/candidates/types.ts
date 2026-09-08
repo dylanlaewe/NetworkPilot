@@ -53,7 +53,8 @@ export interface SimulationCandidateSourceRecord {
 export type DatasetClassification="fictional"|"provider-shaped-fixture"|"authorized-provider";
 export type CandidateLifecycleState="imported"|"normalized"|"review-required"|"eligible"|"rejected"|"suppressed"|"planned";
 export interface FieldProvenance { sourceField:string; observedAt:string; confidence:"high"|"medium"|"low"; }
-export type ExperienceEvidence={kind:"exact";years:number;sourceField:string}|{kind:"range";minimum:number;maximum:number;sourceField:string}|{kind:"approximate";years:number;sourceField:string}|{kind:"unknown";sourceField:string};
+export interface EmploymentPeriod {startDate?:string;endDate?:string;current?:boolean;}
+export type ExperienceEvidence={kind:"exact";years:number;sourceField:string}|{kind:"range";minimum:number;maximum:number;sourceField:string}|{kind:"approximate";years:number;sourceField:string}|{kind:"employment-history";periods:EmploymentPeriod[];referenceDate:string;sourceField:string}|{kind:"unknown";sourceField:string};
 export interface CandidateSourceRecord {
   sourceProviderId:string; providerRecordId:string; datasetClassification:DatasetClassification;
   person:{firstName:string;lastName:string}; currentTitle:string; currentOrganization:{name:string;domain?:string};
@@ -61,6 +62,7 @@ export interface CandidateSourceRecord {
   email:{address:string;verificationStatus:EmailVerificationStatus}; sourceTimestamps:{retrievedAt:string;updatedAt?:string};
   fieldProvenance:Record<string,FieldProvenance>; consent:{suppressed:boolean;optedOut:boolean;evidence?:string};
   sourceFingerprint:string; simulationAlias?:{strategyCompanyId:string;reviewed:boolean;note:string};
+  providerMetadata?:{adapterVersion:string;responseMappingVersion:string;requestContractVersion:string;importArchitectureVersion:string;providerSeniority?:string};
 }
 export interface ExperienceInterpretation { minimumSupportedYears:number|null; maximumSupportedYears:number|null; kind:"exact"|"bounded"|"inferred"|"unknown"; evidence:ExperienceEvidence[]; interpretationVersion:"experience-v1"; confidence:"high"|"medium"|"low"; reviewState:"accepted"|"review-required"; explanationCodes:string[]; }
 export interface SpecificRoleClassification { normalizedTitle:string; specificRoleId:string|null; roleFamilyId:string|null; matchedSignals:string[]; classificationVersion:"role-classification-v2"; reviewCode:string|null; }

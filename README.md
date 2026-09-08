@@ -55,6 +55,10 @@ Interface typography uses repository-independent operating-system sans-serif and
 
 See [docs/architecture.md](docs/architecture.md) and [docs/schema.md](docs/schema.md).
 
+## Apollo adapter foundation
+
+The server-only Apollo read-only adapter is disabled by default and has not been validated with a live account. It provides fixed-host People Search and deliberate enrichment boundaries, strict response mapping, secret redaction, persisted credit caps, and bounded retry handling. All tests use injected fictional responses; no real Apollo request is made. See [docs/apollo-adapter.md](docs/apollo-adapter.md).
+
 ## Targeting and deterministic drafts
 
 Desired early-career job roles are modeled separately from senior networking-recipient personas. Targeting combines configurable company, current-role, function, experience, industry, geography, shared-signal, and derived data-quality components in the explainable `targeting-v1` score. Public target-company metadata is authoritative for matched tier, enabled state, industry, and company score inputs while fictional employer identity stays separate. Deterministic soft caps improve industry and role-family representation, relax only when needed to fill the qualified target, and persist every relaxation.

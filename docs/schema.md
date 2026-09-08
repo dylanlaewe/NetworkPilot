@@ -18,6 +18,8 @@ erDiagram
   PROSPECTS ||--o{ PERSONALIZATION_EVIDENCE : has
   PROSPECTS ||--o| FICTIONAL_TARGETING_PROFILES : simulated_by
   COMPANIES ||--o| FICTIONAL_COMPANY_PROFILES : simulated_by
+  IMPORT_BATCHES ||--o{ IMPORTED_CANDIDATES : contains
+  IMPORTED_CANDIDATES ||--o{ CANDIDATE_REVIEW_AUDIT : audited_by
 
   SIMULATION_RUNS {
     text campaign_date UK
@@ -88,8 +90,33 @@ erDiagram
     text registry_match_provenance
     integer registry_alias_reviewed
   }
+  IMPORT_BATCHES {
+    text adapter_id
+    text dataset_classification
+    text source_fingerprint UK
+    text safe_source_snapshot_json
+    text state
+  }
+  PROVIDER_DAILY_BUDGETS {
+    text provider_id PK
+    text local_date PK
+    integer attempted_candidates
+    integer estimated_max_exposure
+    integer observed_consumption
+  }
+  PROVIDER_OPERATIONS {
+    text provider_id
+    text batch_id
+    text operation
+    text state
+    integer estimated_max_exposure
+    integer observed_consumption
+    integer attempt_count
+  }
 ```
 
 `campaign_plan_decisions.targeting_snapshot_json` is the immutable planning record: validated source identity/fingerprint, `classification-v1`, normalized title and derived classifications, fictional employer, separate authoritative strategy-company match/method/provenance, registry score inputs, targeting score/components/explanations, hard-gate result, rank, final selection state, and reason. Drafts consume selected snapshots instead of mutable profiles. The older qualification and relevance snapshot columns remain migration-compatible but are no longer written by targeting-first planning.
 
 `campaign_settings` stores local campaign configuration, including the IANA timezone and fictional-dataset marker. `schema_migrations` records applied migration filenames. Runtime `.sqlite`, WAL, and journal files are ignored and never committed.
+
+`provider_daily_budgets` and `provider_operations` store conservative Apollo enrichment authorization, attempts, optional observed credit use, and controlled failure categories. They contain no credentials or response payloads. Import batch snapshots retain safe provider identity and version metadata; immutable normalized snapshots retain field provenance.

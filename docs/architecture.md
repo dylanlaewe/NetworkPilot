@@ -26,6 +26,12 @@ Role classification is exact and token-aware in `role-classification-v2`. Stable
 
 Imported records move through imported, normalized, review-required, eligible, rejected, suppressed, and planned lifecycle vocabulary. Candidate Review writes immutable before/after audit snapshots with action, reason, and time. A reviewed correction may resolve role ambiguity only from the approved taxonomy; it cannot override consent, verification, experience, seniority, or authoritative company gates. Automatically eligible fixtures are materialized into the existing fictional planning source, then pass through normal normalization, scoring, uniqueness, cooldown, repeat-contact, and diversification policy. Plans and drafts remain immutable snapshots.
 
+### Apollo boundary
+
+The first concrete provider boundary lives entirely under `src/infrastructure/providers/apollo`. It translates versioned Apollo-shaped evidence into `CandidateSourceRecord`; it cannot set NetworkPilot roles, personas, eligibility, company desirability, scores, suppression, plans, drafts, or delivery state. Its fixed-host HTTP transport is server-only, bounded, redirect-denying, and inert unless the explicit feature flag and credential are both present.
+
+Search and enrichment are separate operations. Search uses coarse approved filters, defaults to manager/director/senior, forces similar-title expansion off, and never promotes a search result to verified email. Enrichment reserves persisted conservative exposure before transport and prohibits personal-email, phone, and waterfall retrieval. Provider employment periods flow to domain-owned `experience-v1`, which merges overlaps and fails incomplete or contradictory evidence closed. SQLite stores estimated exposure, attempts, optional observed consumption, and provider failure categories; retries share the original authorization. See [apollo-adapter.md](apollo-adapter.md) for the assumed, not-yet-live-validated contract.
+
 ## Idempotency and transaction boundary
 
 `simulation_runs.campaign_date` has a unique constraint. The use case checks for an existing completed date both before and inside an SQLite `IMMEDIATE` transaction. The run header, plan lifecycle, decisions, snapshots, and diversification relaxations are committed together. Any thrown failure rolls the transaction back; a database uniqueness violation prevents concurrent duplicate dates.
