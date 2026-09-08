@@ -16,6 +16,16 @@ Versioned SQL migrations create companies, fictional prospects, simulation runs,
 
 Legacy qualification rows remain readable for migration compatibility. New campaign-plan decisions store complete immutable targeting JSON rather than joins that change retroactively when a prospect or strategy is edited.
 
+## Provider-ready ingestion and review
+
+`CandidateSourceRecord` is the neutral boundary for a future authorized adapter. It has no fictional-employer requirement and keeps source-reported organization, reviewed strategy-company match, and optional fictional simulation alias as different facts. Current adapters are deterministic local fixtures only: one flat and one nested. `SimulationCandidateSourceRecord` is explicitly named as the legacy seeded planning envelope.
+
+The application owns import validation and normalization through `IngestionRepository`; SQLite owns transactions and storage only. A batch snapshots adapter/version, dataset class, counts, fingerprint, safe source identity, normalization/classification versions, validation outcomes, failures, and timestamps. Identical fingerprints return the stored batch. Invalid identifiers, live dataset classes, and conflicting native identities fail before persistence; the transaction prevents partial candidate batches.
+
+Role classification is exact and token-aware in `role-classification-v2`. Stable specific roles map to exactly one role family, associate/senior modifiers do not change the base role, partial words and ambiguous/unknown titles fail closed, and recipient persona remains independent. `experience-v1` intersects supplied evidence conservatively, persists minimum and maximum supported years, marks exact/bounded/inferred/unknown values, and routes approximate, absent, or conflicting evidence to review. The five-year gate reads only the minimum.
+
+Imported records move through imported, normalized, review-required, eligible, rejected, suppressed, and planned lifecycle vocabulary. Candidate Review writes immutable before/after audit snapshots with action, reason, and time. A reviewed correction may resolve role ambiguity only from the approved taxonomy; it cannot override consent, verification, experience, seniority, or authoritative company gates. Automatically eligible fixtures are materialized into the existing fictional planning source, then pass through normal normalization, scoring, uniqueness, cooldown, repeat-contact, and diversification policy. Plans and drafts remain immutable snapshots.
+
 ## Idempotency and transaction boundary
 
 `simulation_runs.campaign_date` has a unique constraint. The use case checks for an existing completed date both before and inside an SQLite `IMMEDIATE` transaction. The run header, plan lifecycle, decisions, snapshots, and diversification relaxations are committed together. Any thrown failure rolls the transaction back; a database uniqueness violation prevents concurrent duplicate dates.
@@ -58,7 +68,7 @@ Fictional targeting profiles persist a fabricated title, function/role family, p
 
 ## Candidate normalization and targeting-first planning
 
-`CandidateInput` is the future authorized-source adapter contract. It carries a provider-neutral internal ID, external reference, source type, retrieval timestamp, names, professional context, optional employer domain, experience/range, professional email verification, structured signals, registry match, data-quality indicators, and an idempotent fingerprint. Arbitrary raw provider payload retention is deliberately absent. SQLite implements only this source contract; it cannot hand the planning use case a preclassified targeting candidate.
+`CandidateInput` is the legacy simulation planning input. Future authorized adapters must instead implement the neutral `CandidateSourceRecord`; provider-specific field names end at the adapter boundary. Arbitrary raw payload and secret retention are deliberately absent.
 
 The application produces a `NormalizedCandidateRecord` containing validated source identity and fingerprint, normalized title, interpreted experience, derived role/persona/industry/geography, authoritative company match, derived quality and explicit fictional signals, explanation/review/rejection codes, and `classification-v1`. Prefilled fixture classifications are assertions only: disagreement with derived evidence fails closed.
 

@@ -2,8 +2,12 @@ import type { Industry } from "@/domain/outreach";
 import { INDUSTRIES } from "@/domain/outreach";
 import { TARGET_COMPANIES } from "@/domain/targeting";
 import type { SqliteSimulationRepository } from "./database";
+import {importCandidateBatch} from "@/application/ingestion";
+import {adaptFlatFixture,adaptNestedFixture,FLAT_FIXTURES,NESTED_FIXTURES} from "@/infrastructure/fixtures/provider-fixtures";
+import {classifySpecificRole} from "@/domain/candidates";
 
-export const FICTIONAL_PROSPECT_COUNT = 180;
+const BASE_FICTIONAL_PROSPECT_COUNT=180;
+export const FICTIONAL_PROSPECT_COUNT = 182;
 
 export function seedFictionalData(repository: SqliteSimulationRepository): void {
   repository.transaction(() => {
@@ -15,15 +19,15 @@ export function seedFictionalData(repository: SqliteSimulationRepository): void 
     const companyProfile=repository.native.prepare("INSERT INTO fictional_company_profiles(company_id,industry_id,scenario_tier,recognition_score,career_upside_score,technical_interest_score,profile_version,registry_company_id,registry_match_method,registry_match_provenance,registry_alias_reviewed) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET industry_id=excluded.industry_id,scenario_tier=excluded.scenario_tier,recognition_score=excluded.recognition_score,career_upside_score=excluded.career_upside_score,technical_interest_score=excluded.technical_interest_score,profile_version=excluded.profile_version,registry_company_id=excluded.registry_company_id,registry_match_method=excluded.registry_match_method,registry_match_provenance=excluded.registry_match_provenance,registry_alias_reviewed=excluded.registry_alias_reviewed");
     const targetingProfile=repository.native.prepare("INSERT INTO fictional_targeting_profiles(prospect_id,professional_title,role_family_id,desired_role_id,persona_id,geography_id,industry_id,role_alignment,functional_relevance,shared_signal,data_quality,role_specific_upside,profile_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(prospect_id) DO UPDATE SET professional_title=excluded.professional_title,role_family_id=excluded.role_family_id,desired_role_id=excluded.desired_role_id,persona_id=excluded.persona_id,geography_id=excluded.geography_id,industry_id=excluded.industry_id,role_alignment=excluded.role_alignment,functional_relevance=excluded.functional_relevance,shared_signal=excluded.shared_signal,data_quality=excluded.data_quality,role_specific_upside=excluded.role_specific_upside,profile_version=excluded.profile_version");
     for (const item of TARGET_COMPANIES) targetCompany.run(item.id,item.canonicalName,item.industryId,item.tier,Number(item.enabled),item.recognitionScore,item.careerUpsideScore,item.technicalInterestScore,JSON.stringify(item.geographicRelevance),item.rationale,item.provenance,item.lastReviewedDate,item.operatorNotes);
-    for (let i = 1; i <= FICTIONAL_PROSPECT_COUNT; i += 1) {
+    for (let i = 1; i <= BASE_FICTIONAL_PROSPECT_COUNT; i += 1) {
       const suffix = String(i).padStart(3, "0");
       const specialIndustries:Industry[]=["Defense","Finance","Technology","Commodities","Technology","Consulting","Defense","Finance","Technology","Commodities"];
       const industry: Industry = specialIndustries[i-1]??INDUSTRIES[(i - 1) % INDUSTRIES.length];
       const titles=["Senior Data Engineer","Analytics Manager","Technical Program Leader","Commodities Analyst","Unrelated Corporate Executive","Junior Data Peer","Principal Analytics Engineer","Business Intelligence Analyst","Senior Automation Engineer","Market Data Analyst"];
-      const title=titles[i-1]??["Data Integration Engineer","Solutions Engineer","Program Analyst","Operations Analyst","Senior Data Practitioner"][i%5];
+      const title=titles[i-1]??["Data Engineer","Software Engineer","Program Analyst","Operations Analyst","Senior Data Analyst"][i%5];
       const titleTokens=title.toLowerCase().split(/\s+/);
       const familyId=titleTokens.some((token)=>["commodities","commodity","energy","market","finance","financial","risk","consultant","consulting"].includes(token))?"industry-professional":titleTokens.some((token)=>["program","project","operations","strategy","delivery"].includes(token))?"business-delivery":titleTokens.some((token)=>["data","analytics","analyst","intelligence"].includes(token))?"data-analytics":"technical-product";
-      const desiredRoleId=familyId==="data-analytics"?"data-1":familyId==="technical-product"?"technical-1":familyId==="business-delivery"?"delivery-1":"industry-1";
+      const exactRole=classifySpecificRole(title);const desiredRoleId=exactRole.specificRoleId??"";
       const specialYears=[12,14,13,8,25,1,12,7,11,9];
       const yearsExperience=specialYears[i-1]??(5+(i%16));
       const personaId=titleTokens.includes("manager")?"team-manager":titleTokens.includes("program")&&titleTokens.includes("leader")?"project-leader":yearsExperience>=8?"senior-ic":"experienced-practitioner";
@@ -51,4 +55,7 @@ export function seedFictionalData(repository: SqliteSimulationRepository): void 
     repository.setSetting("minimumDailyTarget", "15", new Date("2026-01-01T00:00:00.000Z"));
     repository.setSetting("maximumDailyTarget", "20", new Date("2026-01-01T00:00:00.000Z"));
   });
+  const companies=repository.listTargetCompanies();
+  importCandidateBatch(repository,companies,{batchId:"fixture-flat-batch-v1",adapterId:"fictional-flat",adapterVersion:"1.0.0",datasetClassification:"provider-shaped-fixture",sourceFingerprint:"fixture-flat-batch-fingerprint-v1",records:FLAT_FIXTURES.map(adaptFlatFixture)},new Date("2026-09-08T12:00:00.000Z"));
+  importCandidateBatch(repository,companies,{batchId:"fixture-nested-batch-v1",adapterId:"fictional-nested",adapterVersion:"1.0.0",datasetClassification:"provider-shaped-fixture",sourceFingerprint:"fixture-nested-batch-fingerprint-v1",records:NESTED_FIXTURES.map(adaptNestedFixture)},new Date("2026-09-08T12:01:00.000Z"));
 }

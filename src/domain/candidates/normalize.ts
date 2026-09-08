@@ -1,6 +1,7 @@
 import { CONTACT_PERSONAS, GEOGRAPHY_PREFERENCES, INDUSTRY_PREFERENCES, TARGET_ROLES } from "@/domain/targeting";
 import type { CandidateClassification, CandidateInput } from "./types";
 import type { TargetCompany } from "@/domain/targeting";
+import {classifySpecificRole} from "./provider-normalization";
 
 const tokens = (value: string): string[] => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
 const hasSequence = (haystack: string[], phrase: string): boolean => {
@@ -43,13 +44,13 @@ export function classifyCandidate(input: CandidateInput): CandidateClassificatio
   if (titleTokens.some((token) => ["intern", "student", "junior"].includes(token)) || hasSequence(titleTokens, "entry level")) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "entry-level-peer"], reviewCode: "entry-level-peer-rejected" };
   const isVp = titleTokens.includes("vp") || hasSequence(titleTokens, "vice president");
   if (isVp && (years === undefined || years < 15)) return { normalizedTitle: title, yearsExperience: years, explanationCodes: [...explanations, "vp-policy"], reviewCode: "vp-not-selective-fit" };
-  const roleFamilyId=titleTokens.some((token)=>["commodities","commodity","energy","market","markets","finance","financial","risk","consultant","consulting"].includes(token))?"industry-professional":titleTokens.some((token)=>["program","project","operations","strategy","delivery"].includes(token))?"business-delivery":titleTokens.some((token)=>["data","analytics","analyst","intelligence"].includes(token))?"data-analytics":titleTokens.some((token)=>["software","engineer","engineering","automation","solutions","product","technical"].includes(token))?"technical-product":undefined;
-  const role = TARGET_ROLES.find((candidate) => candidate.enabled&&candidate.familyId===roleFamilyId);
+  const specific=classifySpecificRole(title);
+  const role = TARGET_ROLES.find((candidate) => candidate.enabled&&candidate.id===specific.specificRoleId);
   const personaId = isVp ? "select-vp" : titleTokens.includes("director") ? "functional-director" : titleTokens.includes("manager") ? "team-manager" : (titleTokens.includes("program")||titleTokens.includes("project"))&&titleTokens.includes("leader")?"project-leader":titleTokens.includes("principal")&&titleTokens.some((token)=>["consultant","consulting"].includes(token))?"consulting-principal":years !== undefined && years >= 8 ? "senior-ic" : years !== undefined && years >= 5 ? "experienced-practitioner" : undefined;
   const industryId = INDUSTRY_PREFERENCES.find((industry) => industry.id === input.industry)?.id;
   const geographyId = GEOGRAPHY_PREFERENCES.find((geography) => geography.id === input.geography)?.id;
   const persona = CONTACT_PERSONAS.find((item) => item.id === personaId);
-  const missing = [[role, "role-ambiguous"], [persona, "persona-ambiguous"], [industryId, "industry-ambiguous"], [geographyId, "geography-ambiguous"]] as const;
+  const missing = [[role, specific.reviewCode??"role-ambiguous"], [persona, "persona-ambiguous"], [industryId, "industry-ambiguous"], [geographyId, "geography-ambiguous"]] as const;
   const reviewCode = missing.find(([value]) => !value)?.[1];
-  return { normalizedTitle: title, roleFamilyId: role?.familyId, desiredRoleId: role?.id, personaId: persona?.id, industryId, geographyId, yearsExperience: years, explanationCodes: [...explanations, ...(role ? ["role-token-match"] : []), ...(persona ? ["persona-policy-match"] : [])], reviewCode };
+  return { normalizedTitle: title, roleFamilyId: role?.familyId, desiredRoleId: role?.id, personaId: persona?.id, industryId, geographyId, yearsExperience: years, explanationCodes: [...explanations, ...(role ? specific.matchedSignals : []), ...(persona ? ["persona-policy-match"] : [])], reviewCode };
 }

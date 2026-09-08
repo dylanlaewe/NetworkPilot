@@ -1,0 +1,3 @@
+"use server";
+import {revalidatePath} from "next/cache";import {getSimulationRepository} from "@/infrastructure/sqlite/runtime";
+export async function reviewCandidateAction(formData:FormData){const candidateId=String(formData.get("candidateId")??""),action=String(formData.get("action")??"") as "confirm"|"correct"|"reject"|"suppress"|"pending",reason=String(formData.get("reason")??""),specificRoleId=String(formData.get("specificRoleId")??"")||undefined;if(!["confirm","correct","reject","suppress","pending"].includes(action))throw new Error("review-action-invalid");getSimulationRepository().reviewCandidate(candidateId,action,reason,specificRoleId,new Date());revalidatePath("/candidate-review");}

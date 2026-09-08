@@ -1,4 +1,4 @@
-import { CANDIDATE_SOURCE_TYPES, classifyCandidate, CLASSIFICATION_VERSION, matchCompanyRegistry, scoreCandidateDataQuality, type CandidateSourceRecord, type NormalizedCandidateRecord } from "@/domain/candidates";
+import { CANDIDATE_SOURCE_TYPES, classifyCandidate, CLASSIFICATION_VERSION, matchCompanyRegistry, scoreCandidateDataQuality, type SimulationCandidateSourceRecord, type NormalizedCandidateRecord } from "@/domain/candidates";
 import type { Prospect } from "@/domain/outreach";
 import type { PlanningCandidate } from "@/domain/planning";
 import { CONTACT_PERSONAS, DEFAULT_TARGETING_WEIGHTS, GEOGRAPHY_PREFERENCES, INDUSTRY_PREFERENCES, TARGET_ROLES, validateWeights, type TargetCompany, type TargetingWeights } from "@/domain/targeting";
@@ -14,7 +14,7 @@ export function validateCandidatePipelineConfig(config:CandidatePipelineConfig):
   validateWeights(config.weights);
 }
 
-export function normalizeCandidateSources(records:readonly CandidateSourceRecord[],registry:readonly TargetCompany[],config:CandidatePipelineConfig=DEFAULT_CANDIDATE_PIPELINE_CONFIG):PlanningCandidate[]{
+export function normalizeCandidateSources(records:readonly SimulationCandidateSourceRecord[],registry:readonly TargetCompany[],config:CandidatePipelineConfig=DEFAULT_CANDIDATE_PIPELINE_CONFIG):PlanningCandidate[]{
   validateCandidatePipelineConfig(config);
   const fingerprints=new Set<string>(),people=new Set<string>(),sourceIds=new Map<string,string>();
   const ordered=[...records].sort((a,b)=>a.input.internalId.localeCompare(b.input.internalId)||a.input.externalSourceReference.localeCompare(b.input.externalSourceReference));

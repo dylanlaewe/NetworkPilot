@@ -40,7 +40,8 @@ export interface CandidateClassification {
 export const CLASSIFICATION_VERSION = "classification-v1";
 export interface SuppliedCandidateClassification { roleFamilyId:string; desiredRoleId:string; personaId:string; industryId:string; geographyId:string; }
 export interface CandidateScoringSignals { roleAlignment:number; functionalRelevance:number; sharedSignal:number; roleSpecificUpside:number; }
-export interface CandidateSourceRecord {
+/** Legacy simulation planning envelope. Provider-shaped input uses CandidateSourceRecord below. */
+export interface SimulationCandidateSourceRecord {
   input:CandidateInput;
   fictionalEmployer:{id:string;name:string;industryId:string};
   suppliedClassification:SuppliedCandidateClassification;
@@ -49,6 +50,20 @@ export interface CandidateSourceRecord {
   targetingProfileVersion:string;
   companyProfileVersion:string;
 }
+export type DatasetClassification="fictional"|"provider-shaped-fixture"|"authorized-provider";
+export type CandidateLifecycleState="imported"|"normalized"|"review-required"|"eligible"|"rejected"|"suppressed"|"planned";
+export interface FieldProvenance { sourceField:string; observedAt:string; confidence:"high"|"medium"|"low"; }
+export type ExperienceEvidence={kind:"exact";years:number;sourceField:string}|{kind:"range";minimum:number;maximum:number;sourceField:string}|{kind:"approximate";years:number;sourceField:string}|{kind:"unknown";sourceField:string};
+export interface CandidateSourceRecord {
+  sourceProviderId:string; providerRecordId:string; datasetClassification:DatasetClassification;
+  person:{firstName:string;lastName:string}; currentTitle:string; currentOrganization:{name:string;domain?:string};
+  location:string; industrySignals:string[]; experienceEvidence:ExperienceEvidence[];
+  email:{address:string;verificationStatus:EmailVerificationStatus}; sourceTimestamps:{retrievedAt:string;updatedAt?:string};
+  fieldProvenance:Record<string,FieldProvenance>; consent:{suppressed:boolean;optedOut:boolean;evidence?:string};
+  sourceFingerprint:string; simulationAlias?:{strategyCompanyId:string;reviewed:boolean;note:string};
+}
+export interface ExperienceInterpretation { minimumSupportedYears:number|null; maximumSupportedYears:number|null; kind:"exact"|"bounded"|"inferred"|"unknown"; evidence:ExperienceEvidence[]; interpretationVersion:"experience-v1"; confidence:"high"|"medium"|"low"; reviewState:"accepted"|"review-required"; explanationCodes:string[]; }
+export interface SpecificRoleClassification { normalizedTitle:string; specificRoleId:string|null; roleFamilyId:string|null; matchedSignals:string[]; classificationVersion:"role-classification-v2"; reviewCode:string|null; }
 export interface NormalizedCandidateRecord {
   source:CandidateInput;
   fictionalEmployer:{id:string;name:string;industryId:string};

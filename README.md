@@ -15,19 +15,23 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The default campaign timezone is `America/New_York`.
 
-The simulation-only Draft Studio is available at [http://localhost:3000/draft-studio](http://localhost:3000/draft-studio). Run `npm run db:migrate` and `npm run db:seed` again after upgrading so the public target-company registry, fictional evidence, and draft schema are present.
+The simulation-only [Candidate Review](http://localhost:3000/candidate-review) and [Draft Studio](http://localhost:3000/draft-studio) workspaces are local. Run `npm run db:migrate` and `npm run db:seed` after upgrading so import, review, strategy-registry, fictional-evidence, and draft schema are present.
 
 ## Local database
 
 The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABASE_PATH` to another local file when needed. Database files, SQLite journals, environment files, and build output are ignored by Git.
 
 - `npm run db:migrate` — apply pending versioned SQL migrations
-- `npm run db:seed` — idempotently insert 180 fabricated prospects and campaign settings
+- `npm run db:seed` — idempotently insert 180 original fabricated prospects, two eligible provider-shaped fixtures, review fixtures, and campaign settings
 - `NODE_ENV=development npm run db:reset` — development-only reset and reseed of the exact configured database
 
 The reset command refuses to run unless `NODE_ENV` is `development` or `test`, prints its resolved target, and requires that target to remain inside this project’s real `data` directory without symlink escapes. An existing database containing data must carry the exact `datasetType=fictional` marker. Migration source files are never removed.
 
 ## Simulation workflow
+
+Two deterministic adapters demonstrate flat and nested provider-shaped inputs without connecting to a provider. Both emit the same neutral source contract with provider/native identity, source-reported organization, timestamps, field provenance, consent evidence, dataset classification, and conservative experience evidence. Import batches are atomic, fingerprint-idempotent, conflict-closed, and retain safe immutable snapshots. Exact `role-classification-v2` mappings never default to the first role in a family; experience gates use the supported lower bound.
+
+The Candidate Review queue permits audited local confirm/correct/reject/suppress/pending transitions. Corrections are limited to approved roles and cannot override suppression, opt-out, unverified email, insufficient/unknown experience, or an unreviewed company. No review action contacts anyone.
 
 The dashboard action creates one atomic targeting-first campaign plan for the campaign-local calendar date. Before creating a new plan, the application layer requires the exact fictional-dataset marker and a non-empty prospect dataset; otherwise the action stays disabled and no randomness or database write occurs. SQLite emits provider-neutral fictional source records; the application validates fingerprints and provenance, deduplicates, normalizes titles and experience, derives and verifies classifications, matches the public strategy registry, derives data quality, applies hard gates, scores, diversifies, and snapshots every decision. Only then is the 15–20 weekday target consumed and persisted. Repeating the action returns the existing plan unchanged. Weekend attempts create a stored no-send result.
 
