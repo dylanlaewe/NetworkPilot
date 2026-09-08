@@ -40,11 +40,14 @@ The engine ranks by versioned `targeting-v1`; the deprecated generic `relevanceS
 - `npm test` / `npm run test:watch` — run the isolated Vitest suite
 - `npm run typecheck` — strict TypeScript validation
 - `npm run lint` — ESLint with zero warnings allowed
+- `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts
 - `npm run db:migrate`, `db:seed`, `db:reset` — local fictional persistence operations
 
 ## Safety boundary
 
 There are no integrations with LinkedIn, CareerShift, Apollo, Gmail, Microsoft, AI APIs, inboxes, or any other provider. There is no scraping, browser automation, contact sourcing, external drafting, credential handling, or email delivery. The UI contains no Send action. All people and employers produced by the seed are explicitly fabricated. Registry references are labeled simulation aliases and never claim that a fictional person works at a real company.
+
+Interface typography uses repository-independent operating-system sans-serif and monospace stacks. Builds and runtime never fetch remote fonts. Run `npm run check:no-remote-fonts` with the normal validation suite to protect this boundary.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/schema.md](docs/schema.md).
 
