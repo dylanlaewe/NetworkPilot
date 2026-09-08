@@ -1,78 +1,19 @@
-import { INDUSTRIES } from "@/domain/outreach";
-
-const operatingRules = [
-  { label: "Daily target", value: "15–20", detail: "qualified introductions" },
-  { label: "Schedule", value: "Mon–Fri", detail: "weekends automatically paused" },
-  { label: "Company cooldown", value: "7 days", detail: "one contact per company per run" },
-];
-
-const pipeline = [
-  ["01", "Contact sourcing", "Disconnected", "No prospect providers are connected."],
-  ["02", "Research & drafting", "Disconnected", "No AI or research services are connected."],
-  ["03", "Email delivery", "Disabled", "No messages can leave this application."],
-] as const;
-
+import { getDashboardData } from "@/application/simulation/dashboard";
+import { DECISION_REASON_CODES, INDUSTRIES } from "@/domain/outreach";
+import { getSimulationRepository } from "@/infrastructure/sqlite/runtime";
+import { runTodaySimulation } from "./actions";
+export const dynamic = "force-dynamic";
+const labels: Record<(typeof DECISION_REASON_CODES)[number], string> = { "suppressed": "Suppressed", "opted-out": "Opted out", "email-unverified": "Email unverified", "insufficient-experience": "Insufficient experience", "previously-contacted": "Previously contacted", "company-in-cooldown": "Company in cooldown", "duplicate-company-in-run": "Duplicate company", "eligible-below-cutoff": "Below daily cutoff", "selected": "Selected" };
 export default function Home() {
-  return (
-    <main>
-      <nav className="nav" aria-label="Primary navigation">
-        <a className="brand" href="#top" aria-label="NetworkPilot home">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          Network<span>Pilot</span>
-        </a>
-        <div className="nav-meta">
-          <span className="private-label">Private workspace</span>
-          <span className="mode-pill"><b /> Simulation mode</span>
-        </div>
-      </nav>
-
-      <section className="hero" id="top">
-        <div className="eyebrow"><span>System status</span> Safe to explore</div>
-        <h1>Thoughtful outreach,<br /><em>built on relevance.</em></h1>
-        <p className="hero-copy">
-          NetworkPilot is preparing the foundation for focused professional networking—without
-          connecting contact data, drafting services, or email delivery.
-        </p>
-        <div className="notice" role="status">
-          <span className="notice-icon" aria-hidden="true">S</span>
-          <div><strong>Simulation mode is active</strong><small>Live sending is disabled. No emails or external requests will be made.</small></div>
-          <span className="secure">Isolated</span>
-        </div>
-      </section>
-
-      <section className="content-section" aria-labelledby="rules-heading">
-        <div className="section-heading">
-          <div><span className="kicker">Operating policy</span><h2 id="rules-heading">A deliberate daily rhythm</h2></div>
-          <p>Guardrails put quality, variety, and consent ahead of volume.</p>
-        </div>
-        <div className="rule-grid">
-          {operatingRules.map((rule, index) => (
-            <article className="rule-card" key={rule.label}>
-              <span className="rule-number">0{index + 1}</span>
-              <p>{rule.label}</p><strong>{rule.value}</strong><small>{rule.detail}</small>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="industry-section" aria-labelledby="industries-heading">
-        <div><span className="kicker">Target landscape</span><h2 id="industries-heading">Five focused industries</h2><p>Initial targeting is intentionally narrow so future outreach can stay specific and useful.</p></div>
-        <ul>{INDUSTRIES.map((industry, index) => <li key={industry}><span>0{index + 1}</span>{industry}</li>)}</ul>
-      </section>
-
-      <section className="content-section pipeline-section" aria-labelledby="pipeline-heading">
-        <div className="section-heading">
-          <div><span className="kicker">Connection status</span><h2 id="pipeline-heading">The pipeline is offline by design</h2></div>
-          <p>Each external capability remains separated behind a future authorized adapter.</p>
-        </div>
-        <div className="pipeline">
-          {pipeline.map(([number, name, status, description]) => (
-            <article key={name}><span className="pipeline-number">{number}</span><div><h3>{name}</h3><p>{description}</p></div><span className="offline"><b />{status}</span></article>
-          ))}
-        </div>
-      </section>
-
-      <footer><span>NetworkPilot</span><p>Foundation milestone · Simulation only</p><span>Live sending disabled</span></footer>
-    </main>
-  );
+  const data = getDashboardData(getSimulationRepository(), new Date());
+  const totals = Object.fromEntries(DECISION_REASON_CODES.map((code) => [code, data.latestRun?.decisions.filter((d) => d.reasonCode === code).length ?? 0]));
+  return <main>
+    <nav className="nav"><a className="brand" href="#top"><span className="brand-mark"><i/><i/><i/></span>Network<span>Pilot</span></a><div className="nav-meta"><span className="private-label">Fictional data only</span><span className="mode-pill"><b/> Simulation mode</span></div></nav>
+    <section className="hero dashboard-hero" id="top"><div className="eyebrow"><span>Campaign workspace</span>{data.isWeekday ? "Sending day" : "Weekend pause"}</div><h1>Today’s fictional<br/><em>campaign simulation.</em></h1><p className="hero-copy">Campaign date <strong>{data.today}</strong> in <strong>{data.timezone}</strong>. Every record is fabricated and every delivery is simulated.</p><div className="notice"><span className="notice-icon">S</span><div><strong>Live sending is disabled</strong><small>Contact sourcing, external research, drafting providers, and email delivery remain disconnected.</small></div><span className="secure">Isolated</span></div><form action={runTodaySimulation}><button className="simulate-button" type="submit">Run today’s fictional simulation</button><span>{data.latestRun ? "Running again returns today’s stored result." : data.prospectCount ? "Creates one atomic, auditable local run." : "Seed fictional data from the command line first."}</span></form></section>
+    <section className="content-section"><div className="section-heading"><div><span className="kicker">Today’s result</span><h2>{data.latestRun ? "Simulation recorded" : "No simulation yet"}</h2></div><p>{data.latestRun ? `${data.latestRun.status === "weekend-no-send" ? "Auditable weekend pause" : "Completed weekday run"} · target stored at creation` : "Run the simulation to evaluate the fictional prospect pool."}</p></div><div className="rule-grid four">{[["Stored target",data.latestRun?.target ?? "—","randomized once, 15–20"],["Selected",data.latestRun?.selectedCount ?? "—","simulated sends only"],["Shortfall",data.latestRun?.shortfall ?? "—","qualified capacity gap"],["Suppressions",data.suppressionCount,"persisted hard exclusions"]].map(([label,value,detail])=><article className="rule-card" key={label}><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>)}</div></section>
+    <section className="industry-section decision-section"><div><span className="kicker">Explainable qualification</span><h2>Every decision has a reason</h2><p>Stable reason codes preserve an auditable snapshot even when a fictional prospect changes later.</p></div><ul>{DECISION_REASON_CODES.map((code,i)=><li key={code}><span>{String(i+1).padStart(2,"0")}</span>{labels[code]}<b>{totals[code]}</b></li>)}</ul></section>
+    <section className="content-section"><div className="section-heading"><div><span className="kicker">Reserved today</span><h2>Selected fictional prospects</h2></div><p>Company diversity and relevance ordering are enforced before simulated-send events are recorded.</p></div>{data.latestRun?.selected.length ? <div className="table-wrap"><table><thead><tr><th>Fictional prospect</th><th>Company</th><th>Industry</th><th>Experience</th><th>Relevance</th></tr></thead><tbody>{data.latestRun.selected.map((d)=><tr key={d.prospectId}><td>{d.prospectName}</td><td>{d.companyName}</td><td>{d.industry}</td><td>{d.yearsExperience} years</td><td>{d.relevanceScore}</td></tr>)}</tbody></table></div>:<div className="empty">{data.prospectCount ? "No fictional prospects selected for today." : "No fictional dataset found. Run npm run db:seed to begin."}</div>}</section>
+    <section className="content-section pipeline-section"><div className="section-heading"><div><span className="kicker">Run history</span><h2>Recent simulations</h2></div><p>{data.prospectCount} fictional prospects across {INDUSTRIES.length} target industries.</p></div>{data.recentRuns.length?<div className="pipeline">{data.recentRuns.map((run)=><article key={run.id}><span className="pipeline-number">{run.campaignDate}</span><div><h3>{run.status === "completed" ? "Weekday simulation" : "Weekend — no send"}</h3><p>Target {run.target} · Selected {run.selectedCount} · Shortfall {run.shortfall}</p></div><span className="offline"><b/>Stored</span></article>)}</div>:<div className="empty">No simulation history yet.</div>}</section>
+    <footer><span>NetworkPilot</span><p>Persistent fictional campaign · SQLite local only</p><span>Live sending disabled</span></footer>
+  </main>;
 }

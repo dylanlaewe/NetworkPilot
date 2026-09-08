@@ -22,6 +22,11 @@ pnpm-debug.log*
 # Tests and coverage
 coverage/
 
+# Local simulation databases
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

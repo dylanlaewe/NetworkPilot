@@ -1,58 +1,39 @@
 # NetworkPilot architecture
 
-## Guiding principles
+## Boundaries
 
-NetworkPilot is designed around a provider-independent domain layer. Business policy must remain testable without a browser, database, network, vendor SDK, or wall clock. External systems will be integrated only through explicit, authorized adapters. Simulation remains the default until live capabilities are separately designed, reviewed, and approved.
+NetworkPilot follows three inward-facing layers:
 
-## Current foundation
+- **Domain (`src/domain`)** owns provider-independent prospect, event, decision, timezone, qualification, cooldown, and selection policy. It imports neither Next.js nor SQLite.
+- **Application (`src/application`)** coordinates the daily simulation and dashboard read model through a `SimulationRepository` interface. It owns idempotency checks and the transaction use case, without SQL.
+- **Infrastructure (`src/infrastructure`)** implements that interface with local SQLite, maps database rows to domain values, runs migrations, and supplies the Next.js server runtime instance.
 
-The App Router dashboard in `src/app` presents operating status and policy. The pure domain module in `src/domain/outreach` owns prospect types and daily selection. Its caller injects the current time and randomness, making weekday behavior and daily targets deterministic in tests. The domain module contains no UI, persistence, provider, scraping, or delivery logic.
+Replacing SQLite with PostgreSQL requires a new repository implementation, not a rewrite of campaign policy.
 
-## Planned components
+## Persistence model
 
-### Dashboard
+Versioned SQL migrations create companies, fictional prospects, simulation runs, reason-coded decision snapshots, outreach events, suppression entries, and key/value campaign settings. Precise instants are stored as UTC ISO timestamps. Runs also store their campaign-local date and the IANA timezone used to derive it. See [schema.md](schema.md).
 
-The private operator interface will show run readiness, qualification outcomes, draft-review queues, send limits, replies, and suppression status. It should invoke application use cases rather than provider SDKs directly and make simulation/live state unmistakable.
+Qualification decisions copy the evaluated name, company, industry, email, experience, and relevance values. They are immutable audit snapshots rather than joins that change retroactively when a prospect is edited.
 
-### Authorized prospect-source adapter
+## Idempotency and transaction boundary
 
-An adapter boundary will accept records only from a source the operator is authorized to use. It will normalize them into domain `Prospect` values and record provenance. No LinkedIn or CareerShift scraping or browser automation is planned or permitted. Provider-specific credentials and payloads must stay outside the domain layer.
+`simulation_runs.campaign_date` has a unique constraint. The use case checks for an existing completed date both before and inside an SQLite `IMMEDIATE` transaction. The run, all decisions, and all simulated-send events are committed together. Any thrown failure rolls the transaction back; a database uniqueness violation prevents concurrent duplicate dates.
 
-### Qualification engine
+The randomly chosen daily target is stored on first creation and never rerolled for repeated requests. Weekend requests use the same idempotent path and persist an auditable `weekend-no-send` run with a zero target.
 
-The qualification engine will apply consent, suppression, verified-email, experience, industry, company-diversity, cooldown, and prior-contact policies. The current daily selector is the first part of this component. Later relevance scoring should remain explainable and auditable.
+## Campaign time
 
-### Research and drafting engine
+An injected UTC instant is formatted with `Intl.DateTimeFormat` using the configured IANA campaign timezone (default `America/New_York`). The resulting local date and weekday drive scheduling. The application never changes the machine timezone. Invalid timezone identifiers fail validation. This approach handles UTC date differences and daylight-saving transitions through the platform timezone database.
 
-This component will assemble authorized research context and produce an editable draft through a future AI adapter. It must preserve citations/provenance, avoid unsupported claims, and require product-approved review rules before a draft can advance.
+## Event semantics
 
-### Scheduler
+The model distinguishes `qualified`, `rejected`, `selected`, `drafted`, `simulated-sent`, future-reserved `actually-sent`, `replied`, `suppressed`, and `cancelled` events. Only `simulated-sent` and `actually-sent` are contact-impacting: they prevent repeat outreach and activate company cooldowns. Selection, drafting, cancellation, and abandoned reservations do not consume a prospect.
 
-The scheduler will create weekday runs, enforce the randomized daily cap, store an immutable run record, and coordinate idempotent work. Clock and randomness interfaces will remain injectable. It must stop safely when dependencies or policy checks fail.
+Stable decision codes are: `suppressed`, `opted-out`, `email-unverified`, `insufficient-experience`, `previously-contacted`, `company-in-cooldown`, `duplicate-company-in-run`, `eligible-below-cutoff`, and `selected`.
 
-### Email adapter
+## Simulation-to-live isolation
 
-A future adapter will translate approved send commands to an authorized email provider. It will be isolated from selection and drafting, enforce idempotency, and expose delivery outcomes. Live delivery is absent and disabled in the current milestone.
+The only implemented write action is named and displayed as a fictional simulation. It creates local `simulated-sent` rows; no transport adapter exists. `actually-sent` is a reserved domain vocabulary value and is unused by every application path. There are no provider SDKs, secrets, external data adapters, browser automation, inbox processors, or delivery controls.
 
-### Reply processor
-
-The reply processor will normalize authorized mailbox events, associate replies with outreach, classify workflow state, and surface positive responses for human attention. Provider-specific webhook or polling details will remain behind the adapter.
-
-### Suppression system
-
-Suppression is a hard policy boundary checked before selection and again before any future delivery. It will combine person-level opt-outs, invalid-address signals, and administrative blocks with an audit trail. A later implementation should favor immediate, fail-closed updates.
-
-### Provider-independent domain layer
-
-Domain types, policies, and use cases must not import framework code or vendor SDKs. Provider adapters will map external values at the application boundary. This keeps policy reusable, makes simulations representative, and allows vendors to change without rewriting core rules.
-
-## Proposed flow
-
-1. An authorized source adapter normalizes permitted prospects.
-2. Qualification and selection apply domain policy to create a daily run.
-3. Research and drafting prepare reviewable material through an approved adapter.
-4. The scheduler advances approved work within weekday and volume limits.
-5. The email adapter delivers only when live mode is explicitly enabled in a future milestone.
-6. The reply processor records outcomes while the suppression system can halt future contact at every stage.
-
-Persistence, authentication, authorization, secrets management, audit logging, and live-provider threat modeling must be specified before any integration is enabled.
+A future live system would require separate authorization, source, research/drafting, scheduler, delivery, and reply adapters plus explicit mode gating and threat review. Those components are architectural placeholders only and are not connected in this milestone.

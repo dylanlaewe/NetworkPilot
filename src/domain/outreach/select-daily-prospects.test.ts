@@ -27,7 +27,7 @@ function options(random = 0, now = monday): SelectionOptions {
 }
 
 function event(person: Prospect, occurredAt: Date): OutreachEvent {
-  return { prospectId: person.id, companyId: person.companyId, type: "sent", occurredAt };
+  return { prospectId: person.id, companyId: person.companyId, type: "actually-sent", occurredAt };
 }
 
 describe("selectDailyProspects", () => {
@@ -132,5 +132,44 @@ describe("selectDailyProspects", () => {
 
   it.each([-0.01, 1, Number.NaN])("rejects invalid random output: %s", (sample) => {
     expect(() => selectDailyProspects([], [], options(sample))).toThrow(RangeError);
+  });
+
+  it("uses the campaign-local date and weekday rather than UTC", () => {
+    const result = selectDailyProspects(amplePool, [], options(0, new Date("2026-09-07T02:00:00.000Z")));
+    expect(result).toMatchObject({ date: "2026-09-06", isWeekday: false });
+  });
+
+  it("handles the spring daylight-saving transition", () => {
+    const before = selectDailyProspects([], [], options(0, new Date("2026-03-08T06:59:59.000Z")));
+    const after = selectDailyProspects([], [], options(0, new Date("2026-03-08T07:00:00.000Z")));
+    expect(before.date).toBe("2026-03-08");
+    expect(after.date).toBe("2026-03-08");
+    expect(after.isWeekday).toBe(false);
+  });
+
+  it("rejects an invalid IANA timezone", () => {
+    expect(() => selectDailyProspects([], [], { ...options(), config: { campaignTimezone: "Mars/Olympus" } })).toThrow("Invalid campaign timezone");
+  });
+
+  it("does not treat selected, drafted, cancelled, or abandoned work as contact", () => {
+    const candidate = prospect(1);
+    for (const type of ["selected", "drafted", "cancelled"] as const) {
+      const result = selectDailyProspects([candidate], [{ ...event(candidate, monday), type }], options());
+      expect(result.selected).toEqual([candidate]);
+    }
+  });
+
+  it("treats simulated-send and actually-sent events as contact-impacting", () => {
+    const candidate = prospect(1);
+    for (const type of ["simulated-sent", "actually-sent"] as const) {
+      const result = selectDailyProspects([candidate], [{ ...event(candidate, monday), type }], options());
+      expect(result.decisions[0]?.reasonCode).toBe("previously-contacted");
+    }
+  });
+
+  it("records stable reason codes for each qualification outcome", () => {
+    const people = [prospect(1, { suppressed: true }), prospect(2, { optedOut: true }), prospect(3, { emailVerified: false }), prospect(4, { yearsExperience: 2 }), prospect(5)];
+    const result = selectDailyProspects(people, [], options());
+    expect(result.decisions.map((d) => d.reasonCode)).toEqual(["suppressed", "opted-out", "email-unverified", "insufficient-experience", "selected"]);
   });
 });
