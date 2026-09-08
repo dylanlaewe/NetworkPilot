@@ -1,5 +1,6 @@
 import { campaignCalendar, DEFAULT_SELECTION_CONFIG, selectDailyProspects } from "@/domain/outreach";
 import type { CreateRunInput, SimulationRepository, SimulationRunView } from "./types";
+import { requireFictionalDataset } from "./dataset-readiness";
 
 export function runDailySimulation(repository: SimulationRepository, input: CreateRunInput): SimulationRunView {
   const timezone = repository.getSetting("campaignTimezone") ?? DEFAULT_SELECTION_CONFIG.campaignTimezone;
@@ -7,9 +8,12 @@ export function runDailySimulation(repository: SimulationRepository, input: Crea
   const existing = repository.findRunByDate(calendar.date);
   if (existing) return { ...existing, existing: true };
 
+  requireFictionalDataset(repository);
+
   return repository.transaction(() => {
     const concurrentExisting = repository.findRunByDate(calendar.date);
     if (concurrentExisting) return { ...concurrentExisting, existing: true };
+    requireFictionalDataset(repository);
     const result = selectDailyProspects(repository.listProspects(), repository.listOutreachEvents(), {
       now: () => input.instant,
       random: input.random,

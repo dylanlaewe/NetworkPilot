@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runDailySimulation } from "@/application/simulation/run-daily-simulation";
+import { getDashboardData } from "@/application/simulation/dashboard";
+import { FICTIONAL_DATASET_UNAVAILABLE, FictionalDatasetUnavailableError } from "@/application/simulation/dataset-readiness";
 import { FICTIONAL_PROSPECT_COUNT, seedFictionalData } from "./seed";
 import { SqliteSimulationRepository } from "./database";
 
@@ -18,6 +20,43 @@ afterEach(() => { while (cleanup.length) rmSync(cleanup.pop()!, { recursive: tru
 const instant = (day: string) => new Date(`${day}T15:00:00.000Z`);
 
 describe("SQLite fictional simulation", () => {
+  it("rejects an unseeded database without mutations or randomness", () => {
+    const repo = repository(); let randomCalls = 0;
+    repo.setSetting("datasetType", "fictional", instant("2026-09-07"));
+    expect(() => runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => { randomCalls += 1; return 0; } })).toThrow(FictionalDatasetUnavailableError);
+    expect(randomCalls).toBe(0);
+    expect(repo.recentRuns(10)).toEqual([]);
+    expect((repo.native.prepare("SELECT COUNT(*) count FROM qualification_decisions").get() as {count:number}).count).toBe(0);
+    expect((repo.native.prepare("SELECT COUNT(*) count FROM outreach_events").get() as {count:number}).count).toBe(0);
+    repo.close();
+  });
+
+  it.each([["missing", undefined], ["non-fictional", "production"]] as const)("rejects a %s dataset marker", (_label, marker) => {
+    const repo = repository(); seedFictionalData(repo);
+    if (marker) repo.setSetting("datasetType", marker, instant("2026-09-07"));
+    else repo.native.prepare("DELETE FROM campaign_settings WHERE key='datasetType'").run();
+    let randomCalls = 0;
+    try { runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => { randomCalls += 1; return 0; } }); throw new Error("expected rejection"); }
+    catch (error) { expect(error).toBeInstanceOf(FictionalDatasetUnavailableError); expect((error as FictionalDatasetUnavailableError).code).toBe(FICTIONAL_DATASET_UNAVAILABLE); }
+    expect(randomCalls).toBe(0); expect(repo.recentRuns(10)).toEqual([]); repo.close();
+  });
+
+  it("allows simulation after an initially unseeded database is seeded", () => {
+    const repo = repository();
+    expect(() => runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 })).toThrow(FictionalDatasetUnavailableError);
+    seedFictionalData(repo);
+    expect(runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 })).toMatchObject({ status: "completed", selectedCount: 15 });
+    repo.close();
+  });
+
+  it("reports dashboard simulation readiness from the application boundary", () => {
+    const repo = repository();
+    expect(getDashboardData(repo, instant("2026-09-07"))).toMatchObject({ simulationReady: false, prospectCount: 0 });
+    seedFictionalData(repo);
+    expect(getDashboardData(repo, instant("2026-09-07"))).toMatchObject({ simulationReady: true, prospectCount: FICTIONAL_PROSPECT_COUNT });
+    repo.close();
+  });
+
   it("creates every migration table", () => {
     const repo = repository();
     const tables = (repo.native.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{name:string}>).map((r) => r.name);
@@ -38,6 +77,14 @@ describe("SQLite fictional simulation", () => {
     const second = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0.99 });
     expect(first.existing).toBe(false); expect(second.existing).toBe(true); expect(second.id).toBe(first.id); expect(second.target).toBe(15);
     expect(repo.recentRuns(10)).toHaveLength(1); repo.close();
+  });
+
+  it("keeps an existing same-day run readable if dataset readiness is later lost", () => {
+    const repo = repository(); seedFictionalData(repo);
+    const first = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => 0 });
+    repo.native.prepare("DELETE FROM campaign_settings WHERE key='datasetType'").run();
+    const existing = runDailySimulation(repo, { instant: instant("2026-09-07"), random: () => { throw new Error("randomness must not run"); } });
+    expect(existing).toMatchObject({ id: first.id, existing: true, selectedCount: 15 }); repo.close();
   });
 
   it("enforces the unique campaign-date constraint", () => {

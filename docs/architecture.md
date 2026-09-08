@@ -20,6 +20,8 @@ Qualification decisions copy the evaluated name, company, industry, email, exper
 
 `simulation_runs.campaign_date` has a unique constraint. The use case checks for an existing completed date both before and inside an SQLite `IMMEDIATE` transaction. The run, all decisions, and all simulated-send events are committed together. Any thrown failure rolls the transaction back; a database uniqueness violation prevents concurrent duplicate dates.
 
+Before any new run or random target is created, an application-layer readiness guard requires `datasetType` to equal exactly `fictional` and the prospect count to be non-zero. The repository exposes dataset status without leaking SQLite into the use case. Previously stored same-day runs remain readable even if readiness is later lost.
+
 The randomly chosen daily target is stored on first creation and never rerolled for repeated requests. Weekend requests use the same idempotent path and persist an auditable `weekend-no-send` run with a zero target.
 
 ## Campaign time

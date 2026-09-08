@@ -24,11 +24,12 @@ export interface PersistedDecision {
   relevanceScore: number;
 }
 export interface SimulationRunView extends RunSummary { decisions: PersistedDecision[]; selected: PersistedDecision[]; }
-export interface DashboardData { today: string; isWeekday: boolean; timezone: string; latestRun: SimulationRunView | null; recentRuns: RunSummary[]; suppressionCount: number; prospectCount: number; }
+export interface DashboardData { today: string; isWeekday: boolean; timezone: string; latestRun: SimulationRunView | null; recentRuns: RunSummary[]; suppressionCount: number; prospectCount: number; simulationReady: boolean; }
 export interface CreateRunInput { instant: Date; random: () => number; }
 export interface SimulationRepository {
   transaction<T>(work: () => T): T;
   getSetting(key: string): string | undefined;
+  getDatasetStatus(): { datasetType?: string; prospectCount: number };
   setSetting(key: string, value: string, at: Date): void;
   findRunByDate(date: string): SimulationRunView | null;
   listProspects(): Prospect[];

@@ -23,11 +23,11 @@ The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABAS
 - `npm run db:seed` — idempotently insert 180 fabricated prospects and campaign settings
 - `NODE_ENV=development npm run db:reset` — development-only reset and reseed of the exact configured database
 
-The reset command refuses to run unless `NODE_ENV` is `development` or `test`, prints its resolved target, and requires that target to be inside this project’s `data` directory. Migration source files are never removed.
+The reset command refuses to run unless `NODE_ENV` is `development` or `test`, prints its resolved target, and requires that target to remain inside this project’s real `data` directory without symlink escapes. An existing database containing data must carry the exact `datasetType=fictional` marker. Migration source files are never removed.
 
 ## Simulation workflow
 
-The dashboard action creates one atomic simulation for the campaign-local calendar date. Weekday runs choose and persist a target from 15–20, record a reason-coded snapshot for every evaluated prospect, and create `simulated-sent` events for selections. Repeating the action returns the existing completed run. Weekend attempts create a stored no-send result.
+The dashboard action creates one atomic simulation for the campaign-local calendar date. Before creating a new run, the application layer requires the exact fictional-dataset marker and a non-empty prospect dataset; otherwise the action stays disabled and no randomness or database write occurs. Weekday runs choose and persist a target from 15–20, record a reason-coded snapshot for every evaluated prospect, and create `simulated-sent` events for selections. Repeating the action returns the existing completed run. Weekend attempts create a stored no-send result.
 
 The engine prioritizes relevance, limits a run to one person per company, applies a configurable seven-day company cooldown, and filters prior contact, suppressions, opt-outs, unverified addresses, and insufficient experience. Only `simulated-sent` and future `actually-sent` events consume a contact; selected, drafted, cancelled, or abandoned work does not.
 

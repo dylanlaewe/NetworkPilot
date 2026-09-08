@@ -30,6 +30,7 @@ export class SqliteSimulationRepository implements SimulationRepository {
   }
   transaction<T>(work: () => T): T { return this.native.transaction(work).immediate(); }
   getSetting(key: string): string | undefined { return (this.native.prepare("SELECT value FROM campaign_settings WHERE key = ?").get(key) as { value: string } | undefined)?.value; }
+  getDatasetStatus(): { datasetType?: string; prospectCount: number } { return { datasetType: this.getSetting("datasetType"), prospectCount: this.countProspects() }; }
   setSetting(key: string, value: string, at: Date): void { this.native.prepare("INSERT INTO campaign_settings(key,value,updated_at_utc) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at_utc=excluded.updated_at_utc").run(key, value, at.toISOString()); }
   listProspects(): Prospect[] {
     const rows = this.native.prepare(`SELECT p.*, c.name company_name, c.industry, EXISTS(SELECT 1 FROM suppression_entries s WHERE s.prospect_id=p.id) suppressed FROM prospects p JOIN companies c ON c.id=p.company_id ORDER BY p.id`).all() as Array<Record<string, string | number>>;
