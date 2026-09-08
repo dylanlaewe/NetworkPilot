@@ -1,0 +1,64 @@
+:root {
+  --ink: #102922;
+  --muted: #63746e;
+  --cream: #f4f1e9;
+  --paper: #fbfaf6;
+  --sage: #dce9df;
+  --green: #1b5b48;
+  --lime: #c9ec84;
+  --line: rgba(16, 41, 34, 0.14);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+a { color: inherit; text-decoration: none; }
+.nav { height: 76px; padding: 0 clamp(24px, 5vw, 76px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: rgba(251,250,246,.92); }
+.brand { display: flex; align-items: center; font: 700 21px var(--font-geist-sans); letter-spacing: -.7px; }
+.brand > span:last-child { color: var(--green); }
+.brand-mark { width: 31px; height: 31px; margin-right: 11px; background: var(--ink); border-radius: 50%; display: flex; align-items: end; justify-content: center; gap: 2px; padding-bottom: 8px; }
+.brand-mark i { display: block; width: 3px; border-radius: 3px; background: var(--lime); }
+.brand-mark i:nth-child(1) { height: 6px; }.brand-mark i:nth-child(2) { height: 11px; }.brand-mark i:nth-child(3) { height: 16px; }
+.nav-meta { display: flex; align-items: center; gap: 22px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.private-label { color: var(--muted); }
+.mode-pill { padding: 9px 13px; border: 1px solid #b7d5c0; border-radius: 99px; color: var(--green); background: #edf6ed; font-weight: 700; }
+.mode-pill b, .offline b { display: inline-block; width: 6px; height: 6px; margin-right: 7px; background: #3f9b69; border-radius: 50%; }
+.hero { position: relative; overflow: hidden; min-height: 570px; padding: 92px clamp(24px, 9vw, 138px) 74px; background: var(--cream); }
+.hero::after { content: ""; position: absolute; width: 600px; height: 600px; right: -170px; top: -180px; border: 1px solid rgba(27,91,72,.13); border-radius: 50%; box-shadow: 0 0 0 70px rgba(27,91,72,.025), 0 0 0 140px rgba(27,91,72,.02); }
+.eyebrow, .kicker { color: var(--green); font: 700 11px var(--font-geist-mono); letter-spacing: .16em; text-transform: uppercase; }
+.eyebrow span { margin-right: 18px; padding-right: 18px; border-right: 1px solid var(--line); }
+h1 { max-width: 840px; margin: 24px 0 23px; font: 500 clamp(48px, 7vw, 90px)/.98 Georgia, serif; letter-spacing: -.045em; }
+h1 em { color: var(--green); font-weight: 400; }
+.hero-copy { max-width: 650px; color: var(--muted); font-size: 17px; line-height: 1.7; }
+.notice { position: relative; z-index: 1; max-width: 780px; margin-top: 38px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; background: var(--ink); color: white; border-radius: 8px; box-shadow: 0 18px 45px rgba(16,41,34,.14); }
+.notice-icon { display: grid; place-items: center; width: 35px; height: 35px; border: 1px solid #537269; border-radius: 50%; color: var(--lime); font: 700 12px var(--font-geist-mono); }
+.notice div { flex: 1; display: flex; flex-direction: column; gap: 4px; }.notice strong { font-size: 14px; }.notice small { color: #b7c7c1; font-size: 12px; }
+.secure { color: var(--lime); font: 700 10px var(--font-geist-mono); letter-spacing: .15em; text-transform: uppercase; }
+.content-section, .industry-section { padding: 88px clamp(24px, 9vw, 138px); }
+.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 40px; margin-bottom: 40px; }
+h2 { margin: 11px 0 0; font: 500 clamp(31px, 4vw, 48px)/1.1 Georgia, serif; letter-spacing: -.025em; }
+.section-heading > p, .industry-section > div > p { max-width: 430px; margin: 0; color: var(--muted); line-height: 1.6; font-size: 14px; }
+.rule-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+.rule-card { position: relative; min-height: 230px; padding: 28px; border: 1px solid var(--line); background: white; }
+.rule-number { position: absolute; right: 25px; top: 25px; color: #8da098; font: 11px var(--font-geist-mono); }
+.rule-card p { margin: 70px 0 8px; color: var(--muted); font: 11px var(--font-geist-mono); letter-spacing: .12em; text-transform: uppercase; }
+.rule-card strong { display: block; font: 500 37px Georgia, serif; }.rule-card small { display: block; margin-top: 9px; color: var(--muted); }
+.industry-section { display: grid; grid-template-columns: 1fr 1fr; gap: 9vw; align-items: center; color: white; background: var(--ink); }
+.industry-section h2 { color: white; }.industry-section > div > p { margin-top: 24px; color: #aebeb8; }
+.industry-section ul { padding: 0; margin: 0; list-style: none; border-top: 1px solid #496159; }
+.industry-section li { padding: 17px 2px; border-bottom: 1px solid #496159; font: 500 21px Georgia, serif; }
+.industry-section li span { display: inline-block; width: 48px; color: var(--lime); font: 10px var(--font-geist-mono); }
+.pipeline-section { background: #eef1e9; }
+.pipeline { border-top: 1px solid var(--line); }
+.pipeline article { display: grid; grid-template-columns: 65px 1fr auto; align-items: center; padding: 22px 5px; border-bottom: 1px solid var(--line); }
+.pipeline-number { color: #84958f; font: 11px var(--font-geist-mono); }.pipeline h3 { margin: 0 0 5px; font-size: 16px; }.pipeline p { margin: 0; color: var(--muted); font-size: 13px; }
+.offline { padding: 8px 11px; border: 1px solid #c5cec8; border-radius: 99px; color: #5f7069; font: 700 9px var(--font-geist-mono); letter-spacing: .1em; text-transform: uppercase; }.offline b { background: #82938c; }
+footer { min-height: 82px; padding: 0 clamp(24px, 5vw, 76px); display: flex; align-items: center; justify-content: space-between; background: #0c211b; color: #9badA7; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+footer span:first-child { color: white; font-weight: 700; font-size: 13px; }
+@media (max-width: 760px) {
+  .private-label { display: none; }.nav { height: 68px; }.hero { padding-top: 67px; }.hero::after { opacity: .5; }
+  .notice { align-items: flex-start; }.secure { display: none; }.rule-grid { grid-template-columns: 1fr; }.rule-card { min-height: 190px; }.rule-card p { margin-top: 45px; }
+  .section-heading, .industry-section { display: block; }.section-heading > p { margin-top: 18px; }.industry-section ul { margin-top: 48px; }
+  .pipeline article { grid-template-columns: 38px 1fr; gap: 8px; }.offline { grid-column: 2; width: max-content; margin-top: 8px; }
+  footer { padding-block: 26px; gap: 16px; flex-wrap: wrap; } footer p { order: 3; width: 100%; margin: 0; }
+}
