@@ -16,6 +16,8 @@ Enrichment requests hard-code `reveal_personal_emails`, `reveal_phone_number`, `
 
 Before enrichment, SQLite atomically reserves the conservative maximum exposure under both per-batch and local-day caps. Missing budget state, a disabled hard stop, or an exceeded cap fails before transport. Attempt count, estimated exposure, optional provider-observed consumption, completion, and failure category are stored separately; unknown consumption remains null. HTTP 429 honors numeric `Retry-After`; 429, 5xx, and transport failures use bounded injected retries. Retries never create another credit authorization.
 
+Apollo documents `POST /api/v1/usage_stats/credit_usage_stats` as the preferred future zero-credit reconciliation source for cycle limits, consumed credits, and remaining credits. NetworkPilot does not call or implement that endpoint yet. Local preauthorization remains a safety ceiling and must never be presented as provider-observed consumption.
+
 ## Provider-to-neutral mapping
 
 Apollo person ID becomes the provider-native ID. Names, current title, source-reported organization/domain, location, industry signals, business email/status, update timestamp, and employment-history evidence retain field-level `apollo.*` provenance. The raw-safe fingerprint hashes the versioned mapped provider response; the API key and request headers are excluded. Missing fields remain unknown or fail required-field validation.

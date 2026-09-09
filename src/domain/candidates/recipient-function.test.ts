@@ -1,0 +1,26 @@
+import { describe, expect, it } from "vitest";
+import { classifyRecipientFunction, mapFunctionTargetRoleAffinities, scoreRecipientRelevance } from "./recipient-function";
+
+const corpus = [
+  ["Senior Software Engineer","software-engineering"],["Staff Software Engineer","software-engineering"],["Principal Software Engineer","software-engineering"],["Engineering Manager","software-engineering"],["Director of Engineering","software-engineering"],
+  ["Solutions Architect","technical-infrastructure"],["Cloud Solution Architect","technical-infrastructure"],["Senior Cloud Solution Architect, AI and Apps","technical-infrastructure"],["Infrastructure Engineer","technical-infrastructure"],["Network Engineer","technical-infrastructure"],
+  ["Machine Learning Engineer","ai-ml"],["Applied Scientist","ai-ml"],["AI Engineer","ai-ml"],["Director of AI","ai-ml"],["Artificial Intelligence Lead","ai-ml"],
+  ["Data Engineer","data-analytics"],["Senior Data Engineer","data-analytics"],["Analytics Engineer","data-analytics"],["Data Analyst","data-analytics"],["Senior Data Analyst","data-analytics"],["Business Intelligence Analyst","data-analytics"],["Analytics Manager","data-analytics"],["Director of Data","data-analytics"],["Director of Analytics","data-analytics"],["Data Scientist","data-analytics"],
+  ["Analytics Program Manager","project-program"],["Technical Program Manager","project-program"],["Senior Program Manager","project-program"],["Program Director","project-program"],["Director of Program Management","project-program"],["Project Manager","project-program"],["Project Coordinator","project-program"],["Program Analyst","project-program"],
+  ["Operations Manager","operations"],["Business Operations Manager","operations"],["Operations Analyst","operations"],["Strategy Manager","business-strategy"],["Corporate Strategy Manager","business-strategy"],
+  ["Management Consultant","consulting"],["Senior Consultant","consulting"],["Engagement Manager","consulting"],
+  ["Financial Analyst","finance"],["Senior Financial Analyst","finance"],["Director of Finance","finance"],["Finance Manager","finance"],
+  ["Investment Analyst","investing"],["Investment Associate","investing"],["Portfolio Manager","investing"],["Quantitative Analyst","investing"],
+  ["Commodities Analyst","commodities-energy"],["Energy Trader","commodities-energy"],["Power Markets Analyst","commodities-energy"],["Commodity Trader","commodities-energy"],["Aerospace Engineer","defense-aerospace"],["Defense Analyst","defense-aerospace"],
+  ["Product Manager","product"],["Director of Product Management","product"],
+  ["Account Executive","unrelated"],["Sales Development Representative","unrelated"],["Recruiter","unrelated"],["Human Resources Manager","unrelated"],["Marketing Manager","unrelated"],["Attorney","unrelated"],["Nurse","unrelated"],["Executive Assistant","unrelated"],["Student","unrelated"],["Intern","unrelated"],["Chief Executive Officer","unrelated"],
+] as const;
+
+describe("recipient-function-v1",()=>{
+  it("classifies a materially varied sanitized corpus deterministically",()=>{expect(corpus.length).toBeGreaterThanOrEqual(50);for(const [title,primary] of corpus){const first=classifyRecipientFunction(title),second=classifyRecipientFunction(title);expect(first,title).toEqual(second);expect(first.primaryFunction,title).toBe(primary);}});
+  it("preserves analytics plus project/program while making the role-bearing phrase primary",()=>{const result=classifyRecipientFunction("Analytics Program Manager");expect(result).toMatchObject({primaryFunction:"project-program",secondaryFunctions:expect.arrayContaining(["data-analytics"]),reviewState:"accepted",classifierVersion:"recipient-function-v1"});expect(result.evidence.map((item)=>item.phrase)).toEqual(expect.arrayContaining(["program manager","analytics"]));});
+  it("preserves infrastructure and AI without inventing a software-engineer target role",()=>{const result=classifyRecipientFunction("Senior Cloud Solution Architect, AI and Apps"),affinities=mapFunctionTargetRoleAffinities(result);expect(result).toMatchObject({primaryFunction:"technical-infrastructure",secondaryFunctions:expect.arrayContaining(["ai-ml"])});expect(affinities.find((item)=>item.targetRoleId==="software-engineer")?.relevance).toBe("moderate");});
+  it("keeps director seniority out of the AI function",()=>expect(classifyRecipientFunction("Director of AI")).toMatchObject({primaryFunction:"ai-ml",secondaryFunctions:[]}));
+  it("uses token boundaries and leaves unsupported titles unknown",()=>{expect(classifyRecipientFunction("Database Administrator").primaryFunction).toBe("unknown");expect(classifyRecipientFunction("General Manager").reviewState).toBe("review-required");});
+  it("maps functions to explainable target-role affinities and adds a precise-role bonus",()=>{const classification=classifyRecipientFunction("Senior Software Engineer"),affinities=mapFunctionTargetRoleAffinities(classification);expect(affinities[0]).toMatchObject({targetRoleId:"software-engineer",relevance:"strong",mappingVersion:"function-role-relevance-v1"});expect(scoreRecipientRelevance(classification,"software-engineer")).toMatchObject({score:100,version:"recipient-relevance-v1",explanationCodes:expect.arrayContaining(["precise-target-role-bonus"])});});
+});
