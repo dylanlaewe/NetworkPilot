@@ -24,4 +24,6 @@ Only an explicitly returned enrichment status of `verified` maps to NetworkPilot
 
 ## Future controlled enablement
 
-After Headquarters approves live validation, an operator would set the server-only feature flag and credential plus conservative enrichment limits shown in `.env.example`, restart the server, and run a separately approved tiny workflow. The current UI exposes status only and cannot initiate provider activity. No real Apollo request was made for this milestone.
+After Headquarters approves live validation, an operator would set the server-only feature flag and credential plus conservative enrichment limits shown in `.env.example`, restart the server, and run a separately approved tiny workflow. The current UI exposes status only and cannot initiate provider activity. No real Apollo request was made while building the original Milestone 6 foundation.
+
+The local-only `npm run apollo:validate-search` command exists solely for Headquarters-authorized Milestone 6.1A validation. Each explicit invocation uses one of three predetermined search-only passes of at most ten results across three reviewed registry companies. Its dedicated database enforces the cumulative three-request cap. The command permits only the People Search endpoint, disables retries, never paginates, and has no enrichment capability or browser UI. Its `data/apollo-live-validation.sqlite` database and `.env.local` credential remain Git-ignored and must never be committed.
