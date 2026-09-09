@@ -9,7 +9,7 @@ export const CONTROLLED_ENRICHMENT_MAX_HTTP_ATTEMPTS = 6;
 export const CONTROLLED_ENRICHMENT_MAX_CREDIT_EXPOSURE = 27;
 
 interface EnrichmentAdapter {
-  enrich(input: { batchId: string; personIds: string[] }): Promise<CandidateSourceRecord[]>;
+  enrich(input: { batchId: string; personIds: string[]; persistedSearchPersonIds: string[] }): Promise<CandidateSourceRecord[]>;
 }
 
 export class CappedApolloEnrichmentTransport implements ApolloHttpTransport {
@@ -37,7 +37,7 @@ export async function runControlledApolloEnrichment(input: {
     if (!/^[a-z0-9][a-z0-9._:-]{2,127}$/i.test(personId)) throw new Error("controlled-apollo-enrichment-person-id-invalid");
     const at = input.now?.() ?? new Date();
     const batchId = `apollo-live-enrichment-${index + 1}-${at.toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
-    const records = await input.adapter.enrich({ batchId, personIds: [personId] });
+    const records = await input.adapter.enrich({ batchId, personIds: [personId], persistedSearchPersonIds: [personId] });
     if (records.length !== 1 || records[0].providerRecordId !== personId) throw new Error("controlled-apollo-enrichment-result-invalid");
     importCandidateBatch(input.repository, TARGET_COMPANIES, {
       batchId,
