@@ -31,7 +31,7 @@ export function runDailySimulation(repository: SimulationRepository, input: Crea
     const id = `run-${calendar.date}`;
     const timestamp = input.instant.toISOString();
     repository.createRun({ id, campaignDate: calendar.date, campaignTimezone: timezone, startedAtUtc: timestamp, completedAtUtc: timestamp, status: calendar.isWeekday ? "completed" : "weekend-no-send", target: result.target, selectedCount: result.selected.length, shortfall: result.target-result.selected.length });
-    repository.createCampaignPlan({id,planVersion:CAMPAIGN_PLAN_VERSION,targetingVersion:TARGETING_SCORE_VERSION,status:"planned",diversificationConfig:diversification,quotaRelaxations:result.quotaRelaxations,at:input.instant});
+    repository.createCampaignPlan({id,planVersion:CAMPAIGN_PLAN_VERSION,targetingVersion:result.decisions[0]?.targetingVersion??TARGETING_SCORE_VERSION,status:"planned",diversificationConfig:diversification,quotaRelaxations:result.quotaRelaxations,at:input.instant});
     repository.createPlanDecisions(id,result.decisions);
     const created = repository.findRunByDate(calendar.date);
     if (!created) throw new Error("Simulation transaction did not produce a run");
