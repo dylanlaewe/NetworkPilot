@@ -23,7 +23,8 @@ function validateConfig(config: SelectionConfig): void {
   campaignCalendar(new Date(0), config.campaignTimezone);
 }
 
-function chooseTarget(config: SelectionConfig, random: () => number): number {
+export function chooseDailyTarget(config: SelectionConfig, random: () => number): number {
+  validateConfig(config);
   const sample = random();
   if (!Number.isFinite(sample) || sample < 0 || sample >= 1) throw new RangeError("random must return a number from 0 (inclusive) to 1 (exclusive)");
   return config.minimumDailyTarget + Math.floor(sample * (config.maximumDailyTarget - config.minimumDailyTarget + 1));
@@ -35,7 +36,7 @@ export function selectDailyProspects(prospects: readonly Prospect[], history: re
   const now = options.now();
   const calendar = campaignCalendar(now, config.campaignTimezone);
   if (!calendar.isWeekday) return { date: calendar.date, target: 0, selected: [], decisions: [], isWeekday: false, shortfall: 0 };
-  const target = chooseTarget(config, options.random);
+  const target = chooseDailyTarget(config, options.random);
   const impacting = history.filter((event) => CONTACT_IMPACTING_EVENT_TYPES.has(event.type));
   const contacted = new Set(impacting.map((event) => event.prospectId));
   const cooldownStart = now.getTime() - config.companyCooldownDays * DAY_IN_MS;
