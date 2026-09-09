@@ -1,0 +1,30 @@
+import {loadEnvFile} from "node:process";
+import {resolve} from "node:path";
+import {prepareControlledRealCampaign} from "../src/application/providers/prepare-controlled-real-campaign";
+import {ControlledRealBatchTransport,runControlledRealCandidateBatch} from "../src/application/providers/run-controlled-real-batch";
+import {ApolloAdapter,assertApolloEnabled,FetchApolloTransport,readApolloConfig} from "../src/infrastructure/providers/apollo";
+import {SqliteSimulationRepository} from "../src/infrastructure/sqlite/database";
+import {seedTargetCompanyRegistry} from "../src/infrastructure/sqlite/seed";
+
+const SEARCH_DATABASE=resolve(process.cwd(),"data/apollo-controlled-batch-search.sqlite");
+const ENRICHMENT_DATABASE=resolve(process.cwd(),"data/apollo-controlled-batch-enrichment.sqlite");
+const localDate=(date:Date)=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
+const counts=(items:readonly string[])=>Object.fromEntries([...new Set(items)].sort().map((value)=>[value,items.filter((item)=>item===value).length]));
+
+async function main():Promise<void>{
+  loadEnvFile(resolve(process.cwd(),".env.local"));
+  const searchRepository=new SqliteSimulationRepository(SEARCH_DATABASE),enrichmentRepository=new SqliteSimulationRepository(ENRICHMENT_DATABASE);
+  try{
+    searchRepository.migrate();enrichmentRepository.migrate();seedTargetCompanyRegistry(enrichmentRepository);
+    const environment={...process.env,NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_BATCH:"20",NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_DAY:"20",NETWORKPILOT_APOLLO_MAX_RETRIES:"0",NETWORKPILOT_APOLLO_HARD_STOP:"true"},config=readApolloConfig(environment);assertApolloEnabled(config);
+    if(enrichmentRepository.getSetting("controlledRealBatchStarted")==="true")throw new Error("controlled-real-batch-already-started");
+    enrichmentRepository.setSetting("controlledRealBatchStarted","true",new Date());
+    const transport=new ControlledRealBatchTransport(new FetchApolloTransport()),adapter=new ApolloAdapter(config,transport,enrichmentRepository,{now:()=>new Date(),sleep:async()=>{},datasetClassification:"authorized-provider",localDate});
+    const outcome=await runControlledRealCandidateBatch({adapter,searchRepository,enrichmentRepository}),preview=prepareControlledRealCampaign(outcome.enriched),status=enrichmentRepository.getApolloProviderStatus(localDate(new Date()));
+    enrichmentRepository.setSetting("controlledRealBatchCompleted","true",new Date());
+    const reviewRequired=outcome.enriched.filter((candidate)=>candidate.state==="review-required"),rejected=outcome.enriched.filter((candidate)=>candidate.state==="rejected"||candidate.state==="suppressed"),qualified=outcome.enriched.filter((candidate)=>candidate.state==="eligible");
+    const report={operation:"NetworkPilot controlled real candidate batch — local draft preview only",safety:{emailDelivery:false,phoneRetrieval:false,personalEmailRetrieval:false,emailWaterfall:false,phoneWaterfall:false,aiApi:false},companies:outcome.companies,http:transport.counts,search:{rawRecords:outcome.rawRecords,uniqueCandidates:outcome.uniqueSearchCandidates,relevantFunctions:counts(outcome.shortlist.map((candidate)=>candidate.recipientFunction.primaryFunction??"unknown"))},enrichment:{shortlist:outcome.shortlist.length,companyDistribution:counts(outcome.shortlist.map((candidate)=>candidate.strategyCompanyMatch?.canonicalName??"unmatched")),logicalEnrichments:outcome.shortlist.length,successful:outcome.enriched.length,providerFailures:outcome.failures,emailVerified:outcome.enriched.filter((candidate)=>candidate.source.email.verificationStatus==="verified").length,supportedExperience:outcome.enriched.filter((candidate)=>(candidate.experience.minimumSupportedYears??0)>=5).length,geographyPass:outcome.enriched.filter((candidate)=>candidate.geographyId!==null).length,functionPass:outcome.enriched.filter((candidate)=>candidate.recipientFunction.reviewState==="accepted").length,qualified:qualified.length,reviewRequired:reviewRequired.length,reviewReasons:counts(reviewRequired.flatMap((candidate)=>candidate.gateFailures)),rejected:rejected.length,rejectionReasons:counts(rejected.flatMap((candidate)=>candidate.gateFailures))},planning:{targetingEligible:preview.plan.qualifiedPopulation,planningEligible:preview.plan.qualifiedPopulation,selected:preview.plan.selected.length,shortfall:preview.plan.target-preview.plan.selected.length},drafting:{generated:preview.drafts.length,lanes:counts(preview.drafts.map((draft)=>draft.lane)),constraintFailures:counts(preview.drafts.flatMap((draft)=>draft.constraintFailures)),reviewReady:preview.drafts.filter((draft)=>draft.constraintFailures.length===0).length,drafts:preview.drafts.map((draft)=>({candidateReference:draft.candidateReference,redactedName:draft.redactedName,company:draft.company,sourceTitle:draft.sourceTitle,recipientFunction:draft.recipientFunction,persona:draft.persona,yearsExperience:draft.yearsExperience,geography:draft.geography,emailVerified:draft.emailVerified,targetingScore:draft.targetingScore,whySelected:draft.whySelected,lane:draft.lane,templateVariant:draft.templateVariant,subject:draft.draft.subject,body:draft.draft.body,wordCount:draft.wordCount,constraintFailures:draft.constraintFailures}))},credits:{before:outcome.usageBefore,after:outcome.usageAfter,observedLeadCreditDelta:outcome.leadCreditDelta,networkPilotAuthorizedMaximum:20,networkPilotAccountedExposure:status.estimatedExposure,providerObservedConsumption:status.observedConsumption}};
+    console.log(JSON.stringify(report,null,2));
+  }finally{searchRepository.close();enrichmentRepository.close();}
+}
+main().catch((error)=>{console.error(JSON.stringify({error:error instanceof Error?error.message:"controlled-real-batch-failed"}));process.exitCode=1;});
