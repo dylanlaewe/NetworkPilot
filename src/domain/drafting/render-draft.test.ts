@@ -43,6 +43,8 @@ describe("deterministic drafts", () => {
     }
   });
 
+  it("reserves leadership aspiration for the explicit fallback lane and avoids duplicate wording",()=>{for(const template of DRAFT_TEMPLATES){expect(template.laneId==="career-path-leader").toBe(template.fragmentIds.includes("leadership-direction"));const draft=renderDraft(recipient(),[],()=>new Date(),template);expect(draft.body).not.toMatch(/long-term.{0,20}long-term/i);}});
+
   it("fails closed for unknown, disabled, unapproved, duplicate, or mismatched fact metadata", () => {
     const template = DRAFT_TEMPLATES[0];
     expect(() => renderDraft(recipient(), [], () => new Date(), template, DYLAN_FACTS.map((fact) => fact.id === template.factIds[0] ? { ...fact, enabled: false } : fact))).toThrow("disabled");
@@ -63,10 +65,13 @@ describe("deterministic drafts", () => {
     expect(variants).toEqual(new Set(["direct-practical", "career-curiosity", "common-ground"]));
   });
 
-  it("routes manager personas and industry lanes independently from role family", () => {
-    expect(selectTemplate({ ...recipient(), personaId: "team-manager" }, { runId: "run" }).laneId).toBe("career-path-leader");
+  it("uses specific function evidence before manager persona fallback", () => {
+    expect(selectTemplate({ ...recipient(), personaId: "team-manager",professionalTitle:"Program Manager",primaryRecipientFunction:"project-program" }, { runId: "run" }).laneId).toBe("project-operations");
+    expect(selectTemplate({ ...recipient(), personaId: "team-manager",roleFamilyId:"",primaryRecipientFunction:undefined }, { runId: "run" }).laneId).toBe("career-path-leader");
     expect(selectTemplate({ ...recipient(), industryId: "commodities-energy", roleFamilyId: "industry-professional" }, { runId: "run" }).laneId).toBe("commodities-energy");
   });
+
+  it("uses immutable title/company evidence without indiscriminate leadership language",()=>{const item={...recipient(),personaId:"team-manager",professionalTitle:"Security Program Manager",primaryRecipientFunction:"project-program"},template=selectTemplate(item,{runId:"run"}),draft=renderDraft(item,[],()=>new Date(),template);expect(template.laneId).toBe("engineering-technical");expect(draft.body).toContain("Security Program Manager");expect(draft.body).toContain("Imaginary Venture");expect(draft.referencedFactIds).not.toContain("long-term-direction");expect(draft.body).not.toMatch(/long-term.{0,20}long-term/i);});
 
   it("renders and traces only verified fictional evidence", () => {
     const template = DRAFT_TEMPLATES[0];

@@ -6,6 +6,14 @@
 
 The command permits only People Search, People Match, and Credit Usage. Its transport hard-caps those endpoints at 16, 20, and 2 HTTP calls respectively. It uses the versioned `disabled-phone-v1` cost policy (one authorized lead credit per logical enrichment) while keeping personal email, phone, and both waterfall options false. Credit telemetry is provider-observed metadata and remains distinct from NetworkPilot preauthorization accounting. A scoped-key 403 is reported without requesting or switching to a Master key.
 
+Pre-enrichment selection first excludes irrelevant or prohibited records, then ranks substantive relevance, applies a three-per-company cap and five-per-primary-function soft cap, and only afterward uses deterministic identity ordering. The function cap relaxes with recorded reasons only when the remaining relevant pool cannot fill the bounded shortlist. Company, industry, and function representation shortfalls are reported rather than treated as request failures.
+
+People Search maps each returned person independently before the atomic import boundary. A malformed person produces only a safe index/reason diagnostic; valid siblings remain importable, and malformed raw provider data is never persisted. Request failures, individual record rejections, import failures, and enrichment failures remain distinct operational metrics.
+
+Planning reports desired volume, qualified people, unique qualified companies, one-person-per-company capacity, qualification shortfall, and company-capacity shortfall separately. Routine weekday volume of 15–20 therefore requires at least 15–20 qualified distinct companies in that day's candidate universe; future sourcing must cover a broader reviewed registry rather than weakening the uniqueness policy.
+
+Draft routing uses the most specific immutable evidence available: reviewed industry and concrete title/function signals precede role-family fallbacks, while the career-path leadership lane is used only when no stronger specific lane exists. Manager or director persona does not itself force leadership messaging. Every local preview records the lane reason and adds a restrained title-and-company connection; leadership facts remain confined to the leadership templates.
+
 Apollo is the first provider selected by Headquarters after its API capabilities, cost model, limits, and terms were reviewed. Controlled diagnostics have validated the approved endpoint paths, scoped API-key authentication, relevant search filters, provider payload mapping, and lead-credit telemetry. Apollo remains disabled by default and is available only through explicit, bounded server-side operator commands.
 
 ## Documented API contract

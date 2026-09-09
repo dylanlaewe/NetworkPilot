@@ -22,7 +22,7 @@ export const FACT_FRAGMENTS:FactFragment[]=[
  {id:"technical-skills",factIds:["technical-work"],claimMarkers:["ETL, automation, data integration, SQL, Power BI, Python, APIs, and reporting"],render:(f)=>`My hands-on work has included ${value(f,"technical-work")}.`},
  {id:"systems",factIds:["systems-scale"],claimMarkers:["more than 20 business and operational systems"],render:(f)=>`I have ${lowerFirst(value(f,"systems-scale"))}.`},
  {id:"interests",factIds:["career-interests"],claimMarkers:["data, analytics, engineering, AI and automation"],render:(f)=>`I have an ${lowerFirst(value(f,"career-interests"))}.`},
- {id:"leadership-direction",factIds:["long-term-direction"],claimMarkers:["leadership, ownership, and responsibility"],render:(f)=>`Longer term, I have a ${lowerFirst(value(f,"long-term-direction"))}.`},
+ {id:"leadership-direction",factIds:["long-term-direction"],claimMarkers:["leadership, ownership, and responsibility"],render:(f)=>`Looking farther ahead, I’m interested in ${lowerFirst(value(f,"long-term-direction")).replace(/^long-term interest in /,"")}.`},
  {id:"northeast",factIds:["northeast"],claimMarkers:["Boston, New York City, and New Jersey"],render:(f)=>`I have a ${lowerFirst(value(f,"northeast"))}.`},
  {id:"remote",factIds:["remote"],claimMarkers:["remote-friendly opportunities"],render:(f)=>`I also have an ${lowerFirst(value(f,"remote"))}.`},
 ];

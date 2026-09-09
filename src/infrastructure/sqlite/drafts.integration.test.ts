@@ -50,7 +50,7 @@ describe("draft persistence and fictional targeting profiles", () => {
     const first = generateDraftsForRun(repository, run.id, () => new Date("2026-09-07T16:00:00Z"));
     const second = generateDraftsForRun(repository, run.id, () => new Date("2026-09-08T16:00:00Z"));
     expect(first).toHaveLength(15); expect(second.map((draft) => draft.id)).toEqual(first.map((draft) => draft.id)); expect(repository.listDrafts()).toHaveLength(15);
-    expect(second[0]).toMatchObject({ templateVersion: "2.0.0", templateCatalogVersion: "catalog-v2", scoreVersion: "targeting-v2", score: first[0].score, createdAt: "2026-09-07T16:00:00.000Z" });
+    expect(second[0]).toMatchObject({ templateVersion: "3.0.0", templateCatalogVersion: "catalog-v3", scoreVersion: "targeting-v2", score: first[0].score, createdAt: "2026-09-07T16:00:00.000Z" });
     expect(new Set(first.map((draft) => draft.templateId)).size).toBeGreaterThan(3); repository.close();
   });
 
