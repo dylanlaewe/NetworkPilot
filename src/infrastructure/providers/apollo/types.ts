@@ -3,7 +3,7 @@ export const APOLLO_ADAPTER_VERSION="apollo-adapter-v1" as const;
 export const APOLLO_MAPPING_VERSION="apollo-mapping-v1" as const;
 export const APOLLO_IMPORT_VERSION="provider-import-v1" as const;
 export type ApolloSeniority="manager"|"director"|"senior";
-export interface ApolloSearchOptions {batchId:string;companyDomains?:string[];organizationIds?:string[];specificTitles:string[];seniorities?:ApolloSeniority[];personLocations?:string[];organizationLocations?:string[];emailStatuses?:string[];includeSimilarTitles?:boolean;page?:number;perPage?:number;}
+export interface ApolloSearchOptions {batchId:string;companyDomains?:string[];organizationIds?:string[];specificTitles?:string[];seniorities?:ApolloSeniority[];personLocations?:string[];organizationLocations?:string[];emailStatuses?:string[];includeSimilarTitles?:boolean;controlledDiagnosticAuthorization?:"milestone-6.1b";page?:number;perPage?:number;}
 export interface ApolloEnrichmentOptions {batchId:string;personIds:string[];}
 export interface ApolloConfig {enabled:boolean;apiKey?:string;maxEnrichmentsPerBatch:number;maxEnrichmentsPerDay:number;hardStop:boolean;timeoutMs:number;maxResponseBytes:number;maxRetries:number;}
 export interface ApolloHttpResponse {status:number;headers:Readonly<Record<string,string|undefined>>;body:string;}

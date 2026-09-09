@@ -24,6 +24,13 @@ export const CONTROLLED_APOLLO_SEARCHES: readonly Readonly<ApolloSearchOptions>[
   { ...BASE_CONTROLLED_APOLLO_SEARCH, specificTitles: ["Senior Data Engineer", "Data Engineering Manager", "Director of Data Engineering", "Senior Software Engineer", "Software Engineering Manager"], emailStatuses: ["verified"] },
   { ...BASE_CONTROLLED_APOLLO_SEARCH, specificTitles: ["Senior Data Analyst", "Senior Data Engineer", "Senior Software Engineer", "Analytics Manager", "Technical Program Leader"] },
 ] as const;
+export const CONTROLLED_APOLLO_DIAGNOSTIC_DOMAINS = { microsoft: "microsoft.com" } as const;
+export const CONTROLLED_APOLLO_DIAGNOSTIC_SEARCHES: readonly Readonly<ApolloSearchOptions>[] = [
+  { batchId: "apollo-live-search-6.1b-domain", companyDomains: ["microsoft.com"], seniorities: [], page: 1, perPage: 10 },
+  { batchId: "apollo-live-search-6.1b-seniority", companyDomains: ["microsoft.com"], seniorities: ["manager", "director", "senior"], page: 1, perPage: 10 },
+  { batchId: "apollo-live-search-6.1b-geography", companyDomains: ["microsoft.com"], seniorities: ["manager", "director", "senior"], personLocations: ["Boston", "Massachusetts", "New York", "New Jersey"], page: 1, perPage: 10 },
+  { batchId: "apollo-live-search-6.1b-titles", companyDomains: ["microsoft.com"], seniorities: ["manager", "director", "senior"], personLocations: ["Boston", "Massachusetts", "New York", "New Jersey"], specificTitles: ["data", "analytics", "software engineer", "data engineer", "program manager"], includeSimilarTitles: true, controlledDiagnosticAuthorization: "milestone-6.1b", page: 1, perPage: 10 },
+] as const;
 
 interface SearchOnlyApolloAdapter {
   search(options: ApolloSearchOptions): Promise<ApolloSearchResult>;
@@ -39,8 +46,7 @@ export interface ControlledApolloSearchOutcome {
   candidates: ImportedCandidateSnapshot[];
 }
 
-function selectedCompanies(registry: readonly TargetCompany[]): TargetCompany[] {
-  const ids = Object.keys(CONTROLLED_APOLLO_COMPANY_DOMAINS);
+function selectedCompanies(registry: readonly TargetCompany[], ids: readonly string[]): TargetCompany[] {
   const selected = ids.map((id) => registry.find((company) => company.id === id && company.enabled && (company.tier === "tier-1" || company.tier === "tier-2")));
   if (selected.some((company) => !company)) throw new Error("controlled-apollo-registry-company-unavailable");
   return selected as TargetCompany[];
@@ -56,15 +62,18 @@ export async function runControlledApolloSearch(input: {
   registry?: readonly TargetCompany[];
   now?: Date;
   pass?: 0 | 1 | 2;
+  diagnosticPass?: 0 | 1 | 2 | 3;
 }): Promise<ControlledApolloSearchOutcome> {
   const registry = input.registry ?? TARGET_COMPANIES;
-  selectedCompanies(registry);
-  const search = CONTROLLED_APOLLO_SEARCHES[input.pass ?? 0];
+  const diagnostic = input.diagnosticPass !== undefined;
+  const domains = diagnostic ? CONTROLLED_APOLLO_DIAGNOSTIC_DOMAINS : CONTROLLED_APOLLO_COMPANY_DOMAINS;
+  selectedCompanies(registry, Object.keys(domains));
+  const search = diagnostic ? CONTROLLED_APOLLO_DIAGNOSTIC_SEARCHES[input.diagnosticPass!] : CONTROLLED_APOLLO_SEARCHES[input.pass ?? 0];
   const result = await input.adapter.search({ ...search });
   if (result.records.length > 10) throw new Error("controlled-apollo-result-cap-exceeded");
   if (result.records.some((record) => record.email.address.trim())) throw new Error("controlled-apollo-search-email-anomaly");
   if (result.records.some((record) => record.email.verificationStatus !== "unknown")) throw new Error("controlled-apollo-search-verification-anomaly");
-  const batchId = `apollo-live-search-${(input.now ?? new Date()).toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
+  const batchId = `apollo-live-search-${diagnostic?`61b-${input.diagnosticPass}`:"61a"}-${(input.now ?? new Date()).toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
   const batch = importCandidateBatch(input.repository, registry, {
     batchId,
     adapterId: "apollo",
@@ -73,8 +82,8 @@ export async function runControlledApolloSearch(input: {
     sourceFingerprint: batchFingerprint(result.records, search),
     records: result.records,
     authorizedProviderAccess: { enabled: true, providerId: "apollo" },
-    strategyCompanyDomains: CONTROLLED_APOLLO_COMPANY_DOMAINS,
+    strategyCompanyDomains: domains,
   }, input.now);
-  const candidates = input.repository.listImportedCandidates().filter((candidate) => candidate.batchId === batch.id);
+  const candidates = result.records.map((record) => input.repository.findImportedCandidate(record.sourceProviderId, record.providerRecordId)).filter((candidate): candidate is ImportedCandidateSnapshot => Boolean(candidate));
   return { requestCount: 1, returnedCount: result.records.length, mappedCount: result.records.length, malformedCount: 0, totalAvailable: result.totalAvailable, batch, candidates };
 }

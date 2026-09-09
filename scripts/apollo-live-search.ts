@@ -1,6 +1,6 @@
 import { loadEnvFile } from "node:process";
 import { resolve } from "node:path";
-import { runControlledApolloSearch, CONTROLLED_APOLLO_COMPANY_DOMAINS, CONTROLLED_APOLLO_SEARCHES } from "../src/application/providers/run-controlled-apollo-search";
+import { runControlledApolloSearch, CONTROLLED_APOLLO_DIAGNOSTIC_DOMAINS, CONTROLLED_APOLLO_DIAGNOSTIC_SEARCHES } from "../src/application/providers/run-controlled-apollo-search";
 import { TARGET_COMPANIES } from "../src/domain/targeting";
 import { ApolloAdapter } from "../src/infrastructure/providers/apollo/adapter";
 import { readApolloConfig } from "../src/infrastructure/providers/apollo/config";
@@ -29,14 +29,19 @@ async function main(): Promise<void> {
   const controlledEnvironment = { ...process.env, NETWORKPILOT_APOLLO_MAX_RETRIES: "0" };
   try {
     repository.migrate();
-    const importedRequests = (repository.native.prepare("SELECT COUNT(*) count FROM import_batches WHERE adapter_id = 'apollo' AND id LIKE 'apollo-live-search-%'").get() as { count: number }).count;
-    const recordedRequests = Number(repository.getSetting("apolloLiveSearch61aRequestCount") ?? 0);
-    const priorRequests = Math.max(importedRequests, Number.isSafeInteger(recordedRequests) ? recordedRequests : 0);
-    if (priorRequests >= CONTROLLED_APOLLO_SEARCHES.length) throw new Error("controlled-apollo-milestone-request-cap-exceeded");
-    const search = CONTROLLED_APOLLO_SEARCHES[priorRequests];
-    repository.setSetting("apolloLiveSearch61aRequestCount", String(priorRequests + 1), new Date());
+    const firstSessionRequests = (repository.native.prepare("SELECT COUNT(*) count FROM import_batches WHERE adapter_id = 'apollo' AND id LIKE 'apollo-live-search-%' AND id NOT LIKE 'apollo-live-search-61b-%'").get() as { count: number }).count;
+    if (firstSessionRequests !== 3) throw new Error("controlled-apollo-first-session-history-invalid");
+    const priorRequests = Number(repository.getSetting("apolloLiveSearch61bRequestCount") ?? 0);
+    if (!Number.isSafeInteger(priorRequests) || priorRequests < 0 || priorRequests >= CONTROLLED_APOLLO_DIAGNOSTIC_SEARCHES.length) throw new Error("controlled-apollo-second-session-request-cap-exceeded");
+    if (priorRequests > 0) {
+      const previousResult = Number(repository.getSetting(`apolloLiveSearch61bResult${priorRequests - 1}`));
+      if (!Number.isSafeInteger(previousResult) || previousResult <= 0) throw new Error("controlled-apollo-previous-stage-not-populated");
+    }
+    const search = CONTROLLED_APOLLO_DIAGNOSTIC_SEARCHES[priorRequests];
+    repository.setSetting("apolloLiveSearch61bRequestCount", String(priorRequests + 1), new Date());
     const adapter = new ApolloAdapter(readApolloConfig(controlledEnvironment), transport, repository, { now: () => new Date(), sleep: async () => {}, datasetClassification: "authorized-provider", localDate: (date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(date) });
-    const outcome = await runControlledApolloSearch({ adapter, repository, pass: priorRequests as 0 | 1 | 2 });
+    const outcome = await runControlledApolloSearch({ adapter, repository, diagnosticPass: priorRequests as 0 | 1 | 2 | 3 });
+    repository.setSetting(`apolloLiveSearch61bResult${priorRequests}`, String(outcome.returnedCount), new Date());
     const summaries = outcome.candidates.map((candidate) => {
     const remainingGates = candidate.gateFailures.filter((failure) => failure !== "email-unverified");
     return {
@@ -63,12 +68,14 @@ async function main(): Promise<void> {
     };
     });
     console.log(JSON.stringify({
-    operation: "NetworkPilot Milestone 6.1A controlled live search",
+    operation: "NetworkPilot Milestone 6.1B controlled sourcing diagnostic",
     logicalSearchCount: outcome.requestCount,
     httpRequestCount: transport.requestCount,
-    milestoneHttpRequestNumber: priorRequests + transport.requestCount,
+    validationSession: "6.1B",
+    sessionHttpRequestNumber: priorRequests + transport.requestCount,
+    cumulativeHttpRequestNumber: firstSessionRequests + priorRequests + transport.requestCount,
     endpoint: "https://api.apollo.io/api/v1/mixed_people/api_search",
-    companies: Object.keys(CONTROLLED_APOLLO_COMPANY_DOMAINS),
+    companies: Object.keys(CONTROLLED_APOLLO_DIAGNOSTIC_DOMAINS),
     filters: search,
     returnedCount: outcome.returnedCount,
     mappedCount: outcome.mappedCount,
