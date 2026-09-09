@@ -1,0 +1,8 @@
+import {describe,expect,it,vi} from "vitest";
+import {FetchGmailTransport} from "./http";
+
+describe("fixed Gmail HTTP transport",()=>{
+  it("uses the fixed host, bearer authorization, and rejects redirects",async()=>{const fetcher=vi.fn(async()=>new Response("{}",{status:200})),transport=new FetchGmailTransport(fetcher);await transport.request({method:"POST",path:"/gmail/v1/users/me/drafts",body:{message:{raw:"fixture"}},accessToken:"fixture-token",timeoutMs:100,maxResponseBytes:1000});expect(fetcher).toHaveBeenCalledWith("https://gmail.googleapis.com/gmail/v1/users/me/drafts",expect.objectContaining({method:"POST",redirect:"error",headers:expect.objectContaining({authorization:"Bearer fixture-token"})}));});
+  it("enforces declared and actual response bounds",async()=>{const declared=new FetchGmailTransport(vi.fn(async()=>new Response("large",{headers:{"content-length":"100"}}))),actual=new FetchGmailTransport(vi.fn(async()=>new Response("oversized"))),input={method:"GET" as const,path:"/gmail/v1/users/me/profile" as const,accessToken:"fixture",timeoutMs:100,maxResponseBytes:4};await expect(declared.request(input)).rejects.toThrow("too-large");await expect(actual.request(input)).rejects.toThrow("too-large");});
+  it("maps AbortError to a timeout without exposing the token",async()=>{const fetcher=vi.fn(async(_url:unknown,init?:RequestInit)=>await new Promise<Response>((_resolve,reject)=>init?.signal?.addEventListener("abort",()=>reject(new DOMException("fixture-token","AbortError"))))),transport=new FetchGmailTransport(fetcher);await expect(transport.request({method:"GET",path:"/gmail/v1/users/me/profile",accessToken:"fixture-token",timeoutMs:1,maxResponseBytes:10})).rejects.toThrow("gmail-request-timeout");});
+});
