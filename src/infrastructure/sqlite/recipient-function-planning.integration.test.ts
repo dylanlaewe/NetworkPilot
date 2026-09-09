@@ -39,8 +39,8 @@ describe("recipient-function production planning",()=>{
       desiredRoleFamily:"business-delivery",
       desiredRoleId:"project-manager",
       targetingVersion:"targeting-v2",
-      recipientFunctionVersion:"recipient-function-v1",
-      recipientRelevanceVersion:"recipient-relevance-v1",
+      recipientFunctionVersion:"recipient-function-v2",
+      recipientRelevanceVersion:"recipient-relevance-v2",
       primaryRecipientFunction:"project-program",
       secondaryRecipientFunctions:expect.arrayContaining(["data-analytics"]),
       recipientFunctionConfidence:"high",
@@ -57,13 +57,15 @@ describe("recipient-function production planning",()=>{
     repo.native.prepare("UPDATE fictional_targeting_profiles SET professional_title='Changed Source Title',desired_role_id='data-engineer',role_family_id='data-analytics',functional_relevance=1 WHERE prospect_id=?").run(id);
     expect(repo.findCampaignPlan(run.id)?.decisions.find((item)=>item.prospectId===id)).toEqual(immutable);
     const draft=generateDraftsForRun(repo,run.id,()=>new Date("2026-09-07T16:00:00.000Z"))[0]!;
-    expect(draft).toMatchObject({scoreVersion:"targeting-v2",score:immutable.totalScore,scoreComponents:immutable.components,recipientSnapshot:{professionalTitle:"analytics program manager",recipientFunctionVersion:"recipient-function-v1",recipientRelevanceVersion:"recipient-relevance-v1",primaryRecipientFunction:"project-program",preciseTargetRoleId:null}});
+    expect(draft).toMatchObject({scoreVersion:"targeting-v2",score:immutable.totalScore,scoreComponents:immutable.components,recipientSnapshot:{professionalTitle:"analytics program manager",recipientFunctionVersion:"recipient-function-v2",recipientRelevanceVersion:"recipient-relevance-v2",primaryRecipientFunction:"project-program",preciseTargetRoleId:null}});
     repo.close();
   });
 
   it.each([
     ["unknown","General Manager","team-manager","recipient-function-unknown"],
     ["unrelated","Account Executive","senior-ic","recipient-function-unrelated"],
+    ["unrelated recruiting","Talent Acquisition Director","functional-director","recipient-function-unrelated"],
+    ["ambiguous digital transformation","Director Digital Transformation","functional-director","recipient-function-unknown"],
     ["prohibited seniority","Chief Executive Officer","team-manager","c-suite-rejected"],
   ] as const)("fails %s recipients closed in the production planner",(_label,title,personaId,rejectionCode)=>{
     const repo=repository(),id=isolateCandidate(repo,title,"","",personaId);
@@ -73,6 +75,14 @@ describe("recipient-function production planning",()=>{
     expect(decision).toMatchObject({selected:false,hardGateRejectionCode:rejectionCode,selectionReason:rejectionCode});
     repo.close();
   });
+
+  it("selects a technical-security recipient on function grounds without an exact target role",()=>{const repo=repository(),id=isolateCandidate(repo,"Security Analyst II","software-engineer","technical-product","senior-ic");const run=runDailySimulation(repo,{instant,random:()=>0});const decision=repo.findCampaignPlan(run.id)!.decisions.find((item)=>item.prospectId===id)!;expect(decision).toMatchObject({selected:true,preciseTargetRoleId:null,primaryRecipientFunction:"technical-infrastructure",recipientFunctionVersion:"recipient-function-v2",recipientRelevanceVersion:"recipient-relevance-v2",hardGateRejectionCode:null});repo.close();});
+
+  it.each([
+    ["verified email",(repo:SqliteSimulationRepository,id:string)=>repo.native.prepare("UPDATE prospects SET email_verified=0 WHERE id=?").run(id),"email-unverified"],
+    ["five years of experience",(repo:SqliteSimulationRepository,id:string)=>repo.native.prepare("UPDATE prospects SET years_experience=4 WHERE id=?").run(id),"insufficient-experience"],
+    ["reviewed company",(repo:SqliteSimulationRepository,id:string)=>repo.native.prepare("UPDATE fictional_company_profiles SET registry_alias_reviewed=0 WHERE company_id=(SELECT company_id FROM prospects WHERE id=?)").run(id),"company-alias-unreviewed"],
+  ] as const)("does not let technical-security relevance bypass required %s",(_label,mutate,rejectionCode)=>{const repo=repository(),id=isolateCandidate(repo,"Security Analyst II","software-engineer","technical-product","senior-ic");mutate(repo,id);runDailySimulation(repo,{instant,random:()=>0});expect(repo.findCampaignPlan("run-2026-09-07")!.decisions.find((item)=>item.prospectId===id)).toMatchObject({selected:false,hardGateRejectionCode:rejectionCode});repo.close();});
 
   it("keeps an explicitly persisted legacy targeting-v1 plan readable",()=>{
     const repo=repository();
@@ -86,4 +96,6 @@ describe("recipient-function production planning",()=>{
     expect(repo.findCampaignPlan("legacy-plan")).toMatchObject({targetingVersion:"targeting-v1",decisions:[{targetingVersion:"targeting-v1"}]});
     repo.close();
   });
+
+  it("keeps persisted recipient-function-v1 relevance snapshots immutable and draftable",()=>{const repo=repository(),id=isolateCandidate(repo,"Analytics Program Manager","project-manager","business-delivery");const run=runDailySimulation(repo,{instant,random:()=>0}),current=repo.findCampaignPlan(run.id)!.decisions.find((item)=>item.prospectId===id)!;const legacy={...current,recipientFunctionVersion:"recipient-function-v1",recipientRelevanceVersion:"recipient-relevance-v1",targetRoleAffinities:current.targetRoleAffinities?.map((item)=>({...item,mappingVersion:"function-role-relevance-v1"}))};repo.createRun({id:"legacy-function-plan",campaignDate:"2026-09-08",campaignTimezone:"America/New_York",startedAtUtc:instant.toISOString(),completedAtUtc:instant.toISOString(),status:"completed",target:1,selectedCount:1,shortfall:0});repo.createCampaignPlan({id:"legacy-function-plan",planVersion:"campaign-plan-v1",targetingVersion:"targeting-v2",status:"planned",diversificationConfig:{},quotaRelaxations:[],at:instant});repo.createPlanDecisions("legacy-function-plan",[legacy]);repo.native.prepare("UPDATE fictional_targeting_profiles SET professional_title='Changed Later' WHERE prospect_id=?").run(id);const stored=repo.findCampaignPlan("legacy-function-plan")!.selected[0]!;expect(stored).toMatchObject({recipientFunctionVersion:"recipient-function-v1",recipientRelevanceVersion:"recipient-relevance-v1"});expect(stored.targetRoleAffinities?.every((item)=>item.mappingVersion==="function-role-relevance-v1")).toBe(true);const draft=generateDraftsForRun(repo,"legacy-function-plan",()=>new Date("2026-09-08T16:00:00Z"))[0]!;expect(draft.recipientSnapshot).toMatchObject({recipientFunctionVersion:"recipient-function-v1",recipientRelevanceVersion:"recipient-relevance-v1",professionalTitle:"analytics program manager"});repo.close();});
 });

@@ -77,7 +77,7 @@ export interface NormalizedCandidateRecord {
   preciseTargetRoleId?:string|null;
   recipientFunction?:import("./recipient-function").RecipientFunctionClassification;
   targetRoleAffinities?:import("./recipient-function").TargetRoleAffinity[];
-  recipientRelevance?:{score:number;version:"recipient-relevance-v1";explanationCodes:string[]};
+  recipientRelevance?:{score:number;version:import("./recipient-function").RecipientRelevanceVersion;explanationCodes:string[]};
   recipientPersonaId:string|null;
   industryId:string|null;
   geographyId:string|null;

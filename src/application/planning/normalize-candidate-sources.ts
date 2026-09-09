@@ -36,6 +36,10 @@ export function normalizeCandidateSources(records:readonly SimulationCandidateSo
     if(!rejectionCode&&fingerprints.has(input.rawRecordFingerprint))rejectionCode="duplicate-fingerprint";
     if(!rejectionCode&&people.has(personKey))rejectionCode="duplicate-person";
     fingerprints.add(input.rawRecordFingerprint);people.add(personKey);
+    if(!rejectionCode&&record.controls.suppressed)rejectionCode="suppressed";
+    if(!rejectionCode&&record.controls.optedOut)rejectionCode="opted-out";
+    if(!rejectionCode&&input.emailVerificationStatus!=="verified")rejectionCode="email-unverified";
+    if(!rejectionCode&&(classification.yearsExperience??0)<5)rejectionCode="insufficient-experience";
     const supplied=record.suppliedClassification;
     const derived=[strategicRoleFamily??"",strategicRoleId??"",classification.personaId??"",classification.industryId??"",classification.geographyId??""];
     const claimed=[supplied.roleFamilyId,supplied.desiredRoleId,supplied.personaId,supplied.industryId,supplied.geographyId];
@@ -47,10 +51,6 @@ export function normalizeCandidateSources(records:readonly SimulationCandidateSo
     if(!rejectionCode&&!functionAccepted)rejectionCode=recipientFunction.explanationCodes.at(-1)??"recipient-function-unknown";
     if(!rejectionCode&&!companyResult.company)rejectionCode=companyResult.explanationCode;
     if(!rejectionCode&&(classification.industryId!==record.fictionalEmployer.industryId||classification.industryId!==companyResult.company?.industryId))rejectionCode="industry-conflict";
-    if(!rejectionCode&&record.controls.suppressed)rejectionCode="suppressed";
-    if(!rejectionCode&&record.controls.optedOut)rejectionCode="opted-out";
-    if(!rejectionCode&&input.emailVerificationStatus!=="verified")rejectionCode="email-unverified";
-    if(!rejectionCode&&(classification.yearsExperience??0)<5)rejectionCode="insufficient-experience";
     const normalized:NormalizedCandidateRecord={source:input,fictionalEmployer:record.fictionalEmployer,stableFingerprint:input.rawRecordFingerprint,normalizedTitle:classification.normalizedTitle,yearsExperience:classification.yearsExperience??null,roleFamilyId:strategicRoleFamily??null,desiredRoleId:strategicRoleId??null,preciseTargetRoleId:classification.desiredRoleId??null,recipientFunction,targetRoleAffinities,recipientRelevance,recipientPersonaId:classification.personaId??null,industryId:classification.industryId??null,geographyId:classification.geographyId??null,companyMatch:companyResult.company?{companyId:companyResult.company.id,canonicalName:companyResult.company.canonicalName,tier:companyResult.company.tier,enabled:companyResult.company.enabled,industryId:companyResult.company.industryId,recognitionScore:companyResult.company.recognitionScore,careerUpsideScore:companyResult.company.careerUpsideScore,technicalInterestScore:companyResult.company.technicalInterestScore,reviewStatus:companyResult.company.tier==="unreviewed"?"unreviewed":"reviewed",method:companyResult.method!,provenance:companyResult.company.provenance}:null,dataQualityScore:scoreCandidateDataQuality(input),sharedSignal:record.scoringSignals.sharedSignal,roleAlignment:record.scoringSignals.roleAlignment,functionalRelevance:recipientRelevance.score,roleSpecificUpside:record.scoringSignals.roleSpecificUpside,explanationCodes:[...classification.explanationCodes,...recipientFunction.explanationCodes,...recipientRelevance.explanationCodes,companyResult.explanationCode,"data-quality-derived"],reviewCode:functionAccepted?null:recipientFunction.explanationCodes.at(-1)??classification.reviewCode??null,rejectionCode,classificationVersion:CLASSIFICATION_VERSION,targetingProfileVersion:record.targetingProfileVersion,companyProfileVersion:record.companyProfileVersion};
     const role=TARGET_ROLES.find((item)=>item.id===normalized.desiredRoleId),persona=CONTACT_PERSONAS.find((item)=>item.id===normalized.recipientPersonaId),industry=INDUSTRY_PREFERENCES.find((item)=>item.id===normalized.industryId),geography=GEOGRAPHY_PREFERENCES.find((item)=>item.id===normalized.geographyId),matched=companyResult.company;
     const company=matched?{...matched}:null;
