@@ -62,7 +62,7 @@ export interface CandidateSourceRecord {
   email:{address:string;verificationStatus:EmailVerificationStatus}; sourceTimestamps:{retrievedAt:string;updatedAt?:string};
   fieldProvenance:Record<string,FieldProvenance>; consent:{suppressed:boolean;optedOut:boolean;evidence?:string};
   sourceFingerprint:string; simulationAlias?:{strategyCompanyId:string;reviewed:boolean;note:string};
-  providerMetadata?:{adapterVersion:string;responseMappingVersion:string;requestContractVersion:string;importArchitectureVersion:string;providerSeniority?:string};
+  providerMetadata?:{adapterVersion:string;responseMappingVersion:string;requestContractVersion:string;importArchitectureVersion:string;providerSeniority?:string;matchConfidence?:"high"|"medium"|"low"};
 }
 export interface ExperienceInterpretation { minimumSupportedYears:number|null; maximumSupportedYears:number|null; kind:"exact"|"bounded"|"inferred"|"unknown"; evidence:ExperienceEvidence[]; interpretationVersion:"experience-v1"; confidence:"high"|"medium"|"low"; reviewState:"accepted"|"review-required"; explanationCodes:string[]; }
 export interface SpecificRoleClassification { normalizedTitle:string; specificRoleId:string|null; roleFamilyId:string|null; matchedSignals:string[]; classificationVersion:"role-classification-v2"; reviewCode:string|null; }
