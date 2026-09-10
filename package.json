@@ -17,6 +17,7 @@
     "apollo:validate-enrichment": "tsx scripts/apollo-live-enrichment.ts",
     "apollo:controlled-batch": "tsx scripts/apollo-controlled-real-batch.ts",
     "apollo:operational-scale": "tsx scripts/apollo-operational-scale-batch.ts",
+    "gmail:controlled-live": "tsx scripts/gmail-controlled-live-validation.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/reset.ts"
