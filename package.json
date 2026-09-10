@@ -21,6 +21,7 @@
     "gmail:human-reviewed-pilot": "tsx scripts/gmail-human-reviewed-pilot.ts",
     "manual-send:confirm": "tsx scripts/confirm-manual-send.ts",
     "manual-send:list": "tsx scripts/list-manual-send-drafts.ts",
+    "manual-send:bounce": "tsx scripts/record-manual-hard-bounce.ts",
     "manual-outreach:outcome": "tsx scripts/report-manual-outcome.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",

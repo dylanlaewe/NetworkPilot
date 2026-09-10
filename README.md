@@ -50,6 +50,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run check:no-email-send` — fail if application source introduces a known delivery path
 - `npm run manual-send:list` — list confirmable pilot drafts with privacy-safe operation-derived IDs
 - `npm run manual-send:confirm` — after sending independently in Gmail, record an explicit operator confirmation by listed ID
+- `npm run manual-send:bounce` — atomically record a manual attempt and human-reported address-not-found hard bounce
 - `npm run manual-outreach:outcome` — record an audited human-reported pilot outcome locally
 - `npm run db:migrate`, `db:seed`, `db:reset` — local fictional persistence operations
 

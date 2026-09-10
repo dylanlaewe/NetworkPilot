@@ -27,7 +27,7 @@ export function runDailySimulation(repository: SimulationRepository, input: Crea
     const candidates=normalizeCandidateSources(repository.listCandidateSourceRecords(),repository.listTargetCompanies(),{...DEFAULT_CANDIDATE_PIPELINE_CONFIG,classificationVersion,minimumScore:diversification.minimumScore});
     const sample=calendar.isWeekday?input.random():0;if(calendar.isWeekday&&(!Number.isFinite(sample)||sample<0||sample>=1))throw new RangeError("random must return a number from 0 (inclusive) to 1 (exclusive)");
     const target=calendar.isWeekday?minimum+Math.floor(sample*(maximum-minimum+1)):0;
-    const result=calendar.isWeekday?planDailyCampaign(candidates,repository.listOutreachEvents(),target,input.instant,cooldown,diversification,DEFAULT_CANDIDATE_PIPELINE_CONFIG.weights): {target:0,decisions:[],selected:[],quotaRelaxations:[],qualifiedPopulation:0};
+    const result=calendar.isWeekday?planDailyCampaign(candidates,repository.listOutreachEvents(),target,input.instant,cooldown,diversification,DEFAULT_CANDIDATE_PIPELINE_CONFIG.weights,timezone): {target:0,decisions:[],selected:[],quotaRelaxations:[],qualifiedPopulation:0};
     const id = `run-${calendar.date}`;
     const timestamp = input.instant.toISOString();
     repository.createRun({ id, campaignDate: calendar.date, campaignTimezone: timezone, startedAtUtc: timestamp, completedAtUtc: timestamp, status: calendar.isWeekday ? "completed" : "weekend-no-send", target: result.target, selectedCount: result.selected.length, shortfall: result.target-result.selected.length });

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateDraftsForRun } from "@/application/drafts";
 import { approveForGmailDraft, type ApprovedEmailDraftSnapshot } from "@/application/email-drafts";
-import { confirmManualSendByOperatorId, confirmOperatorManualSend, manualSendOperatorId, reportManualOutreachOutcome } from "@/application/manual-outreach";
+import { confirmManualSendByOperatorId, confirmOperatorManualSend, manualSendOperatorId, recordOperatorReportedHardBounce, reportManualOutreachOutcome } from "@/application/manual-outreach";
 import { runDailySimulation } from "@/application/simulation/run-daily-simulation";
 import { selectDailyProspects } from "@/domain/outreach";
 import { seedFictionalData } from "./seed";
@@ -60,19 +60,20 @@ describe("operator-confirmed manual outreach production path", () => {
     expect(resolveManualOutreachDatabaseSelection({NETWORKPILOT_DATABASE_PATH:configuredPath},directory).path).toBe(defaultPath);
   });
 
-  it("upgrades an existing migration-0008 database without changing historical Gmail operations", () => {
+  it("upgrades an existing migration-0009 database without changing historical Gmail or manual-outreach records", () => {
     const directory=mkdtempSync(join(tmpdir(),"networkpilot-manual-upgrade-"));directories.push(directory);
     const repository=new SqliteSimulationRepository(join(directory,"upgrade.sqlite"));
     repository.native.exec("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, applied_at_utc TEXT NOT NULL)");
-    for(const file of readdirSync(resolve(process.cwd(),"migrations")).filter((name)=>name.endsWith(".sql")&&name<"0009_").sort()){
+    for(const file of readdirSync(resolve(process.cwd(),"migrations")).filter((name)=>name.endsWith(".sql")&&name<"0010_").sort()){
       repository.native.exec(readFileSync(resolve(process.cwd(),"migrations",file),"utf8"));
       repository.native.prepare("INSERT OR IGNORE INTO schema_migrations(version,applied_at_utc) VALUES(?,?)").run(file,"2026-09-10T00:00:00.000Z");
     }
     const fixture={operationId:"gmail-draft:historical",snapshot:{snapshotId:"historical-snapshot",recipientProfessionalEmail:"fictional@example.invalid",recipientDisplayName:"Fictional Person",subject:"Historical subject",body:"Historical body",planningSnapshotId:"historical-plan",templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-10T00:00:00.000Z"},provider:"gmail" as const,state:"approved-for-gmail-draft" as const,gmailDraftId:null,gmailMessageId:null,attemptStartedAt:null,completedAt:null,errorCategory:null,adapterVersion:"fixture-v1"};
-    repository.approveGmailDraftOperation(fixture);repository.migrate();
+    repository.approveGmailDraftOperation(fixture);seedFictionalData(repository);const prospect=repository.listProspects()[0]!;repository.createManualOutreach({id:"historical-manual",draftSnapshotId:"historical-snapshot",gmailOperationId:fixture.operationId,candidateId:prospect.id,companyId:prospect.companyId,identitySource:"prospect",confirmationSource:"operator",confirmedAt:"2026-09-10T01:00:00.000Z",effectiveSentAt:"2026-09-10T00:59:00.000Z",outcome:"awaiting-response",operationVersion:"manual-outreach-v1",createdAt:"2026-09-10T01:00:00.000Z",updatedAt:"2026-09-10T01:00:00.000Z"});repository.migrate();
     expect(repository.findGmailDraftOperation("historical-snapshot")).toEqual(fixture);
-    expect(repository.findManualOutreach("historical-snapshot")).toBeNull();
-    expect(repository.native.prepare("SELECT version FROM schema_migrations WHERE version='0009_manual_outreach_tracking.sql'").get()).toEqual({version:"0009_manual_outreach_tracking.sql"});
+    expect(repository.findManualOutreach("historical-snapshot")).toMatchObject({id:"historical-manual",outcome:"awaiting-response",operationVersion:"manual-outreach-v1"});
+    expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit WHERE manual_outreach_id='historical-manual'").get()).toEqual({count:1});
+    expect(repository.native.prepare("SELECT version FROM schema_migrations WHERE version='0010_manual_hard_bounce.sql'").get()).toEqual({version:"0010_manual_hard_bounce.sql"});
     repository.close();
   });
 
@@ -166,5 +167,24 @@ describe("operator-confirmed manual outreach production path", () => {
     expect(repository.listImportedCandidates().find((item)=>item.id===candidate.id)).toMatchObject({state:"suppressed",source:{consent:{suppressed:true}}});
     expect(repository.native.prepare("SELECT COUNT(*) count FROM candidate_suppression_entries WHERE candidate_id=?").get(candidate.id)).toEqual({count:1});
     repository.close();
+  });
+
+  it("atomically records and suppresses an idempotent operator-reported hard bounce",()=>{
+    const {repository}=setup(),candidate=repository.findImportedCandidate("fictional-flat","flat-001")!,snapshot:ApprovedEmailDraftSnapshot={snapshotId:"hard-bounce-fixture",recipientProfessionalEmail:"flat.one@example.test",recipientDisplayName:"Fictional F.",subject:"Fictional subject",body:"Fictional body",planningSnapshotId:"operational-scale:authorized:flat-001",templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-09T12:00:00.000Z"};
+    const operation=approveForGmailDraft(repository,snapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,operation.operationId);
+    const sentAt=new Date("2026-09-09T16:32:00.000Z"),reportedAt=new Date("2026-09-09T16:33:00.000Z"),first=recordOperatorReportedHardBounce({snapshotId:snapshot.snapshotId,effectiveSentAt:sentAt,now:()=>reportedAt,repository}),second=recordOperatorReportedHardBounce({snapshotId:snapshot.snapshotId,effectiveSentAt:new Date("2026-09-09T17:00:00.000Z"),now:()=>new Date("2026-09-09T17:01:00.000Z"),repository});
+    expect(second).toEqual(first);expect(first.outcome).toBe("hard-bounce");expect(repository.native.prepare("SELECT event_type,outcome FROM manual_outreach_audit ORDER BY id").all()).toEqual([{event_type:"operator-confirmed-manual-send",outcome:"awaiting-response"},{event_type:"hard-bounce-reported",outcome:"hard-bounce"}]);
+    const stored=repository.listImportedCandidates().find((item)=>item.id===candidate.id)!;expect(stored).toMatchObject({state:"suppressed",source:{consent:{suppressed:true}}});
+    expect(()=>reportManualOutreachOutcome({snapshotId:snapshot.snapshotId,outcome:"replied",now:()=>new Date("2026-09-10T12:00:00.000Z"),repository})).toThrow("manual-hard-bounce-terminal");
+    const base={id:candidate.id,firstName:"Fictional",lastName:"Candidate",companyId:"microsoft",companyName:"Microsoft",industry:"Technology" as const,email:"fixture@example.invalid",emailVerified:true,yearsExperience:8,suppressed:true,optedOut:false,relevanceScore:90},coworker={...base,id:"coworker",email:"coworker@example.invalid",suppressed:false},history=repository.listOutreachEvents();
+    const sameDay=selectDailyProspects([base,coworker],history,{now:()=>new Date("2026-09-09T20:00:00.000Z"),random:()=>0,config:{minimumDailyTarget:2,maximumDailyTarget:2}});expect(sameDay.decisions.find((item)=>item.prospect.id==="coworker")?.reasonCode).toBe("company-in-cooldown");
+    const nextDay=selectDailyProspects([coworker],history,{now:()=>new Date("2026-09-10T20:00:00.000Z"),random:()=>0,config:{minimumDailyTarget:1,maximumDailyTarget:1}});expect(nextDay.selected).toHaveLength(1);
+    expect(repository.getManualOutreachMetrics()).toMatchObject({manuallySent:1,outcomes:{"hard-bounce":1,replied:0,declined:0,"no-response":0}});repository.close();
+  });
+
+  it("rolls back the send attempt and suppression if hard-bounce auditing fails",()=>{
+    const {repository}=setup(),snapshot:ApprovedEmailDraftSnapshot={snapshotId:"hard-bounce-rollback",recipientProfessionalEmail:"flat.one@example.test",recipientDisplayName:"Fictional F.",subject:"Fictional subject",body:"Fictional body",planningSnapshotId:"operational-scale:authorized:flat-001",templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-09T12:00:00.000Z"},operation=approveForGmailDraft(repository,snapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,operation.operationId);repository.native.exec("CREATE TRIGGER fail_hard_bounce_audit BEFORE INSERT ON manual_outreach_audit WHEN NEW.event_type='hard-bounce-reported' BEGIN SELECT RAISE(ABORT,'injected hard bounce audit failure'); END");
+    expect(()=>recordOperatorReportedHardBounce({snapshotId:snapshot.snapshotId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository})).toThrow("injected hard bounce audit failure");
+    expect(repository.findManualOutreach(snapshot.snapshotId)).toBeNull();expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit").get()).toEqual({count:0});expect(repository.native.prepare("SELECT COUNT(*) count FROM candidate_suppression_entries").get()).toEqual({count:0});repository.close();
   });
 });

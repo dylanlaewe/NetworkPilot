@@ -62,4 +62,15 @@ npm run manual-send:confirm -- \
 
 The explicit phrase is required. The operation is `operator-confirmed-manual-send`, never provider-confirmed delivery. It records the immutable snapshot and Gmail operation identities, resolved prospect/company identities, confirmation and effective-send timestamps, source `operator`, version, initial `awaiting-response` outcome, and one audit event. Repeating it returns the existing record without another event or second cooldown.
 
-Future outcomes are also human-reported with `npm run manual-outreach:outcome -- --id '<npms-id>' --outcome replied`. Supported values are `awaiting-response`, `replied`, `meeting-scheduled`, `declined`, `opt-out`, and `no-response`. An opt-out creates an ordinary suppression immediately. Metrics count these states against the explicit denominator `operator-confirmed-manual-send` and expose the first/last effective-send observation window; they do not claim a reply rate.
+Future outcomes are also human-reported with `npm run manual-outreach:outcome -- --id '<npms-id>' --outcome replied`. Supported ordinary values are `awaiting-response`, `replied`, `meeting-scheduled`, `declined`, `opt-out`, and `no-response`. An opt-out creates an ordinary suppression immediately. Metrics count these states against the explicit denominator `operator-confirmed-manual-send` and expose the first/last effective-send observation window; they do not claim a reply rate.
+
+An immediate address-not-found failure uses a stricter atomic command after the operator has manually pressed Send:
+
+```bash
+npm run manual-send:bounce -- \
+  --id '<npms-id>' \
+  --sent-at '2026-09-10T12:32:00-04:00' \
+  --confirm-i-received-address-not-found
+```
+
+This records the manual attempt, terminal human-reported `hard-bounce` outcome, durable candidate/address suppression, and two audit events in one transaction. It makes no provider call. Repeating it is idempotent. A hard bounce permanently blocks the bad candidate/address but, because it did not reach the recipient, its company cooldown lasts only through that campaign-local calendar day. Normal confirmed manual sends retain the full configured seven-day company cooldown. The same-day rule prevents immediately moving to another employee after a failure without misrepresenting the bounce as successful company contact.

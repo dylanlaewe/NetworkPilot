@@ -1,5 +1,5 @@
 import type { DailySelectionResult, OutreachEvent, Prospect, QualificationDecision, SelectionConfig, SelectionOptions } from "./types";
-import { CONTACT_IMPACTING_EVENT_TYPES } from "./types";
+import { CONTACT_IMPACTING_EVENT_TYPES, HARD_BOUNCE_EVENT_TYPE } from "./types";
 
 export const DEFAULT_SELECTION_CONFIG: Readonly<SelectionConfig> = { minimumDailyTarget: 15, maximumDailyTarget: 20, companyCooldownDays: 7, minimumYearsExperience: 5, campaignTimezone: "America/New_York" };
 const DAY_IN_MS = 86_400_000;
@@ -13,6 +13,8 @@ export function campaignCalendar(instant: Date, timeZone: string): { date: strin
   const weekday = value("weekday");
   return { date: `${value("year")}-${value("month")}-${value("day")}`, weekday, isWeekday: weekday !== "Sat" && weekday !== "Sun" };
 }
+
+export function occursOnCampaignDate(occurredAt:Date,now:Date,timeZone:string):boolean{return campaignCalendar(occurredAt,timeZone).date===campaignCalendar(now,timeZone).date;}
 
 function validateConfig(config: SelectionConfig): void {
   for (const [name, value] of [["minimumDailyTarget", config.minimumDailyTarget], ["maximumDailyTarget", config.maximumDailyTarget], ["companyCooldownDays", config.companyCooldownDays]] as const) {
@@ -38,9 +40,10 @@ export function selectDailyProspects(prospects: readonly Prospect[], history: re
   if (!calendar.isWeekday) return { date: calendar.date, target: 0, selected: [], decisions: [], isWeekday: false, shortfall: 0 };
   const target = chooseDailyTarget(config, options.random);
   const impacting = history.filter((event) => CONTACT_IMPACTING_EVENT_TYPES.has(event.type));
-  const contacted = new Set(impacting.map((event) => event.prospectId));
+  const personBlocking = history.filter((event) => CONTACT_IMPACTING_EVENT_TYPES.has(event.type)||event.type===HARD_BOUNCE_EVENT_TYPE);
+  const contacted = new Set(personBlocking.map((event) => event.prospectId));
   const cooldownStart = now.getTime() - config.companyCooldownDays * DAY_IN_MS;
-  const coolingCompanies = new Set(impacting.filter((event) => event.occurredAt.getTime() > cooldownStart && event.occurredAt.getTime() <= now.getTime()).map((event) => event.companyId));
+  const coolingCompanies = new Set([...impacting.filter((event) => event.occurredAt.getTime() > cooldownStart && event.occurredAt.getTime() <= now.getTime()),...history.filter((event)=>event.type===HARD_BOUNCE_EVENT_TYPE&&event.occurredAt.getTime()<=now.getTime()&&occursOnCampaignDate(event.occurredAt,now,config.campaignTimezone))].map((event) => event.companyId));
   const decisions = new Map<string, QualificationDecision>();
   const eligible: Prospect[] = [];
   for (const prospect of prospects) {

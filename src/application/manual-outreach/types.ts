@@ -7,6 +7,7 @@ export const MANUAL_OUTREACH_OUTCOMES = [
   "declined",
   "opt-out",
   "no-response",
+  "hard-bounce",
 ] as const;
 
 export type ManualOutreachOutcome = (typeof MANUAL_OUTREACH_OUTCOMES)[number];
