@@ -41,6 +41,18 @@ export interface ManualOutreachMetrics {
   observationWindow: { earliest: string | null; latest: string | null };
 }
 
+export interface ManualDraftOperatorEntry {
+  operatorId: string;
+  snapshotId: string;
+  operationId: string;
+  redactedRecipient: string;
+  company: string;
+  title: string;
+  subject: string;
+  gmailDraftCreated: true;
+  manualSendConfirmed: boolean;
+}
+
 export interface ManualOutreachRepository {
   transaction<T>(work: () => T): T;
   resolveManualDraft(snapshotId: string): ResolvedManualDraft | null;

@@ -43,15 +43,23 @@ The separately authorized human-reviewed pilot uses `gmail:human-reviewed-pilot`
 
 ## Human-reported manual outreach
 
+First list the persisted Gmail-created operations and copy the stable `npms-…` operator ID:
+
+```bash
+npm run manual-send:list
+```
+
+The list is read-only and privacy-safe: it shows a redacted recipient, company, title, subject, Gmail-draft status, and manual-confirmation status. It never prints recipient addresses, Gmail IDs, Apollo IDs, tokens, immutable snapshot IDs, or operation IDs. By default both operator commands use the explicit pilot datastore `data/apollo-operational-scale-enrichment.sqlite`. A deliberate alternative may be supplied only with `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`; the generic application database setting is ignored, and the selected sanitized path is printed.
+
 After Dylan independently presses Send in Gmail, this local-only command can record that fact. It makes no Gmail request, does not inspect Sent Mail, and cannot deliver anything:
 
 ```bash
 npm run manual-send:confirm -- \
-  --snapshot-hash '<privacy-safe 12+ character recommendation hash>' \
+  --id '<npms-id from manual-send:list>' \
   --sent-at '2026-09-10T14:30:00.000Z' \
   --confirm-i-sent-this-in-gmail
 ```
 
 The explicit phrase is required. The operation is `operator-confirmed-manual-send`, never provider-confirmed delivery. It records the immutable snapshot and Gmail operation identities, resolved prospect/company identities, confirmation and effective-send timestamps, source `operator`, version, initial `awaiting-response` outcome, and one audit event. Repeating it returns the existing record without another event or second cooldown.
 
-Future outcomes are also human-reported with `npm run manual-outreach:outcome -- --snapshot-id '<id>' --outcome replied`. Supported values are `awaiting-response`, `replied`, `meeting-scheduled`, `declined`, `opt-out`, and `no-response`. An opt-out creates an ordinary suppression immediately. Metrics count these states against the explicit denominator `operator-confirmed-manual-send` and expose the first/last effective-send observation window; they do not claim a reply rate.
+Future outcomes are also human-reported with `npm run manual-outreach:outcome -- --id '<npms-id>' --outcome replied`. Supported values are `awaiting-response`, `replied`, `meeting-scheduled`, `declined`, `opt-out`, and `no-response`. An opt-out creates an ordinary suppression immediately. Metrics count these states against the explicit denominator `operator-confirmed-manual-send` and expose the first/last effective-send observation window; they do not claim a reply rate.

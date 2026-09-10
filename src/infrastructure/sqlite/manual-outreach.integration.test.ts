@@ -4,11 +4,12 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateDraftsForRun } from "@/application/drafts";
 import { approveForGmailDraft, type ApprovedEmailDraftSnapshot } from "@/application/email-drafts";
-import { confirmOperatorManualSend, reportManualOutreachOutcome } from "@/application/manual-outreach";
+import { confirmManualSendByOperatorId, confirmOperatorManualSend, manualSendOperatorId, reportManualOutreachOutcome } from "@/application/manual-outreach";
 import { runDailySimulation } from "@/application/simulation/run-daily-simulation";
 import { selectDailyProspects } from "@/domain/outreach";
 import { seedFictionalData } from "./seed";
 import { SqliteSimulationRepository } from "./database";
+import { DEFAULT_MANUAL_OUTREACH_DATABASE, listManualDraftOperatorEntries, resolveManualOutreachDatabaseSelection } from "./manual-outreach-operator";
 
 const directories: string[] = [];
 const SENT_AT = new Date("2026-09-09T14:00:00.000Z");
@@ -17,7 +18,7 @@ const CONFIRMED_AT = new Date("2026-09-09T14:05:00.000Z");
 function setup() {
   const directory = mkdtempSync(join(tmpdir(), "networkpilot-manual-outreach-"));
   directories.push(directory);
-  const repository = new SqliteSimulationRepository(join(directory, "test.sqlite"));
+  const databasePath=join(directory,"test.sqlite"),repository = new SqliteSimulationRepository(databasePath);
   repository.migrate();
   seedFictionalData(repository);
   const run = runDailySimulation(repository, { instant: new Date("2026-09-07T15:00:00.000Z"), random: () => 0 });
@@ -37,7 +38,7 @@ function setup() {
   const operation = approveForGmailDraft(repository, snapshot, "fixture-adapter-v1");
   repository.native.prepare("DELETE FROM outreach_events").run();
   repository.native.prepare("DELETE FROM campaign_plan_decisions").run();
-  return { repository, draft, prospect, operation, snapshot };
+  return { repository, databasePath, draft, prospect, operation, snapshot };
 }
 
 function markGmailDraftCreated(repository: SqliteSimulationRepository, operationId: string) {
@@ -50,6 +51,15 @@ afterEach(() => {
 });
 
 describe("operator-confirmed manual outreach production path", () => {
+  it("selects the explicit operational datastore without searching neighboring databases",()=>{
+    const directory=mkdtempSync(join(tmpdir(),"networkpilot-manual-config-"));directories.push(directory);
+    const defaultPath=join(directory,DEFAULT_MANUAL_OUTREACH_DATABASE),configuredPath=join(directory,"configured.sqlite");
+    const defaultRepository=new SqliteSimulationRepository(defaultPath);defaultRepository.close();const configuredRepository=new SqliteSimulationRepository(configuredPath);configuredRepository.close();
+    expect(resolveManualOutreachDatabaseSelection({},directory)).toMatchObject({path:defaultPath,displayPath:DEFAULT_MANUAL_OUTREACH_DATABASE,source:"default-operational"});
+    expect(resolveManualOutreachDatabaseSelection({NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH:configuredPath},directory)).toMatchObject({path:configuredPath,source:"environment"});
+    expect(resolveManualOutreachDatabaseSelection({NETWORKPILOT_DATABASE_PATH:configuredPath},directory).path).toBe(defaultPath);
+  });
+
   it("upgrades an existing migration-0008 database without changing historical Gmail operations", () => {
     const directory=mkdtempSync(join(tmpdir(),"networkpilot-manual-upgrade-"));directories.push(directory);
     const repository=new SqliteSimulationRepository(join(directory,"upgrade.sqlite"));
@@ -94,6 +104,23 @@ describe("operator-confirmed manual outreach production path", () => {
     expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit WHERE event_type='operator-confirmed-manual-send'").get()).toEqual({ count: 1 });
     expect(now).toHaveBeenCalledTimes(1);
     repository.close();
+  });
+
+  it("lists stable operation-derived IDs and confirms through exactly one matching ID",()=>{
+    const {repository,databasePath,operation}=setup();markGmailDraftCreated(repository,operation.operationId);
+    const entries=listManualDraftOperatorEntries(databasePath),entry=entries.find((item)=>item.snapshotId===operation.snapshot.snapshotId)!;
+    expect(entry).toMatchObject({operatorId:manualSendOperatorId(operation.operationId),gmailDraftCreated:true,manualSendConfirmed:false});
+    expect(entry.operatorId).toMatch(/^npms-[a-f0-9]{16}$/);expect(JSON.stringify(entry)).not.toContain("@example");
+    const first=confirmManualSendByOperatorId({entries,operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
+    const second=confirmManualSendByOperatorId({entries,operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
+    expect(second).toEqual(first);expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records").get()).toEqual({count:1});expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit").get()).toEqual({count:1});repository.close();
+  });
+
+  it("rejects report hashes, nonexistent IDs, and ambiguous IDs before persistence",()=>{
+    const {repository,databasePath,operation}=setup();markGmailDraftCreated(repository,operation.operationId);const entry=listManualDraftOperatorEntries(databasePath).find((item)=>item.snapshotId===operation.snapshot.snapshotId)!;
+    for(const operatorId of ["dd0c271aac21","npms-0000000000000000"]){expect(()=>confirmManualSendByOperatorId({entries:[entry],operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository})).toThrow();}
+    expect(()=>confirmManualSendByOperatorId({entries:[entry,{...entry}],operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository})).toThrow("manual-send-operator-id-ambiguous");
+    expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records").get()).toEqual({count:0});expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit").get()).toEqual({count:0});repository.close();
   });
 
   it("uses effective manual-send time for repeat-person prevention and company cooldown", () => {
