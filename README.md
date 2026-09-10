@@ -47,6 +47,9 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run typecheck` — strict TypeScript validation
 - `npm run lint` — ESLint with zero warnings allowed
 - `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts
+- `npm run check:no-email-send` — fail if application source introduces a known delivery path
+- `npm run manual-send:confirm` — after sending independently in Gmail, record an explicit operator confirmation locally
+- `npm run manual-outreach:outcome` — record an audited human-reported pilot outcome locally
 - `npm run db:migrate`, `db:seed`, `db:reset` — local fictional persistence operations
 
 ## Safety boundary
@@ -66,5 +69,7 @@ The server-only Apollo read-only adapter is disabled by default and has not been
 Desired early-career job roles are modeled separately from senior networking-recipient personas. Targeting combines configurable company, current-role, function, experience, industry, geography, shared-signal, and derived data-quality components in the explainable `targeting-v2` score for new plans. Public target-company metadata is authoritative for matched tier, enabled state, industry, and company score inputs while fictional employer identity stays separate. Deterministic soft caps improve industry and role-family representation, relax only when needed to fill the qualified target, and persist every relaxation.
 
 Drafts are generated only from selected persisted plan snapshots—without rescoring mutable profiles—and without AI from 24 versioned variants across eight outreach lanes. Dylan graduated in May 2026 with a B.S. in Computer Science; templates vary truthful recent-graduate phrasing instead of describing graduation as future. Every biographical sentence is composed from registered fragments whose complete, ordered fact IDs are persisted. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.
+
+Gmail draft creation and manual outreach are separate durable states. A confirmed Gmail draft remains unsent in NetworkPilot until the operator deliberately records `operator-confirmed-manual-send` after sending outside the app. That local record starts prior-person prevention and the seven-day company cooldown at the operator-supplied effective-send time. Outcomes are human-reported only; opt-outs feed the existing suppression system. See [docs/gmail-draft-only.md](docs/gmail-draft-only.md).
 
 Variant rotation uses a documented FNV-1a 32-bit hash of the template catalog version, simulation run ID, fictional prospect ID, and outreach lane. It uses no wall clock or randomness, so identical context regenerates the same version while recipients distribute across variants.

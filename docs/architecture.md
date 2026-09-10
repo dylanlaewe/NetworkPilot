@@ -46,13 +46,13 @@ An injected UTC instant is formatted with `Intl.DateTimeFormat` using the config
 
 ## Event semantics
 
-The domain vocabulary distinguishes `qualified`, `rejected`, `selected`, `drafted`, legacy `simulated-sent`, future-reserved `actually-sent`, `replied`, `suppressed`, and `cancelled`. Milestone 4 writes no outreach events. Active persisted plan selections act as non-contacting reservations for repeat-person and cooldown policy; cancelled and failed plans are excluded. Only a future authorized delivery stage could create contact-impacting history.
+The domain vocabulary distinguishes `qualified`, `rejected`, `selected`, `drafted`, legacy `simulated-sent`, reserved `actually-sent`, human-reported `operator-confirmed-manual-send`, `replied`, `suppressed`, and `cancelled`. Active persisted plan selections act as non-contacting reservations for repeat-person and cooldown policy; cancelled and failed plans are excluded. An operator-confirmed manual send is contact-impacting at its operator-supplied effective time. It is never inferred from Gmail draft creation and never described as provider-confirmed delivery.
 
 Stable decision codes are: `suppressed`, `opted-out`, `email-unverified`, `insufficient-experience`, `previously-contacted`, `company-in-cooldown`, `duplicate-company-in-run`, `eligible-below-cutoff`, and `selected`.
 
 ## Simulation-to-live isolation
 
-The only implemented write action is named and displayed as a fictional simulation. It creates local plans and drafts; no transport adapter exists and no delivery event is created. `actually-sent` is reserved domain vocabulary and is unused by every application path. There are no provider SDKs, secrets, external data adapters, browser automation, inbox processors, or delivery controls.
+The local simulation creates plans and deterministic drafts. The separately gated Gmail adapter can create drafts only and contains no delivery endpoint. A provider-neutral local application use case may record that an operator says they already sent a confirmed Gmail draft outside NetworkPilot; it has no provider dependency and cannot inspect a mailbox. `actually-sent` remains reserved vocabulary and is unused. There is no browser automation, inbox processor, or delivery control.
 
 A future live system would require separate authorization, source, research/drafting, scheduler, delivery, and reply adapters plus explicit mode gating and threat review. Those components are architectural placeholders only and are not connected in this milestone.
 

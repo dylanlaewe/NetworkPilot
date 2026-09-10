@@ -39,4 +39,19 @@ POST requests are never automatically retried. If a timeout, transport loss, rat
 
 For an explicitly Headquarters-authorized controlled validation, the local-only command is `NETWORKPILOT_GMAIL_ENABLED=true npm run gmail:controlled-live -- /absolute/path/to/client-secret.json`. The credential must be a Google Desktop client JSON stored outside the repository. The command never prints its values, permits one profile request and at most two draft-create requests, validates MIME before each POST, refuses a repeated validation after its durable start marker, and makes no Apollo request. The repository default remains disabled.
 
-The separately authorized human-reviewed pilot uses `gmail:human-reviewed-pilot`. It reuses the immutable operational-scale plan and drafts, rechecks mutable suppression, opt-out, contact, cooldown, and prior-Gmail-operation gates, selects no more than eight companies with diversity preference, and validates all MIME locally before enabling its one profile and eight draft-create caps. NetworkPilot places approved drafts into Gmail; Dylan alone visually reviews, edits, and decides whether to send them manually. Draft creation does not imply or record a send. Sent-state and reply tracking remain separate, unimplemented milestones.
+The separately authorized human-reviewed pilot uses `gmail:human-reviewed-pilot`. It reuses the immutable operational-scale plan and drafts, rechecks mutable suppression, opt-out, contact, cooldown, and prior-Gmail-operation gates, selects no more than eight companies with diversity preference, and validates all MIME locally before enabling its one profile and eight draft-create caps. NetworkPilot places approved drafts into Gmail; Dylan alone visually reviews, edits, and decides whether to send them manually. Draft creation never implies a send.
+
+## Human-reported manual outreach
+
+After Dylan independently presses Send in Gmail, this local-only command can record that fact. It makes no Gmail request, does not inspect Sent Mail, and cannot deliver anything:
+
+```bash
+npm run manual-send:confirm -- \
+  --snapshot-hash '<privacy-safe 12+ character recommendation hash>' \
+  --sent-at '2026-09-10T14:30:00.000Z' \
+  --confirm-i-sent-this-in-gmail
+```
+
+The explicit phrase is required. The operation is `operator-confirmed-manual-send`, never provider-confirmed delivery. It records the immutable snapshot and Gmail operation identities, resolved prospect/company identities, confirmation and effective-send timestamps, source `operator`, version, initial `awaiting-response` outcome, and one audit event. Repeating it returns the existing record without another event or second cooldown.
+
+Future outcomes are also human-reported with `npm run manual-outreach:outcome -- --snapshot-id '<id>' --outcome replied`. Supported values are `awaiting-response`, `replied`, `meeting-scheduled`, `declined`, `opt-out`, and `no-response`. An opt-out creates an ordinary suppression immediately. Metrics count these states against the explicit denominator `operator-confirmed-manual-send` and expose the first/last effective-send observation window; they do not claim a reply rate.

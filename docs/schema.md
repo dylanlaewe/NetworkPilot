@@ -20,6 +20,11 @@ erDiagram
   COMPANIES ||--o| FICTIONAL_COMPANY_PROFILES : simulated_by
   IMPORT_BATCHES ||--o{ IMPORTED_CANDIDATES : contains
   IMPORTED_CANDIDATES ||--o{ CANDIDATE_REVIEW_AUDIT : audited_by
+  GMAIL_DRAFT_OPERATIONS ||--o| MANUAL_OUTREACH_RECORDS : may_be_confirmed_as
+  PROSPECTS ||--o{ MANUAL_OUTREACH_RECORDS : concerns
+  COMPANIES ||--o{ MANUAL_OUTREACH_RECORDS : starts_cooldown_for
+  MANUAL_OUTREACH_RECORDS ||--o{ MANUAL_OUTREACH_AUDIT : audited_by
+  IMPORTED_CANDIDATES ||--o| CANDIDATE_SUPPRESSION_ENTRIES : may_have
 
   SIMULATION_RUNS {
     text campaign_date UK
@@ -113,6 +118,24 @@ erDiagram
     integer observed_consumption
     integer attempt_count
   }
+  MANUAL_OUTREACH_RECORDS {
+    text draft_snapshot_id UK
+    text gmail_operation_id UK
+    text candidate_id
+    text company_id
+    text identity_source
+    text confirmation_source
+    text confirmed_at_utc
+    text effective_sent_at_utc
+    text outcome
+    text operation_version
+  }
+  MANUAL_OUTREACH_AUDIT {
+    text event_type
+    text outcome
+    text confirmation_source
+    text occurred_at_utc
+  }
 ```
 
 `campaign_plan_decisions.targeting_snapshot_json` is the immutable planning record: validated source identity/fingerprint, `classification-v1`, normalized title and derived classifications, fictional employer, separate authoritative strategy-company match/method/provenance, registry score inputs, targeting score/components/explanations, hard-gate result, rank, final selection state, and reason. Drafts consume selected snapshots instead of mutable profiles. The older qualification and relevance snapshot columns remain migration-compatible but are no longer written by targeting-first planning.
@@ -120,3 +143,7 @@ erDiagram
 `campaign_settings` stores local campaign configuration, including the IANA timezone and fictional-dataset marker. `schema_migrations` records applied migration filenames. Runtime `.sqlite`, WAL, and journal files are ignored and never committed.
 
 `provider_daily_budgets` and `provider_operations` store conservative Apollo enrichment authorization, attempts, optional observed credit use, and controlled failure categories. They contain no credentials or response payloads. Import batch snapshots retain safe provider identity and version metadata; immutable normalized snapshots retain field provenance.
+
+`manual_outreach_records` stays separate from Gmail draft operations. A row exists only after deliberate local operator confirmation that the operator already sent the message outside NetworkPilot. Its effective timestamp is surfaced as an `operator-confirmed-manual-send` domain event for prior-person and company-cooldown policy. `manual_outreach_audit` records the initial confirmation and every changed human-reported outcome. Draft snapshot content remains immutable and is not copied into either table.
+
+`candidate_suppression_entries` extends the existing suppression boundary to provider-ready candidates that are not materialized as simulation prospects. Repository reads overlay these durable entries as non-overridable suppression and preserve the normalized source snapshot unchanged.

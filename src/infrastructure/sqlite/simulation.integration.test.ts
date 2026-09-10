@@ -60,7 +60,7 @@ describe("SQLite fictional simulation", () => {
   it("creates every migration table", () => {
     const repo = repository();
     const tables = (repo.native.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{name:string}>).map((r) => r.name);
-    expect(tables).toEqual(expect.arrayContaining(["companies", "prospects", "simulation_runs", "campaign_plans", "campaign_plan_decisions", "campaign_plan_lifecycle", "outreach_events", "suppression_entries", "campaign_settings", "schema_migrations"]));
+    expect(tables).toEqual(expect.arrayContaining(["companies", "prospects", "simulation_runs", "campaign_plans", "campaign_plan_decisions", "campaign_plan_lifecycle", "outreach_events", "suppression_entries", "campaign_settings", "schema_migrations", "gmail_draft_operations", "manual_outreach_records", "manual_outreach_audit"]));
     repo.close();
   });
 
