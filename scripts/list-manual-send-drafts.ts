@@ -2,4 +2,4 @@ import { listManualDraftOperatorEntries, resolveManualOutreachDatabaseSelection 
 
 const database=resolveManualOutreachDatabaseSelection(),entries=listManualDraftOperatorEntries(database.path);
 process.stdout.write(`Manual-send database: ${database.displayPath} (${database.source})\n`);
-console.table(entries.map((entry)=>({id:entry.operatorId,recipient:entry.redactedRecipient,company:entry.company,title:entry.title,subject:entry.subject,"Gmail draft created":"yes","Manual send confirmed":entry.manualSendConfirmed?"yes":"no"})));
+console.table(entries.map((entry)=>({"Operator ID":entry.operatorId,Recipient:entry.redactedRecipient,Company:entry.company,Title:entry.title,Subject:entry.subject,"Gmail draft created":"yes","Manual send attempted":entry.manualSendConfirmed?"yes":"no","Effective sent time":entry.effectiveSentAt??"—",Outcome:entry.outcome??"—",Suppressed:entry.suppressed?"yes":"no","Response state":entry.responseState??"—"})));

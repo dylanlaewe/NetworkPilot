@@ -52,6 +52,10 @@ export interface ManualDraftOperatorEntry {
   subject: string;
   gmailDraftCreated: true;
   manualSendConfirmed: boolean;
+  effectiveSentAt: string | null;
+  outcome: ManualOutreachOutcome | null;
+  suppressed: boolean;
+  responseState: "awaiting-response" | "response-received" | "closed" | "delivery-failed" | null;
 }
 
 export interface ManualOutreachRepository {

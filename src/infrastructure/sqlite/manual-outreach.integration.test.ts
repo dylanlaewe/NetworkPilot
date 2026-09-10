@@ -45,6 +45,7 @@ function markGmailDraftCreated(repository: SqliteSimulationRepository, operation
   repository.beginGmailDraftAttempt(operationId, new Date("2026-09-07T17:01:00.000Z"));
   repository.completeGmailDraftOperation(operationId, "fictional-gmail-draft-id", "fictional-gmail-message-id", new Date("2026-09-07T17:02:00.000Z"));
 }
+function persistedOperatorState(repository:SqliteSimulationRepository):string{return JSON.stringify({manual:repository.native.prepare("SELECT * FROM manual_outreach_records ORDER BY id").all(),audit:repository.native.prepare("SELECT * FROM manual_outreach_audit ORDER BY id").all(),prospectSuppressions:repository.native.prepare("SELECT * FROM suppression_entries ORDER BY id").all(),candidateSuppressions:repository.native.prepare("SELECT * FROM candidate_suppression_entries ORDER BY id").all(),events:repository.native.prepare("SELECT * FROM outreach_events ORDER BY id").all(),gmail:repository.native.prepare("SELECT * FROM gmail_draft_operations ORDER BY operation_id").all(),candidates:repository.native.prepare("SELECT id,normalized_snapshot_json,lifecycle_state,review_state,updated_at_utc FROM imported_candidates ORDER BY id").all()});}
 
 afterEach(() => {
   while (directories.length) rmSync(directories.pop()!, { recursive: true, force: true });
@@ -110,11 +111,15 @@ describe("operator-confirmed manual outreach production path", () => {
   it("lists stable operation-derived IDs and confirms through exactly one matching ID",()=>{
     const {repository,databasePath,operation}=setup();markGmailDraftCreated(repository,operation.operationId);
     const entries=listManualDraftOperatorEntries(databasePath),entry=entries.find((item)=>item.snapshotId===operation.snapshot.snapshotId)!;
-    expect(entry).toMatchObject({operatorId:manualSendOperatorId(operation.operationId),gmailDraftCreated:true,manualSendConfirmed:false});
+    expect(entry).toMatchObject({operatorId:manualSendOperatorId(operation.operationId),gmailDraftCreated:true,manualSendConfirmed:false,effectiveSentAt:null,outcome:null,suppressed:false,responseState:null});
     expect(entry.operatorId).toMatch(/^npms-[a-f0-9]{16}$/);expect(JSON.stringify(entry)).not.toContain("@example");
     const first=confirmManualSendByOperatorId({entries,operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
     const second=confirmManualSendByOperatorId({entries,operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
-    expect(second).toEqual(first);expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records").get()).toEqual({count:1});expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit").get()).toEqual({count:1});repository.close();
+    expect(second).toEqual(first);expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records").get()).toEqual({count:1});expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit").get()).toEqual({count:1});expect(listManualDraftOperatorEntries(databasePath).find((item)=>item.operatorId===entry.operatorId)).toMatchObject({manualSendConfirmed:true,effectiveSentAt:SENT_AT.toISOString(),outcome:"awaiting-response",suppressed:false,responseState:"awaiting-response"});repository.close();
+  });
+
+  it("keeps listing read-only across outreach, audit, suppression, cooldown, Gmail, and candidate state",()=>{
+    const {repository,databasePath,operation}=setup();markGmailDraftCreated(repository,operation.operationId);const before=persistedOperatorState(repository),first=listManualDraftOperatorEntries(databasePath),second=listManualDraftOperatorEntries(databasePath);expect(second).toEqual(first);expect(persistedOperatorState(repository)).toBe(before);repository.close();
   });
 
   it("rejects report hashes, nonexistent IDs, and ambiguous IDs before persistence",()=>{
@@ -179,7 +184,7 @@ describe("operator-confirmed manual outreach production path", () => {
     const base={id:candidate.id,firstName:"Fictional",lastName:"Candidate",companyId:"microsoft",companyName:"Microsoft",industry:"Technology" as const,email:"fixture@example.invalid",emailVerified:true,yearsExperience:8,suppressed:true,optedOut:false,relevanceScore:90},coworker={...base,id:"coworker",email:"coworker@example.invalid",suppressed:false},history=repository.listOutreachEvents();
     const sameDay=selectDailyProspects([base,coworker],history,{now:()=>new Date("2026-09-09T20:00:00.000Z"),random:()=>0,config:{minimumDailyTarget:2,maximumDailyTarget:2}});expect(sameDay.decisions.find((item)=>item.prospect.id==="coworker")?.reasonCode).toBe("company-in-cooldown");
     const nextDay=selectDailyProspects([coworker],history,{now:()=>new Date("2026-09-10T20:00:00.000Z"),random:()=>0,config:{minimumDailyTarget:1,maximumDailyTarget:1}});expect(nextDay.selected).toHaveLength(1);
-    expect(repository.getManualOutreachMetrics()).toMatchObject({manuallySent:1,outcomes:{"hard-bounce":1,replied:0,declined:0,"no-response":0}});repository.close();
+    expect(repository.getManualOutreachMetrics()).toMatchObject({manuallySent:1,outcomes:{"hard-bounce":1,replied:0,declined:0,"no-response":0}});expect(listManualDraftOperatorEntries(repository.native.name).find((item)=>item.snapshotId===snapshot.snapshotId)).toMatchObject({manualSendConfirmed:true,effectiveSentAt:sentAt.toISOString(),outcome:"hard-bounce",suppressed:true,responseState:"delivery-failed"});repository.close();
   });
 
   it("rolls back the send attempt and suppression if hard-bounce auditing fails",()=>{

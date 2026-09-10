@@ -49,7 +49,7 @@ First list the persisted Gmail-created operations and copy the stable `npms-…`
 npm run manual-send:list
 ```
 
-The list is read-only and privacy-safe: it shows a redacted recipient, company, title, subject, Gmail-draft status, and manual-confirmation status. It never prints recipient addresses, Gmail IDs, Apollo IDs, tokens, immutable snapshot IDs, or operation IDs. By default both operator commands use the explicit pilot datastore `data/apollo-operational-scale-enrichment.sqlite`. A deliberate alternative may be supplied only with `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`; the generic application database setting is ignored, and the selected sanitized path is printed.
+The list is read-only and privacy-safe: it shows a redacted recipient, company, title, subject, Gmail-draft status, manual-attempt status, effective sent time, persisted outcome, suppression, and derived response state. A hard bounce therefore remains visibly distinct from a normal awaiting-response contact even though both have a confirmed manual attempt. It never prints recipient addresses, Gmail IDs, Apollo IDs, tokens, immutable snapshot IDs, or operation IDs. By default both operator commands use the explicit pilot datastore `data/apollo-operational-scale-enrichment.sqlite`. A deliberate alternative may be supplied only with `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`; the generic application database setting is ignored, and the selected sanitized path is printed.
 
 After Dylan independently presses Send in Gmail, this local-only command can record that fact. It makes no Gmail request, does not inspect Sent Mail, and cannot deliver anything:
 
