@@ -6,13 +6,17 @@ import {TARGET_COMPANIES,type TargetCompany} from "@/domain/targeting";
 import type {ApolloCreditUsage,ApolloEnrichmentOptions,ApolloHttpResponse,ApolloHttpTransport,ApolloSearchOptions,ApolloSearchResult} from "@/infrastructure/providers/apollo";
 import {selectControlledEnrichmentShortlistDetailed,type ControlledProviderFailure,type ShortlistDiversification} from "./run-controlled-real-batch";
 
-export const OPERATIONAL_MAX_SEARCH_REQUESTS=36,OPERATIONAL_MAX_RAW_RECORDS=750,OPERATIONAL_MAX_ENRICHMENTS=40,OPERATIONAL_MAX_PER_COMPANY=2,OPERATIONAL_FUNCTION_SOFT_CAP=8;
+export const OPERATIONAL_MAX_SEARCH_REQUESTS=46,OPERATIONAL_MAX_RAW_RECORDS=1150,OPERATIONAL_MAX_ENRICHMENTS=30,OPERATIONAL_MAX_PER_COMPANY=2,OPERATIONAL_FUNCTION_SOFT_CAP=6;
 export const OPERATIONAL_COMPANIES=[
   ["microsoft","microsoft.com"],["google","google.com"],["amazon","amazon.com"],["apple","apple.com"],["nvidia","nvidia.com"],["palantir","palantir.com"],
   ["jpmorganchase","jpmorganchase.com"],["goldman-sachs","goldmansachs.com"],["morgan-stanley","morganstanley.com"],["blackrock","blackrock.com"],["bloomberg","bloomberg.com"],
   ["mckinsey-and-company","mckinsey.com"],["boston-consulting-group","bcg.com"],["bain-and-company","bain.com"],["accenture","accenture.com"],["deloitte","deloitte.com"],
   ["rtx","rtx.com"],["lockheed-martin","lockheedmartin.com"],["northrop-grumman","northropgrumman.com"],["anduril","anduril.com"],
-  ["vitol","vitol.com"],["trafigura","trafigura.com"],["cargill","cargill.com"],["shell","shell.com"],
+  ["vitol","vitol.com"],["trafigura","trafigura.com"],["mercuria","mercuria.com"],["glencore","glencore.com"],["cargill","cargill.com"],["shell","shell.com"],["bp","bp.com"],["chevron","chevron.com"],
+  ["pwc","pwc.com"],["ey","ey.com"],["kpmg","kpmg.com"],["oliver-wyman","oliverwyman.com"],
+  ["citi","citi.com"],["bank-of-america","bankofamerica.com"],["fidelity-investments","fidelity.com"],["state-street","statestreet.com"],["capital-one","capitalone.com"],
+  ["datadog","datadoghq.com"],["snowflake","snowflake.com"],["servicenow","servicenow.com"],["ibm","ibm.com"],
+  ["shield-ai","shield.ai"],["general-dynamics","gd.com"],["l3harris-technologies","l3harris.com"],["bae-systems","baesystems.com"],["boeing","boeing.com"],
 ] as const;
 const TITLES=["data","analytics","software engineer","AI","security","product manager","program manager","operations"];
 const digest=(value:string)=>createHash("sha256").update(value).digest("hex"),domains=Object.fromEntries(OPERATIONAL_COMPANIES);

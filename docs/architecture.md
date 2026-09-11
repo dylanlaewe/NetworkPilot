@@ -87,3 +87,9 @@ Hard gates run before scoring: suppression, opt-out, verification, minimum exper
 Industry and role-family caps are deterministic soft preferences. A first pass honors both; a second pass relaxes only for otherwise-qualified candidates when needed to reach the target. Each relaxation is stored with its reason. Score and eligibility always outrank representation, while one company per day and cooldown remain hard.
 
 Plans move through `created`, `evaluated`, `planned`, `drafted`, `simulation-approved`, `cancelled`, or `failed`. Same-day planning is idempotent and transactional. Cancelling creates no contact-impacting history and removes its selections from active reservations. Strategy changes never rewrite historical plan JSON; they require a new date or future explicit plan-version workflow. Draft Studio accepts selected persisted plan snapshots, copies their score and components exactly, and never rescales mutable source rows.
+
+## Daily operating loop
+
+The `/today` command center reads a privacy-safe projection of the configured operational datastore. It presents outreach health, reserve stages, provider safety state, and a deterministic recommendation of no more than five qualified recipients from distinct companies. Human outcome actions call the existing application use cases; React components do not classify candidates or own Apollo or Gmail transport behavior.
+
+The bounded reserve workflow is source → normalize → classify → reserve → pre-enrichment rank → selectively enrich → qualify → plan → draft → operator review. Its hard ceilings are 46 one-page company searches, 1,150 raw records, 30 logical enrichments/credits, and five recommendations. Future weekday scheduling can invoke this boundary, but automatic scheduling, automatic Gmail drafting, inbox inference, and email delivery remain absent.
