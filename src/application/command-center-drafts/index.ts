@@ -1,0 +1,10 @@
+import {createHash} from "node:crypto";
+import type {ApprovedEmailDraftSnapshot,GmailDraftOperation} from "@/application/email-drafts";
+import type {ImportedCandidateSnapshot} from "@/application/ingestion";
+
+export interface CommandCenterDraftReview {
+  candidateId:string;recipient:string;recipientEmail:string;company:string;title:string;primaryFunction:string;secondaryFunctions:ImportedCandidateSnapshot["recipientFunction"]["secondaryFunctions"];persona:string;experience:number;industry:string;location:string;score:number;lane:string;templateVariant:string;qualification:"qualified";whySelected:string;subject:string;body:string;wordCount:number;factIds:string[];catalogVersion:string;snapshotId:string;operation:GmailDraftOperation|null;blockedReason:string|null;
+}
+export const commandCenterSnapshotId=(input:{candidateId:string;subject:string;body:string;catalogVersion:string})=>`command-center:${createHash("sha256").update(JSON.stringify(input)).digest("hex")}`;
+export function approvedSnapshot(review:CommandCenterDraftReview,now:Date):ApprovedEmailDraftSnapshot{return{snapshotId:review.snapshotId,recipientProfessionalEmail:review.recipientEmail,recipientDisplayName:review.recipient,subject:review.subject,body:review.body,planningSnapshotId:`daily-command-center:${review.candidateId}`,templateCatalogVersion:review.catalogVersion,evidenceIds:review.factIds,approvedAt:now.toISOString()};}
+export const humanDraftError=(code:string):string=>({"suppressed":"This contact is suppressed and cannot be contacted.","opted-out":"This contact opted out and cannot be contacted.","previous-contact":"This person was already contacted.","company-cooldown":"Someone at this company was contacted recently.","gmail-feature-disabled":"Gmail draft creation is disabled.","gmail-connection-invalid":"Reconnect the approved Gmail account before creating a draft.","gmail-scope-invalid":"Gmail must be connected with only the compose scope.","draft-not-approved":"Approve this exact draft before creating it in Gmail."}[code]??"This action could not be completed safely.");

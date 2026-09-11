@@ -8,7 +8,7 @@ import {readApolloConfig} from "@/infrastructure/providers/apollo/config";
 
 const redact=(first:string,last:string)=>`${first[0]??"?"}***${last?` ${last[0]}.`:""}`;
 export function loadDailyCommandCenter():DailyCommandCenterState{
-  let selected;try{selected=resolveManualOutreachDatabaseSelection();}catch{const fallback=resolve(process.cwd(),process.env.NETWORKPILOT_DATABASE_PATH??"data/networkpilot.sqlite");if(!existsSync(fallback))return buildDailyCommandCenter({drafts:[],reserve:[],gmailState:"not-configured",apolloEnabled:false,apolloExposure:0,apolloObserved:null,cooldownCompanies:0});selected={path:fallback};}
+  let selected;try{selected=resolveManualOutreachDatabaseSelection();}catch{const fallback=resolve(/*turbopackIgnore: true*/ process.cwd(),process.env.NETWORKPILOT_DATABASE_PATH??"data/networkpilot.sqlite");if(!existsSync(/*turbopackIgnore: true*/ fallback))return buildDailyCommandCenter({drafts:[],reserve:[],gmailState:"not-configured",apolloEnabled:false,apolloExposure:0,apolloObserved:null,cooldownCompanies:0});selected={path:fallback};}
   const drafts=listManualDraftOperatorEntries(selected.path),db=new Database(selected.path,{readonly:true,fileMustExist:true});
   try{
     const now=Date.now(),cooldownCutoff=new Date(now-7*86400000).toISOString(),today=new Date().toISOString().slice(0,10);

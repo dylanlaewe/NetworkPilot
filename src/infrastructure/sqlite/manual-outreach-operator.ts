@@ -12,7 +12,7 @@ export interface ManualOutreachDatabaseSelection { path:string; displayPath:stri
 
 export function resolveManualOutreachDatabaseSelection(env:Readonly<Record<string,string|undefined>>=process.env,cwd=process.cwd()):ManualOutreachDatabaseSelection{
   const configured=env[MANUAL_OUTREACH_DATABASE_ENV],path=resolve(cwd,configured??DEFAULT_MANUAL_OUTREACH_DATABASE);
-  if(!existsSync(path)||!statSync(path).isFile())throw new Error(`manual-outreach-database-not-found:${sanitizedDatabasePath(path,cwd)}`);
+  if(!existsSync(/*turbopackIgnore: true*/ path)||!statSync(/*turbopackIgnore: true*/ path).isFile())throw new Error(`manual-outreach-database-not-found:${sanitizedDatabasePath(path,cwd)}`);
   return{path,displayPath:sanitizedDatabasePath(path,cwd),source:configured?"environment":"default-operational"};
 }
 
