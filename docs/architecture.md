@@ -1,5 +1,13 @@
 # NetworkPilot architecture
 
+## Outreach tracks
+
+NetworkPilot has two explicit, provider-independent strategies: `professional` and `recruiter`. Historical Gmail draft, manual-outreach, and audit rows migrate with `professional` as their immutable default, so no existing record is reinterpreted. New candidate imports derive exclusive track ownership from versioned domain classification. A clear recruiter title at a reviewed employer belongs only to Recruiter Track; agency, ambiguous-employer, coordinator, generic-HR, and executive cases fail closed.
+
+Recruiter Track uses `recruiter-classification-v1`, `recruiter-relevance-v1`, `recruiter-catalog-v1`, and `recruiter-subject-v1`. Its 2–15-year supported-experience policy is separate from the professional track's unchanged five-year minimum. Both tracks share suppression, prior-person, one-company-per-day, and normal seven-day company cooldown state. Recruiter copy is generated locally and remains review-only; this milestone creates no Gmail drafts.
+
+Future application-aware ranking may prioritize a recruiter at a company where Dylan has an authoritative application record and may mention that application only from that record. Milestone 12 deliberately does not implement application tracking or infer requisition ownership.
+
 ## Boundaries
 
 NetworkPilot follows three inward-facing layers:

@@ -27,6 +27,7 @@ function redactName(value:string):string{
 }
 
 function tableExists(database:Database.Database,name:string):boolean{return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));}
+function columnExists(database:Database.Database,table:string,column:string):boolean{return (database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name:string}>).some((item)=>item.name===column);}
 function responseState(outcome:ManualOutreachOutcome|null):ManualDraftOperatorEntry["responseState"]{if(!outcome)return null;if(outcome==="awaiting-response")return"awaiting-response";if(outcome==="replied"||outcome==="meeting-scheduled")return"response-received";if(outcome==="hard-bounce")return"delivery-failed";return"closed";}
 
 export function listManualDraftOperatorEntries(databasePath:string):ManualDraftOperatorEntry[]{
@@ -36,7 +37,8 @@ export function listManualDraftOperatorEntries(databasePath:string):ManualDraftO
     const manualBySnapshot=new Map(manualRows.map((row)=>[row.draft_snapshot_id,row]));
     const suppressedProspects=tableExists(database,"suppression_entries")?new Set((database.prepare("SELECT prospect_id FROM suppression_entries").all() as Array<{prospect_id:string}>).map((row)=>row.prospect_id)):new Set<string>();
     const suppressedCandidates=tableExists(database,"candidate_suppression_entries")?new Set((database.prepare("SELECT candidate_id FROM candidate_suppression_entries").all() as Array<{candidate_id:string}>).map((row)=>row.candidate_id)):new Set<string>();
-    const rows=database.prepare("SELECT operation_id,draft_snapshot_id,approved_snapshot_json FROM gmail_draft_operations WHERE state='gmail-draft-created' ORDER BY completed_at_utc,operation_id").all() as Array<{operation_id:string;draft_snapshot_id:string;approved_snapshot_json:string}>;
+    const trackColumn=columnExists(database,"gmail_draft_operations","outreach_track")?"outreach_track":"'professional' AS outreach_track";
+    const rows=database.prepare(`SELECT operation_id,draft_snapshot_id,approved_snapshot_json,${trackColumn} FROM gmail_draft_operations WHERE state='gmail-draft-created' ORDER BY completed_at_utc,operation_id`).all() as Array<{operation_id:string;draft_snapshot_id:string;approved_snapshot_json:string;outreach_track:"professional"|"recruiter"}>;
     return rows.map((row)=>{
       const snapshot=JSON.parse(row.approved_snapshot_json) as ApprovedEmailDraftSnapshot;
       let company="Unavailable",title="Unavailable",persistedSuppressed=false;
@@ -46,7 +48,7 @@ export function listManualDraftOperatorEntries(databasePath:string):ManualDraftO
         if(imported){const candidate=JSON.parse(imported.normalized_snapshot_json) as ImportedCandidateSnapshot;company=candidate.source.currentOrganization.name;title=candidate.source.currentTitle;persistedSuppressed=candidate.source.consent.suppressed||suppressedCandidates.has(candidate.id);}
       }
       const manual=manualBySnapshot.get(row.draft_snapshot_id)??null,outcome=manual?.outcome??null,suppressed=persistedSuppressed||(manual?.identity_source==="prospect"?suppressedProspects.has(manual.candidate_id):manual?.identity_source==="imported-candidate"?suppressedCandidates.has(manual.candidate_id):false);
-      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};
+      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};
     });
   }finally{database.close();}
 }

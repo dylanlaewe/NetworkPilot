@@ -146,4 +146,6 @@ erDiagram
 
 `manual_outreach_records` stays separate from Gmail draft operations. A row exists only after deliberate local operator confirmation that the operator already sent the message outside NetworkPilot. Its effective timestamp is surfaced as an `operator-confirmed-manual-send` domain event for prior-person and company-cooldown policy. Migration `0010` adds terminal `hard-bounce`, surfaced as `operator-reported-hard-bounce`: it preserves permanent person/address suppression while limiting company cooldown to the campaign-local day. `manual_outreach_audit` records the initial confirmation and every changed human-reported outcome, including a distinct `hard-bounce-reported` event. Draft snapshot content remains immutable and is not copied into either table.
 
+Migration `0011` adds an explicit `outreach_track` to Gmail operations, manual outreach, and manual audit rows. Its default is `professional`, preserving the meaning of every historical row. Recruiter candidates also carry versioned track/classification data in their immutable imported snapshot JSON.
+
 `candidate_suppression_entries` extends the existing suppression boundary to provider-ready candidates that are not materialized as simulation prospects. Repository reads overlay these durable entries as non-overridable suppression and preserve the normalized source snapshot unchanged.

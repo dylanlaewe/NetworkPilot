@@ -1,4 +1,5 @@
 import type { GmailDraftOperation } from "@/application/email-drafts";
+import type {OutreachTrack} from "@/domain/recruiters";
 
 export const MANUAL_OUTREACH_OUTCOMES = [
   "awaiting-response",
@@ -43,6 +44,7 @@ export interface ManualOutreachMetrics {
 }
 
 export interface ManualDraftOperatorEntry {
+  outreachTrack?: OutreachTrack;
   operatorId: string;
   snapshotId: string;
   operationId: string;

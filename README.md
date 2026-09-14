@@ -23,6 +23,8 @@ The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABAS
 
 The Gmail integration foundation is draft-only and disabled by default. It contains no send or inbox capability and has not been live-authorized. See [`docs/gmail-draft-only.md`](docs/gmail-draft-only.md) for its OAuth, Keychain, MIME, idempotency, and uncertain-outcome boundaries. Run `npm run check:no-email-send` with the normal validation suite.
 
+The command center supports distinct Professional and Recruiter outreach tracks. Recruiter classification, qualification, bounded planning, and 60–110 word draft previews are local and deterministic. Recruiter discovery uses the existing read-only Apollo adapter only through the explicitly capped `npm run apollo:recruiter-discovery` validation command; it never creates Gmail drafts or sends email.
+
 - `npm run db:migrate` — apply pending versioned SQL migrations
 - `npm run db:seed` — idempotently insert 180 original fabricated prospects, two eligible provider-shaped fixtures, review fixtures, and campaign settings
 - `NODE_ENV=development npm run db:reset` — development-only reset and reseed of the exact configured database

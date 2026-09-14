@@ -17,6 +17,7 @@
     "apollo:validate-enrichment": "tsx scripts/apollo-live-enrichment.ts",
     "apollo:controlled-batch": "tsx scripts/apollo-controlled-real-batch.ts",
     "apollo:operational-scale": "tsx scripts/apollo-operational-scale-batch.ts",
+    "apollo:recruiter-discovery": "tsx scripts/apollo-recruiter-discovery.ts",
     "gmail:controlled-live": "tsx scripts/gmail-controlled-live-validation.ts",
     "gmail:human-reviewed-pilot": "tsx scripts/gmail-human-reviewed-pilot.ts",
     "manual-send:confirm": "tsx scripts/confirm-manual-send.ts",

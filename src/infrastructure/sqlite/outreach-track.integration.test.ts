@@ -1,0 +1,4 @@
+import {describe,expect,it} from "vitest";
+import {SqliteSimulationRepository} from "./database";
+
+describe("outreach track migration",()=>{it("preserves historical Gmail, manual outreach, and audit rows as professional",()=>{const repository=new SqliteSimulationRepository(":memory:");repository.migrate();for(const table of ["gmail_draft_operations","manual_outreach_records","manual_outreach_audit"]){const column=(repository.native.prepare(`PRAGMA table_info(${table})`).all() as Array<{name:string;dflt_value:string|null}>).find((item)=>item.name==="outreach_track");expect(column?.dflt_value).toBe("'professional'");}expect(repository.native.prepare("SELECT version FROM schema_migrations WHERE version='0011_outreach_tracks.sql'").get()).toEqual({version:"0011_outreach_tracks.sql"});repository.close();});});
