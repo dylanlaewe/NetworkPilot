@@ -5,7 +5,7 @@ export const DAILY_ENRICHMENT_CAP = 30;
 export const DAILY_RECOMMENDATION_CAP = 5;
 
 export type ReserveStage = "search-only" | "enriched-unqualified" | "qualified-available" | "cooldown" | "suppressed" | "already-contacted";
-export interface ReserveCandidate { id:string; recipient:string; company:string; title:string; industry:string; functionName:string; persona:string; score:number; stage:ReserveStage; track?:"professional"|"recruiter";recruiterType?:string;recruitingDomain?:string;whySelected?:string;draftSubject?:string;draftBody?:string;draftWordCount?:number; }
+export interface ReserveCandidate { id:string; recipient:string; company:string; title:string; industry:string; functionName:string; persona:string; score:number; stage:ReserveStage; track?:"professional"|"recruiter";recruiterType?:string;recruitingDomain?:string;technicalRecruiting?:boolean;earlyCareerRecruiting?:boolean;whySelected?:string;draftSubject?:string;draftBody?:string;draftWordCount?:number; }
 export interface DailyCommandCenterState {
   outreach:{attempted:number;replyEligible:number;outcomes:Record<ManualOutreachOutcome,number>;bounceRate:number};
   trackAnalytics:{professional:{attempts:number;replies:number;meetings:number};recruiter:{attempts:number;replies:number;meetings:number;hardBounces:number}};
