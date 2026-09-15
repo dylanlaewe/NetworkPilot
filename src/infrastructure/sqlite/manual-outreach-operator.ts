@@ -30,6 +30,16 @@ function tableExists(database:Database.Database,name:string):boolean{return Bool
 function columnExists(database:Database.Database,table:string,column:string):boolean{return (database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name:string}>).some((item)=>item.name===column);}
 function responseState(outcome:ManualOutreachOutcome|null):ManualDraftOperatorEntry["responseState"]{if(!outcome)return null;if(outcome==="awaiting-response")return"awaiting-response";if(outcome==="replied"||outcome==="meeting-scheduled")return"response-received";if(outcome==="hard-bounce")return"delivery-failed";return"closed";}
 
+function importedCandidateForPlanningSnapshot(database:Database.Database,planningSnapshotId:string):ImportedCandidateSnapshot|undefined{
+  const operationalPrefix="operational-scale:authorized:",commandCenterPrefix="daily-command-center:";
+  const row=planningSnapshotId.startsWith(operationalPrefix)
+    ?database.prepare("SELECT normalized_snapshot_json FROM imported_candidates WHERE provider_record_id=?").get(planningSnapshotId.slice(operationalPrefix.length))
+    :planningSnapshotId.startsWith(commandCenterPrefix)
+      ?database.prepare("SELECT normalized_snapshot_json FROM imported_candidates WHERE id=?").get(planningSnapshotId.slice(commandCenterPrefix.length))
+      :undefined;
+  return row?JSON.parse((row as {normalized_snapshot_json:string}).normalized_snapshot_json) as ImportedCandidateSnapshot:undefined;
+}
+
 export function listManualDraftOperatorEntries(databasePath:string):ManualDraftOperatorEntry[]{
   const database=new Database(databasePath,{readonly:true,fileMustExist:true});
   try{
@@ -43,9 +53,9 @@ export function listManualDraftOperatorEntries(databasePath:string):ManualDraftO
       const snapshot=JSON.parse(row.approved_snapshot_json) as ApprovedEmailDraftSnapshot;
       let company="Unavailable",title="Unavailable",persistedSuppressed=false;
       const direct=database.prepare("SELECT p.id candidate_id,c.name company,t.professional_title title FROM drafts d JOIN prospects p ON p.id=d.prospect_id JOIN companies c ON c.id=p.company_id LEFT JOIN fictional_targeting_profiles t ON t.prospect_id=p.id WHERE d.id=?").get(row.draft_snapshot_id) as {candidate_id:string;company:string;title:string|null}|undefined;
-      if(direct){company=direct.company;title=direct.title??"Unavailable";persistedSuppressed=suppressedProspects.has(direct.candidate_id);}else if(snapshot.planningSnapshotId.startsWith("operational-scale:authorized:")){
-        const providerRecordId=snapshot.planningSnapshotId.slice("operational-scale:authorized:".length),imported=database.prepare("SELECT normalized_snapshot_json FROM imported_candidates WHERE provider_record_id=?").get(providerRecordId) as {normalized_snapshot_json:string}|undefined;
-        if(imported){const candidate=JSON.parse(imported.normalized_snapshot_json) as ImportedCandidateSnapshot;company=candidate.source.currentOrganization.name;title=candidate.source.currentTitle;persistedSuppressed=candidate.source.consent.suppressed||suppressedCandidates.has(candidate.id);}
+      if(direct){company=direct.company;title=direct.title??"Unavailable";persistedSuppressed=suppressedProspects.has(direct.candidate_id);}else{
+        const candidate=importedCandidateForPlanningSnapshot(database,snapshot.planningSnapshotId);
+        if(candidate){company=candidate.source.currentOrganization.name;title=candidate.source.currentTitle;persistedSuppressed=candidate.source.consent.suppressed||suppressedCandidates.has(candidate.id);}
       }
       const manual=manualBySnapshot.get(row.draft_snapshot_id)??null,outcome=manual?.outcome??null,suppressed=persistedSuppressed||(manual?.identity_source==="prospect"?suppressedProspects.has(manual.candidate_id):manual?.identity_source==="imported-candidate"?suppressedCandidates.has(manual.candidate_id):false);
       return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};

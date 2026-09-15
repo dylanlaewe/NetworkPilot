@@ -118,9 +118,12 @@ export class SqliteSimulationRepository implements SimulationRepository, DraftSt
     const operation=this.findGmailDraftOperation(snapshotId);if(!operation)return null;
     const direct=this.native.prepare("SELECT d.prospect_id,p.company_id FROM drafts d JOIN prospects p ON p.id=d.prospect_id WHERE d.id=?").get(snapshotId) as {prospect_id:string;company_id:string}|undefined;
     if(direct)return{operation,candidateId:direct.prospect_id,companyId:direct.company_id,identitySource:"prospect"};
-    const providerRecordId=operation.snapshot.planningSnapshotId.startsWith("operational-scale:authorized:")?operation.snapshot.planningSnapshotId.slice("operational-scale:authorized:".length):null;
-    if(!providerRecordId)return null;
-    const imported=this.native.prepare("SELECT id,normalized_snapshot_json FROM imported_candidates WHERE provider_record_id=?").get(providerRecordId) as {id:string;normalized_snapshot_json:string}|undefined;
+    const operationalPrefix="operational-scale:authorized:",commandCenterPrefix="daily-command-center:";
+    const imported=(operation.snapshot.planningSnapshotId.startsWith(operationalPrefix)
+      ?this.native.prepare("SELECT id,normalized_snapshot_json FROM imported_candidates WHERE provider_record_id=?").get(operation.snapshot.planningSnapshotId.slice(operationalPrefix.length))
+      :operation.snapshot.planningSnapshotId.startsWith(commandCenterPrefix)
+        ?this.native.prepare("SELECT id,normalized_snapshot_json FROM imported_candidates WHERE id=?").get(operation.snapshot.planningSnapshotId.slice(commandCenterPrefix.length))
+        :undefined) as {id:string;normalized_snapshot_json:string}|undefined;
     if(!imported)return null;const candidate=JSON.parse(imported.normalized_snapshot_json) as ImportedCandidateSnapshot,companyId=candidate.strategyCompanyMatch?.companyId;
     if(!companyId||!this.native.prepare("SELECT 1 FROM target_companies WHERE id=?").get(companyId))return null;
     return{operation,candidateId:imported.id,companyId,identitySource:"imported-candidate"};

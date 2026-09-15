@@ -174,6 +174,32 @@ describe("operator-confirmed manual outreach production path", () => {
     repository.close();
   });
 
+  it("hydrates Command Center Gmail operations from their persisted candidate lineage across reserve-state changes",()=>{
+    const {repository,databasePath}=setup(),candidate=repository.findImportedCandidate("fictional-flat","flat-001")!;
+    const snapshot:ApprovedEmailDraftSnapshot={snapshotId:"command-center:fixture-professional",recipientProfessionalEmail:"flat.one@example.test",recipientDisplayName:"Fictional F.",subject:"Command Center subject",body:"Fictional body",planningSnapshotId:`daily-command-center:${candidate.id}`,templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-09T12:00:00.000Z"};
+    const operation=approveForGmailDraft(repository,snapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,operation.operationId);
+    repository.native.prepare("UPDATE imported_candidates SET lifecycle_state='suppressed',review_state='rejected' WHERE id=?").run(candidate.id);
+    const entry=listManualDraftOperatorEntries(databasePath).find((item)=>item.snapshotId===snapshot.snapshotId)!;
+    expect(entry).toMatchObject({operatorId:manualSendOperatorId(operation.operationId),outreachTrack:"professional",redactedRecipient:"F*** F.",company:"Imaginary Provider Lab",title:"Data Engineer",gmailDraftCreated:true,manualSendConfirmed:false});
+    const first=confirmManualSendByOperatorId({entries:[entry],operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
+    const repeated=confirmManualSendByOperatorId({entries:[entry],operatorId:entry.operatorId,effectiveSentAt:SENT_AT,now:()=>CONFIRMED_AT,repository});
+    expect(repeated).toEqual(first);
+    expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records WHERE draft_snapshot_id=?").get(snapshot.snapshotId)).toEqual({count:1});
+    repository.close();
+  });
+
+  it("hydrates recruiter-track Command Center operations without weakening unresolved identity handling",()=>{
+    const {repository,databasePath}=setup(),candidate=repository.findImportedCandidate("fictional-flat","flat-001")!;
+    const recruiterSnapshot:ApprovedEmailDraftSnapshot={snapshotId:"command-center:fixture-recruiter",recipientProfessionalEmail:"flat.one@example.test",recipientDisplayName:"Fictional F.",subject:"Recruiter subject",body:"Fictional body",planningSnapshotId:`daily-command-center:${candidate.id}`,templateCatalogVersion:"recruiter-v1",evidenceIds:[],approvedAt:"2026-09-09T12:00:00.000Z"};
+    const recruiterOperation=approveForGmailDraft(repository,recruiterSnapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,recruiterOperation.operationId);
+    repository.native.prepare("UPDATE gmail_draft_operations SET outreach_track='recruiter' WHERE operation_id=?").run(recruiterOperation.operationId);
+    const unresolvedSnapshot:ApprovedEmailDraftSnapshot={...recruiterSnapshot,snapshotId:"command-center:unresolved",planningSnapshotId:"daily-command-center:missing-candidate",subject:"Unresolved subject"};
+    const unresolvedOperation=approveForGmailDraft(repository,unresolvedSnapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,unresolvedOperation.operationId);
+    expect(listManualDraftOperatorEntries(databasePath).find((entry)=>entry.snapshotId===recruiterSnapshot.snapshotId)).toMatchObject({outreachTrack:"recruiter",company:"Imaginary Provider Lab",title:"Data Engineer"});
+    expect(listManualDraftOperatorEntries(databasePath).find((entry)=>entry.snapshotId===unresolvedSnapshot.snapshotId)).toMatchObject({company:"Unavailable",title:"Unavailable"});
+    repository.close();
+  });
+
   it("atomically records and suppresses an idempotent operator-reported hard bounce",()=>{
     const {repository}=setup(),candidate=repository.findImportedCandidate("fictional-flat","flat-001")!,snapshot:ApprovedEmailDraftSnapshot={snapshotId:"hard-bounce-fixture",recipientProfessionalEmail:"flat.one@example.test",recipientDisplayName:"Fictional F.",subject:"Fictional subject",body:"Fictional body",planningSnapshotId:"operational-scale:authorized:flat-001",templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-09T12:00:00.000Z"};
     const operation=approveForGmailDraft(repository,snapshot,"fixture-adapter-v1");markGmailDraftCreated(repository,operation.operationId);
