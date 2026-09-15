@@ -6,13 +6,13 @@ export interface ClassifiedGmailError extends Error {category:string;outcomeUnkn
 
 const operationId=(snapshotId:string)=>`gmail-draft:${createHash("sha256").update(snapshotId).digest("hex")}`;
 
-export function approveForGmailDraft(repository:GmailDraftOperationRepository,snapshot:ApprovedEmailDraftSnapshot,adapterVersion:string):GmailDraftOperation{
+export function approveForGmailDraft(repository:GmailDraftOperationRepository,snapshot:ApprovedEmailDraftSnapshot,adapterVersion:string,outreachTrack:"professional"|"recruiter"=snapshot.outreachTrack??"professional"):GmailDraftOperation{
   const existing=repository.findGmailDraftOperation(snapshot.snapshotId);
   if(existing){
     if(JSON.stringify(existing.snapshot)!==JSON.stringify(snapshot))throw new Error("gmail-draft-snapshot-conflict");
     return existing;
   }
-  const operation:GmailDraftOperation={operationId:operationId(snapshot.snapshotId),snapshot:structuredClone(snapshot),provider:"gmail",state:"approved-for-gmail-draft",gmailDraftId:null,gmailMessageId:null,attemptStartedAt:null,completedAt:null,errorCategory:null,adapterVersion};
+  const operation:GmailDraftOperation={operationId:operationId(snapshot.snapshotId),snapshot:structuredClone(snapshot),provider:"gmail",state:"approved-for-gmail-draft",gmailDraftId:null,gmailMessageId:null,attemptStartedAt:null,completedAt:null,errorCategory:null,adapterVersion,outreachTrack};
   repository.approveGmailDraftOperation(operation);
   return operation;
 }

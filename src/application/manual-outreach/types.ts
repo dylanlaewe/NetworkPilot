@@ -21,6 +21,7 @@ export interface ResolvedManualDraft {
 }
 
 export interface ManualOutreachRecord {
+  outreachTrack?: OutreachTrack;
   id: string;
   draftSnapshotId: string;
   gmailOperationId: string;

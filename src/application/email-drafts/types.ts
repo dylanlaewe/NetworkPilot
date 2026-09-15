@@ -17,6 +17,11 @@ export interface ApprovedEmailDraftSnapshot {
   templateCatalogVersion: string;
   evidenceIds: readonly string[];
   approvedAt: string;
+  outreachTrack?: "professional" | "recruiter";
+  candidateId?: string;
+  companyId?: string;
+  companyDisplayName?: string;
+  professionalTitle?: string;
 }
 
 export interface GmailDraftOperation {
@@ -30,6 +35,7 @@ export interface GmailDraftOperation {
   completedAt: string | null;
   errorCategory: string | null;
   adapterVersion: string;
+  outreachTrack?: "professional" | "recruiter";
 }
 
 export interface GmailDraftOperationRepository {

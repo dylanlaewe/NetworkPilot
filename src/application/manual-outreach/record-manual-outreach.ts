@@ -33,6 +33,7 @@ export function confirmOperatorManualSend(input: {
     }
 
     const record: ManualOutreachRecord = {
+      outreachTrack: resolved.operation.outreachTrack ?? resolved.operation.snapshot.outreachTrack ?? "professional",
       id: `manual-outreach:${createHash("sha256").update(input.snapshotId).digest("hex")}`,
       draftSnapshotId: input.snapshotId,
       gmailOperationId: resolved.operation.operationId,
