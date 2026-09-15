@@ -21,6 +21,7 @@ pnpm-debug.log*
 
 # Tests and coverage
 coverage/
+artifacts/
 
 # Local simulation databases
 data/*.sqlite

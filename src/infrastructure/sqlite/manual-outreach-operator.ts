@@ -43,7 +43,7 @@ function importedCandidateForPlanningSnapshot(database:Database.Database,plannin
 export function listManualDraftOperatorEntries(databasePath:string):ManualDraftOperatorEntry[]{
   const database=new Database(databasePath,{readonly:true,fileMustExist:true});
   try{
-    const manualRows=tableExists(database,"manual_outreach_records")?database.prepare("SELECT draft_snapshot_id,candidate_id,identity_source,effective_sent_at_utc,outcome FROM manual_outreach_records").all() as Array<{draft_snapshot_id:string;candidate_id:string;identity_source:"prospect"|"imported-candidate";effective_sent_at_utc:string;outcome:ManualOutreachOutcome}>:[];
+    const manualRows=tableExists(database,"manual_outreach_records")?database.prepare("SELECT draft_snapshot_id,candidate_id,identity_source,confirmation_source,effective_sent_at_utc,outcome FROM manual_outreach_records").all() as Array<{draft_snapshot_id:string;candidate_id:string;identity_source:"prospect"|"imported-candidate";confirmation_source:"operator"|"networkpilot-gmail-send";effective_sent_at_utc:string;outcome:ManualOutreachOutcome}>:[];
     const manualBySnapshot=new Map(manualRows.map((row)=>[row.draft_snapshot_id,row]));
     const suppressedProspects=tableExists(database,"suppression_entries")?new Set((database.prepare("SELECT prospect_id FROM suppression_entries").all() as Array<{prospect_id:string}>).map((row)=>row.prospect_id)):new Set<string>();
     const suppressedCandidates=tableExists(database,"candidate_suppression_entries")?new Set((database.prepare("SELECT candidate_id FROM candidate_suppression_entries").all() as Array<{candidate_id:string}>).map((row)=>row.candidate_id)):new Set<string>();
@@ -58,7 +58,7 @@ export function listManualDraftOperatorEntries(databasePath:string):ManualDraftO
         if(candidate){company=candidate.source.currentOrganization.name;title=candidate.source.currentTitle;persistedSuppressed=candidate.source.consent.suppressed||suppressedCandidates.has(candidate.id);}
       }
       const manual=manualBySnapshot.get(row.draft_snapshot_id)??null,outcome=manual?.outcome??null,suppressed=persistedSuppressed||(manual?.identity_source==="prospect"?suppressedProspects.has(manual.candidate_id):manual?.identity_source==="imported-candidate"?suppressedCandidates.has(manual.candidate_id):false);
-      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};
+      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),confirmationSource:manual?.confirmation_source??null,effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};
     });
   }finally{database.close();}
 }

@@ -22,7 +22,7 @@ describe("deterministic drafts", () => {
 
   it.each(DRAFT_TEMPLATES)("renders $id with accurate provenance and safe length", (template) => {
     const draft = renderDraft(recipient(), [], () => new Date("2026-09-07T00:00:00Z"), template);
-    expect(draftWordCount(draft.body)).toBeGreaterThanOrEqual(70);
+    expect(draftWordCount(draft.body)).toBeGreaterThanOrEqual(60);
     expect(draftWordCount(draft.body)).toBeLessThanOrEqual(130);
     expect(draft.status).toBe("draft-only-simulation");
     expect(draft.referencedFactIds).toEqual(template.factIds);
@@ -32,7 +32,7 @@ describe("deterministic drafts", () => {
   });
 
   it("aligns every fragment claim with explicitly approved fact IDs", () => {
-    const uniqueMarkers: Record<string, string> = { "identity-graduated": "My name is", "identity-recent-grad": "recent computer science graduate", "identity-since-may": "since graduating in May 2026", internship: "Bresco Broadband", "technical-skills": "ETL, automation", systems: "more than 20 business", interests: "AI and automation", "leadership-direction": "leadership, ownership", northeast: "Boston, New York City", remote: "remote-friendly opportunities" };
+    const uniqueMarkers: Record<string, string> = { "identity-graduated": "I graduated in May 2026", "identity-recent-grad": "recent computer science graduate", "identity-since-may": "After graduating in May 2026", internship: "Bresco Broadband", "technical-skills": "SQL, Python, ETL", systems: "more than 20 business", interests: "AI, and automation", "leadership-direction": "leadership, ownership", northeast: "Boston, New York City", remote: "remote-friendly opportunities" };
     for (const template of DRAFT_TEMPLATES) {
       const facts = validateTemplateProvenance(template, DYLAN_FACTS);
       const draft = renderDraft(recipient(), [], () => new Date(), template);

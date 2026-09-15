@@ -3,7 +3,7 @@ import {revalidatePath} from "next/cache";
 import {SqliteSimulationRepository} from "@/infrastructure/sqlite/database";
 import {listManualDraftOperatorEntries,resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
 import {confirmManualSendByOperatorId,recordOperatorReportedHardBounce,reportManualOutreachOutcome,resolveManualSendOperatorEntry,MANUAL_OUTREACH_OUTCOMES,type ManualOutreachOutcome} from "@/application/manual-outreach";
-import {approveCommandCenterDraft,createCommandCenterGmailDraft} from "@/infrastructure/sqlite/command-center-drafts";
+import {approveCommandCenterDraft,createCommandCenterGmailDraft,sendCommandCenterGmailDraft} from "@/infrastructure/sqlite/command-center-drafts";
 import {runDailyRefreshFromToday} from "@/infrastructure/sqlite/daily-refresh";
 import {redirect} from "next/navigation";
 
@@ -13,4 +13,5 @@ export async function recordOutcome(formData:FormData){const id=String(formData.
 export async function reportDeliveryFailure(formData:FormData){if(formData.get("confirmation")!=="address-not-found")throw new Error("manual-hard-bounce-explicit-confirmation-required");const id=String(formData.get("id")??""),sentAt=new Date(String(formData.get("sentAt")??"")),{entries,repository}=context();try{const entry=resolveManualSendOperatorEntry(entries,id);recordOperatorReportedHardBounce({snapshotId:entry.snapshotId,effectiveSentAt:sentAt,now:()=>new Date(),repository});}finally{repository.close();}revalidatePath("/today");}
 export async function approveDraft(formData:FormData){await approveCommandCenterDraft(String(formData.get("snapshotId")??""));revalidatePath("/today");}
 export async function createGmailDraft(formData:FormData){await createCommandCenterGmailDraft(String(formData.get("snapshotId")??""));revalidatePath("/today");}
+export async function sendGmailDraft(formData:FormData){if(formData.get("confirmation")!=="send-approved-draft-now")throw new Error("gmail-send-explicit-confirmation-required");await sendCommandCenterGmailDraft(String(formData.get("snapshotId")??""));revalidatePath("/today");}
 export async function refreshToday(formData:FormData){const allowProvider=formData.get("providerConfirmation")==="confirmed",force=formData.get("force")==="true";if(force&&!allowProvider)redirect("/today?refreshError=confirmation-required");try{await runDailyRefreshFromToday({allowProvider,force});}catch(error){const code=error instanceof Error?error.message:"";if(code==="apollo-feature-disabled"||code==="apollo-api-key-missing")redirect("/today?refreshError=apollo-unavailable");if(code.includes("budget-exhausted"))redirect("/today?refreshError=budget-exhausted");if(code.includes("credit-model"))redirect("/today?refreshError=credit-warning");throw error;}revalidatePath("/today");}

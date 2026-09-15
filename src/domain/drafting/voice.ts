@@ -1,0 +1,3 @@
+export const DYLAN_VOICE_VERSION="dylan-voice-v1" as const;
+export const BANNED_OUTREACH_PHRASES=["i hope this message finds you well","i hope this email finds you well","i am reaching out to","i would love the opportunity","your impressive background","pick your brain","leverage","synergy","excited to connect"] as const;
+export function assertDylanVoice(subject:string,body:string){const text=`${subject}\n${body}`,lower=text.toLowerCase();if(text.includes("—"))throw new Error("dylan-voice-em-dash-prohibited");if(BANNED_OUTREACH_PHRASES.some((phrase)=>lower.includes(phrase)))throw new Error("dylan-voice-generic-phrase-prohibited");}

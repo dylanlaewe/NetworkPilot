@@ -28,7 +28,7 @@ export interface ManualOutreachRecord {
   candidateId: string;
   companyId: string;
   identitySource: "prospect" | "imported-candidate";
-  confirmationSource: "operator";
+  confirmationSource: "operator" | "networkpilot-gmail-send";
   confirmedAt: string;
   effectiveSentAt: string;
   outcome: ManualOutreachOutcome;
@@ -55,6 +55,7 @@ export interface ManualDraftOperatorEntry {
   subject: string;
   gmailDraftCreated: true;
   manualSendConfirmed: boolean;
+  confirmationSource?: "operator" | "networkpilot-gmail-send" | null;
   effectiveSentAt: string | null;
   outcome: ManualOutreachOutcome | null;
   suppressed: boolean;

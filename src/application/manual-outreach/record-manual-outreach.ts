@@ -12,6 +12,7 @@ export function confirmOperatorManualSend(input: {
   effectiveSentAt: Date;
   now: () => Date;
   repository: ManualOutreachRepository;
+  confirmationSource?: "operator" | "networkpilot-gmail-send";
 }): ManualOutreachRecord {
   if (!input.snapshotId.trim()) throw new Error("manual-send-snapshot-required");
   if (Number.isNaN(input.effectiveSentAt.getTime())) throw new Error("manual-send-time-invalid");
@@ -40,7 +41,7 @@ export function confirmOperatorManualSend(input: {
       candidateId: resolved.candidateId,
       companyId: resolved.companyId,
       identitySource: resolved.identitySource,
-      confirmationSource: "operator",
+      confirmationSource: input.confirmationSource ?? "operator",
       confirmedAt: confirmedAt.toISOString(),
       effectiveSentAt: input.effectiveSentAt.toISOString(),
       outcome: "awaiting-response",

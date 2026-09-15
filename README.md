@@ -1,6 +1,6 @@
 # NetworkPilot
 
-NetworkPilot is a private, local, single-user dashboard for operating Dylan's human-reviewed professional-networking workflow. Authorized provider access is isolated and explicitly gated. NetworkPilot can create Gmail drafts after approval, but it cannot send email.
+NetworkPilot is a private, local, single-user dashboard for operating Dylan's human-reviewed professional-networking workflow. Authorized provider access is isolated and explicitly gated. NetworkPilot can create a Gmail draft after approval and send that exact draft only after a separate, explicit confirmation.
 
 ## Requirements and setup
 
@@ -34,7 +34,7 @@ The simulation-only [Candidate Review](http://localhost:3000/candidate-review) a
 
 The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABASE_PATH` to another local file when needed. Database files, SQLite journals, environment files, and build output are ignored by Git.
 
-The Gmail integration foundation is draft-only and disabled by default. It contains no send or inbox capability and has not been live-authorized. See [`docs/gmail-draft-only.md`](docs/gmail-draft-only.md) for its OAuth, Keychain, MIME, idempotency, and uncertain-outcome boundaries. Run `npm run check:no-email-send` with the normal validation suite.
+The Gmail integration is disabled by default. It uses only the compose scope for immutable draft creation and an explicit human-triggered `users.drafts.send` of that same NetworkPilot-created draft. It contains no generic message send, SMTP, scheduling, background sending, or inbox access. See [`docs/gmail-draft-only.md`](docs/gmail-draft-only.md) for its OAuth, Keychain, MIME, idempotency, and uncertain-outcome boundaries. Run `npm run check:no-email-send` with the normal validation suite.
 
 The command center supports distinct Professional and Recruiter outreach tracks. Recruiter classification, qualification, bounded planning, and 60–110 word draft previews are local and deterministic.
 
@@ -64,7 +64,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run typecheck` — strict TypeScript validation
 - `npm run lint` — ESLint with zero warnings allowed
 - `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts
-- `npm run check:no-email-send` — fail if application source introduces a known delivery path
+- `npm run check:no-email-send` — permit only the reviewed explicit Gmail draft-send path and reject generic, bulk, scheduled, background, SMTP, or bypass delivery paths
 - `npm run manual-send:list` — list confirmable pilot drafts with privacy-safe operation-derived IDs
 - `npm run manual-send:confirm` — after sending independently in Gmail, record an explicit operator confirmation by listed ID
 - `npm run manual-send:bounce` — atomically record a manual attempt and human-reported address-not-found hard bounce
@@ -73,7 +73,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 
 ## Safety boundary
 
-There is no LinkedIn or CareerShift automation, scraping, browser automation, personal-email or phone discovery, AI API, inbox/Sent-folder access, SMTP, scheduling, or email delivery. Apollo access is server-only, explicit, bounded, and used solely for approved professional contact sourcing/enrichment. Gmail access is limited to the compose scope and immutable draft creation after human approval. The UI contains no Send action. Simulation fixtures remain plainly fictional and isolated from ignored operational databases.
+There is no LinkedIn or CareerShift automation, scraping, browser automation, personal-email or phone discovery, AI API, inbox/Sent-folder access, SMTP, scheduling, background delivery, bulk delivery, or generic message-send path. Apollo access is server-only, explicit, bounded, and used solely for approved professional contact sourcing/enrichment. Gmail access is limited to the compose scope, immutable draft creation, and an explicit confirmation that sends only the already-approved NetworkPilot-created draft. Simulation fixtures remain plainly fictional and isolated from ignored operational databases. Demo mode uses a separate synthetic client workflow and fails closed before live Gmail or Apollo adapters can be constructed.
 
 Interface typography uses repository-independent operating-system sans-serif and monospace stacks. Builds and runtime never fetch remote fonts. Run `npm run check:no-remote-fonts` with the normal validation suite to protect this boundary.
 
@@ -89,6 +89,6 @@ Desired early-career job roles are modeled separately from senior networking-rec
 
 Drafts are generated only from selected persisted plan snapshots—without rescoring mutable profiles—and without AI from 24 versioned variants across eight outreach lanes. Dylan graduated in May 2026 with a B.S. in Computer Science; templates vary truthful recent-graduate phrasing instead of describing graduation as future. Every biographical sentence is composed from registered fragments whose complete, ordered fact IDs are persisted. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.
 
-Gmail draft creation and manual outreach are separate durable states. A confirmed Gmail draft remains unsent in NetworkPilot until the operator deliberately records `operator-confirmed-manual-send` after sending outside the app. The confirmation represents the real-world contact event even if Dylan copied the approved content into an equivalent Gmail message instead of using the exact created draft object. NetworkPilot does not inspect Gmail Sent. That local record starts prior-person prevention and the seven-day company cooldown at the operator-supplied effective-send time. Outcomes are human-reported only; opt-outs feed the suppression system. See [docs/gmail-draft-only.md](docs/gmail-draft-only.md).
+Gmail draft creation, explicit Gmail sending, and manual outreach are separate durable states. A successful send through NetworkPilot records `networkpilot-gmail-send` provenance, the confirmed Gmail response identity, an awaiting-response outreach record, prior-person prevention, and company cooldown without requiring a second manual confirmation. When Dylan sends outside NetworkPilot, the existing `operator-confirmed-manual-send` fallback remains available even for a copied equivalent approved message. NetworkPilot does not inspect Gmail Sent. Outcomes remain human-reported; opt-outs feed the suppression system. See [docs/gmail-draft-only.md](docs/gmail-draft-only.md).
 
 Variant rotation uses a documented FNV-1a 32-bit hash of the template catalog version, simulation run ID, fictional prospect ID, and outreach lane. It uses no wall clock or randomness, so identical context regenerates the same version while recipients distribute across variants.

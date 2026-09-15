@@ -1,4 +1,4 @@
-# Gmail draft-only boundary
+# Gmail compose and explicit draft-send boundary
 
 NetworkPilot selected Gmail because its official API can place an RFC 2822/MIME message into the authenticated user's Drafts folder without SMTP or browser automation. This milestone implements and tests that boundary, but authorizes no live OAuth flow and no live Gmail request.
 
@@ -8,12 +8,13 @@ The provider-neutral application layer receives an explicitly approved, immutabl
 
 The production Gmail transport allowlist contains only:
 
-- `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts` for future draft creation.
+- `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts` for approved draft creation.
+- `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts/send` only for a separately confirmed send of that exact NetworkPilot-created draft.
 - `GET https://gmail.googleapis.com/gmail/v1/users/me/profile` solely to pin and verify the authenticated account identity without reading inbox content.
 
 Draft creation sends a deterministic CRLF-compliant, plain-text MIME message encoded with base64URL in `message.raw`. It supports safe Unicode headers and rejects header injection or invalid recipients. It omits From so Gmail applies the authenticated identity, and it provides no CC, BCC, attachments, HTML, or tracking.
 
-NetworkPilot has no Gmail send method, generic Gmail executor, SMTP transport, inbox reader, message listing, mailbox search, history, labels, scheduling, or reply processing. The automated `npm run check:no-email-send` scan protects the application source against known delivery endpoints and libraries. This is an application-level control: Google's `gmail.compose` scope can technically manage drafts and send messages, so the OAuth scope alone is not a sufficient safety boundary.
+NetworkPilot has no generic `messages.send`, generic Gmail executor, SMTP transport, inbox reader, message listing, mailbox search, history, labels, scheduling, bulk/background sending, or reply processing. The automated `npm run check:no-email-send` scan permits the single reviewed draft-send adapter path and rejects known bypass endpoints and libraries. This is an application-level control: Google's `gmail.compose` scope can technically manage drafts and send messages, so the OAuth scope alone is not a sufficient safety boundary.
 
 ## Local desktop OAuth
 
@@ -35,7 +36,11 @@ The operation records its deterministic NetworkPilot identity, immutable approve
 
 POST requests are never automatically retried. If a timeout, transport loss, rate limit, server response, or malformed success leaves creation uncertain, the operation enters `reconciliation-required`; another automatic POST is blocked. A definitive failure can enter `failed`, but still requires a later explicit operator action. Reconciliation tooling is deliberately deferred.
 
-`NETWORKPILOT_GMAIL_ENABLED` defaults to `false`. When disabled, authorization, token refresh, identity discovery, and draft creation fail before external activity. A separately reviewed milestone must authorize the first OAuth connection and tiny live draft validation. Reply-aware behavior would require separate scope, privacy, and product review.
+Sending uses a second persisted state machine: `not-sent` → `sending` → `sent` or `send-status-uncertain`. The application rechecks immutable identity, suppression, opt-out, prior contact, hard bounce, company cooldown, account pinning, exact compose scope, runtime credentials, and exact Gmail draft identity immediately before the send. A double click or repeated request cannot create a second provider call. Any uncertain provider result blocks retry pending reconciliation. Gmail-confirmed success records its protected response identity and creates an awaiting-response contact record with `networkpilot-gmail-send` provenance. The external manual-confirmation workflow remains available and unchanged.
+
+`NETWORKPILOT_GMAIL_ENABLED` defaults to `false`. When disabled, authorization, token refresh, identity discovery, draft creation, and draft sending fail before external activity. Reply-aware behavior would require separate scope, privacy, and product review.
+
+Future optional reconciliation of email sent outside NetworkPilot could evaluate the narrow `gmail.metadata` scope and history metadata without reading bodies. It is not implemented in v1.1; no mailbox-reading scope is requested.
 
 For an explicitly Headquarters-authorized controlled validation, the local-only command is `NETWORKPILOT_GMAIL_ENABLED=true npm run gmail:controlled-live -- /absolute/path/to/client-secret.json`. The credential must be a Google Desktop client JSON stored outside the repository. The command never prints its values, permits one profile request and at most two draft-create requests, validates MIME before each POST, refuses a repeated validation after its durable start marker, and makes no Apollo request. The repository default remains disabled.
 

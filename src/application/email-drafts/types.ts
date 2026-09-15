@@ -36,6 +36,9 @@ export interface GmailDraftOperation {
   errorCategory: string | null;
   adapterVersion: string;
   outreachTrack?: "professional" | "recruiter";
+  sendState?: "not-sent" | "sending" | "sent" | "send-status-uncertain";
+  sentAt?: string | null;
+  gmailSentMessageId?: string | null;
 }
 
 export interface GmailDraftOperationRepository {
@@ -44,11 +47,15 @@ export interface GmailDraftOperationRepository {
   beginGmailDraftAttempt(operationId: string, at: Date): void;
   completeGmailDraftOperation(operationId: string, gmailDraftId: string, gmailMessageId: string, at: Date): void;
   failGmailDraftOperation(operationId: string, state: "failed" | "reconciliation-required", category: string, at: Date): void;
+  beginGmailSend(operationId:string,at:Date):void;
+  completeGmailSend(operationId:string,messageId:string,at:Date):void;
+  markGmailSendUncertain(operationId:string,at:Date):void;
 }
 
 export interface GmailDraftCreator {
   createDraft(rawMessage: string): Promise<{draftId: string; messageId: string}>;
 }
+export interface GmailDraftSender {sendDraft(gmailDraftId:string):Promise<{messageId:string}>;}
 
 export interface GmailConnectionMetadata {accountEmail:string|null;grantedScopes:readonly string[];state:"connected"|"disconnected"|"reauthorization-required";updatedAt:string;}
 export interface GmailConnectionMetadataRepository {saveGmailConnectionMetadata(metadata:GmailConnectionMetadata):void;getGmailConnectionMetadata():GmailConnectionMetadata|null;}

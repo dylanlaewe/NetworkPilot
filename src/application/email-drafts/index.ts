@@ -1,4 +1,5 @@
 export {approveForGmailDraft,createApprovedGmailDraft} from "./create-approved-gmail-draft";
+export {sendApprovedGmailDraft} from "./send-approved-gmail-draft";
 export type {ClassifiedGmailError,MimeMessageBuilder} from "./create-approved-gmail-draft";
 export {GMAIL_COMPOSE_SCOPE} from "./types";
-export type {ApprovedEmailDraftSnapshot,GmailConnectionMetadata,GmailConnectionMetadataRepository,GmailDraftCreator,GmailDraftOperation,GmailDraftOperationRepository,GmailDraftOperationState} from "./types";
+export type {ApprovedEmailDraftSnapshot,GmailConnectionMetadata,GmailConnectionMetadataRepository,GmailDraftCreator,GmailDraftSender,GmailDraftOperation,GmailDraftOperationRepository,GmailDraftOperationState} from "./types";

@@ -64,6 +64,10 @@ The local simulation creates plans and deterministic drafts. The separately gate
 
 A future live system would require separate authorization, source, research/drafting, scheduler, delivery, and reply adapters plus explicit mode gating and threat review. Those components are architectural placeholders only and are not connected in this milestone.
 
+The v1.1 Gmail boundary is deliberately narrower than a general delivery adapter. Only a human-confirmed application action may send the exact already-created Gmail draft through `users.drafts.send`. The persisted send state prevents duplicate calls, uncertain responses require reconciliation, and success records contact state automatically. SMTP, `messages.send`, scheduling, bulk/background sending, and mailbox reading remain absent. External Gmail sends continue through the explicit manual-confirmation fallback.
+
+Demo mode is a separate synthetic client workflow with deterministic `.invalid` fixtures and mock provider behavior. The Today route returns it before any production datastore is loaded, and both live provider adapters reject construction while demo mode is active. It never redacts a real datastore after loading it.
+
 ## Targeting and draft studio
 
 Current desired roles are early-career opportunities Dylan could pursue; recipient personas are experienced people who may provide useful perspective. The two are distinct domain types, so targeting a director never implies applying for a director role. Long-term leadership, ownership, and delivery responsibility are recorded as direction rather than current-role eligibility.
@@ -73,6 +77,8 @@ The editable public-company strategy registry is isolated from the fictional `co
 Historical `targeting-v1` plans retain their original eight named weighted components, explanations, totals, and hard-gate results. New planning uses `targeting-v2`, which consumes the provider-neutral `recipient-relevance-v2` snapshot. Primary function contributes full career-path relevance, secondary supported functions contribute only a bounded bonus, and a precise target-role analogue retains its bounded bonus. Secondary evidence cannot independently sort ahead of primary-function affinities. Lack of an exact analogue no longer zeroes a functionally relevant recipient. Industry and geography are preferences rather than absolute filters. Weights must be finite, non-negative, and total 100; ranking ties resolve by stable candidate ID.
 
 The sender fact registry contains only approved atomic statements about Dylan’s education, May 2026 graduation, internship, skills, integration work, interests, geography, and long-term direction. Dylan is a recent graduate, not currently completing his degree. Templates reference registered sentence fragments; each fragment declares its required fact IDs, and catalog construction derives the template’s unique ordered fact list. Rendering fails closed if metadata differs or a fact is unknown, disabled, or unapproved. Personalization sentences can use only verified fictional evidence and preserve evidence IDs; unverified or absent evidence falls back without inference.
+
+Current Professional and Recruiter rendering also passes through the versioned `dylan-voice-v1` policy. The current catalogs use new version identities, reject em dashes and banned generic networking phrases at render time, and do not reinterpret historical approved or sent snapshots.
 
 Each of eight template lanes has direct/practical, career-curiosity, and technical/operational-common-ground variants with different structure, facts, reasoning, requests, rhythm, and subjects. Rotation applies a specified FNV-1a 32-bit hash to `catalogVersion|runId|prospectId|lane`, then takes the unsigned result modulo the sorted eligible variants. The catalog and template versions are persisted, so rotation is deterministic and version behavior is explicit.
 

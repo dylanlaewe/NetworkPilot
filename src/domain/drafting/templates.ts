@@ -1,11 +1,11 @@
 import{fragmentById}from"./facts";import type{DraftTemplate,OutreachLane}from"./types";
-export const TEMPLATE_CATALOG_VERSION="catalog-v3";
+export const TEMPLATE_CATALOG_VERSION="catalog-v4-dylan-voice-v1";
 type VariantSeed=Pick<DraftTemplate,"variantId"|"structure"|"subject"|"reason"|"question"|"fragmentIds">;
-const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName} — ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"3.0.0",factIds};});
+const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"4.0.0",factIds};});
 const shared=(subject:string,reason:string):VariantSeed[]=>[
  {variantId:"direct-practical",structure:"facts-first",fragmentIds:["identity-graduated","internship","technical-skills"],subject,reason,question:"Would you be open to a brief 15-minute conversation about what a new contributor should learn first?"},
- {variantId:"career-curiosity",structure:"reason-first",fragmentIds:["identity-recent-grad","interests"],subject:`Career path question: ${subject}`,reason:`${reason} I’m trying to understand the early decisions that create a strong foundation.`,question:"If you have about 15 minutes, could I ask how you would approach that first stage today?"},
- {variantId:"common-ground",structure:"experience-first",fragmentIds:["identity-since-may","systems","technical-skills"],subject:`Practical perspective on ${subject}`,reason:`${reason} My interest comes from seeing how interconnected technical and operational work can be.`,question:"Could I ask for 15 minutes to hear which practical experiences have proved most useful in your work?"},
+ {variantId:"career-curiosity",structure:"reason-first",fragmentIds:["identity-recent-grad","interests"],subject:`Career path question: ${subject}`,reason:`${reason} I’m trying to understand which early choices actually build a strong foundation.`,question:"If you have about 15 minutes, could I ask how you would approach that first stage today?"},
+ {variantId:"common-ground",structure:"experience-first",fragmentIds:["identity-since-may","systems"],subject:`Practical perspective on ${subject}`,reason:`${reason} Working across connected systems is what made this path interesting to me.`,question:"Could I ask for 15 minutes to hear which practical experiences have mattered most in your work?"},
 ];
 export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("data-analytics","Data and analytics",shared("data and analytics work","Your work is relevant to the kind of grounded data practice I want to build toward.")),
