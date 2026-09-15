@@ -1,6 +1,6 @@
 # NetworkPilot
 
-NetworkPilot is a private, local dashboard for simulating thoughtful professional-networking campaigns. It uses only deterministic, plainly fictional contacts and cannot source real people or send email.
+NetworkPilot is a private, local, single-user dashboard for operating Dylan's human-reviewed professional-networking workflow. Authorized provider access is isolated and explicitly gated. NetworkPilot can create Gmail drafts after approval, but it cannot send email.
 
 ## Requirements and setup
 
@@ -13,7 +13,20 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The default campaign timezone is `America/New_York`.
+Open [http://localhost:3000/today](http://localhost:3000/today). The default campaign timezone is `America/New_York`.
+
+### Local production workflow
+
+Keep provider configuration in the gitignored `.env.local` file and OAuth tokens in macOS Keychain; never place secrets in source files. After pulling an update:
+
+```bash
+npm install
+npm run db:migrate
+npm run build
+npm run app:start
+```
+
+Open [http://localhost:3000/today](http://localhost:3000/today). Stop the local server with `Ctrl+C`. On ordinary days, Dylan only needs to start the app and use Today; daily pipeline refresh, draft approval, Gmail draft creation, manual-send confirmation, and outcome reporting are available in the UI.
 
 The simulation-only [Candidate Review](http://localhost:3000/candidate-review) and [Draft Studio](http://localhost:3000/draft-studio) workspaces are local. Run `npm run db:migrate` and `npm run db:seed` after upgrading so import, review, strategy-registry, fictional-evidence, and draft schema are present.
 
@@ -23,7 +36,9 @@ The default SQLite file is `data/networkpilot.sqlite`. Set `NETWORKPILOT_DATABAS
 
 The Gmail integration foundation is draft-only and disabled by default. It contains no send or inbox capability and has not been live-authorized. See [`docs/gmail-draft-only.md`](docs/gmail-draft-only.md) for its OAuth, Keychain, MIME, idempotency, and uncertain-outcome boundaries. Run `npm run check:no-email-send` with the normal validation suite.
 
-The command center supports distinct Professional and Recruiter outreach tracks. Recruiter classification, qualification, bounded planning, and 60–110 word draft previews are local and deterministic. Recruiter discovery uses the existing read-only Apollo adapter only through the explicitly capped `npm run apollo:recruiter-discovery` validation command; it never creates Gmail drafts or sends email.
+The command center supports distinct Professional and Recruiter outreach tracks. Recruiter classification, qualification, bounded planning, and 60–110 word draft previews are local and deterministic.
+
+`Refresh Today’s Pipeline` persists a deterministic campaign-day plan with a target of 10 Professional and 5 Recruiter contacts. It consumes safe Candidate Reserve supply first, applies prior-contact, suppression, opt-out, cooldown, verification, qualification, and one-company-across-tracks gates, and reports any shortfall rather than weakening them. If reserve is insufficient, an explicitly confirmed refresh may selectively enrich already persisted search candidates through Apollo, subject to a hard 20-enrichment daily-refresh cap and credit telemetry. A normal second request reuses the existing plan; `Refresh Again` is deliberately labeled as a potentially paid advanced rerun. Weekend refreshes prepare the next eligible weekday without recommending weekend sending.
 
 - `npm run db:migrate` — apply pending versioned SQL migrations
 - `npm run db:seed` — idempotently insert 180 original fabricated prospects, two eligible provider-shaped fixtures, review fixtures, and campaign settings
@@ -44,7 +59,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 ## Scripts
 
 - `npm run dev` — start local development
-- `npm run build` / `npm start` — build and serve production output
+- `npm run build` / `npm run app:start` — build and serve the supported local production application
 - `npm test` / `npm run test:watch` — run the isolated Vitest suite
 - `npm run typecheck` — strict TypeScript validation
 - `npm run lint` — ESLint with zero warnings allowed
@@ -58,7 +73,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 
 ## Safety boundary
 
-There are no integrations with LinkedIn, CareerShift, Apollo, Gmail, Microsoft, AI APIs, inboxes, or any other provider. There is no scraping, browser automation, contact sourcing, external drafting, credential handling, or email delivery. The UI contains no Send action. All people and employers produced by the seed are explicitly fabricated. Registry references are labeled simulation aliases and never claim that a fictional person works at a real company.
+There is no LinkedIn or CareerShift automation, scraping, browser automation, personal-email or phone discovery, AI API, inbox/Sent-folder access, SMTP, scheduling, or email delivery. Apollo access is server-only, explicit, bounded, and used solely for approved professional contact sourcing/enrichment. Gmail access is limited to the compose scope and immutable draft creation after human approval. The UI contains no Send action. Simulation fixtures remain plainly fictional and isolated from ignored operational databases.
 
 Interface typography uses repository-independent operating-system sans-serif and monospace stacks. Builds and runtime never fetch remote fonts. Run `npm run check:no-remote-fonts` with the normal validation suite to protect this boundary.
 
@@ -66,7 +81,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/schema.md](docs/schem
 
 ## Apollo adapter foundation
 
-The server-only Apollo read-only adapter is disabled by default and has not been validated with a live account. It provides fixed-host People Search and deliberate enrichment boundaries, strict response mapping, secret redaction, persisted credit caps, and bounded retry handling. All tests use injected fictional responses; no real Apollo request is made. See [docs/apollo-adapter.md](docs/apollo-adapter.md).
+The server-only Apollo read-only adapter is disabled by default. It provides fixed-host People Search and deliberate enrichment boundaries, strict response mapping, secret redaction, persisted credit caps, and bounded retry handling. Tests use injected fictional responses. See [docs/apollo-adapter.md](docs/apollo-adapter.md).
 
 ## Targeting and deterministic drafts
 
@@ -74,6 +89,6 @@ Desired early-career job roles are modeled separately from senior networking-rec
 
 Drafts are generated only from selected persisted plan snapshots—without rescoring mutable profiles—and without AI from 24 versioned variants across eight outreach lanes. Dylan graduated in May 2026 with a B.S. in Computer Science; templates vary truthful recent-graduate phrasing instead of describing graduation as future. Every biographical sentence is composed from registered fragments whose complete, ordered fact IDs are persisted. Optional personalization uses only verified fictional evidence and retains its evidence ID; missing or unverified evidence produces a clean fallback. Approval changes simulation review state only and cannot deliver email.
 
-Gmail draft creation and manual outreach are separate durable states. A confirmed Gmail draft remains unsent in NetworkPilot until the operator deliberately records `operator-confirmed-manual-send` after sending outside the app. That local record starts prior-person prevention and the seven-day company cooldown at the operator-supplied effective-send time. Outcomes are human-reported only; opt-outs feed the existing suppression system. See [docs/gmail-draft-only.md](docs/gmail-draft-only.md).
+Gmail draft creation and manual outreach are separate durable states. A confirmed Gmail draft remains unsent in NetworkPilot until the operator deliberately records `operator-confirmed-manual-send` after sending outside the app. The confirmation represents the real-world contact event even if Dylan copied the approved content into an equivalent Gmail message instead of using the exact created draft object. NetworkPilot does not inspect Gmail Sent. That local record starts prior-person prevention and the seven-day company cooldown at the operator-supplied effective-send time. Outcomes are human-reported only; opt-outs feed the suppression system. See [docs/gmail-draft-only.md](docs/gmail-draft-only.md).
 
 Variant rotation uses a documented FNV-1a 32-bit hash of the template catalog version, simulation run ID, fictional prospect ID, and outreach lane. It uses no wall clock or randomness, so identical context regenerates the same version while recipients distribute across variants.

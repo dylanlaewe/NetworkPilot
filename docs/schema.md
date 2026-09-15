@@ -148,4 +148,6 @@ erDiagram
 
 Migration `0011` adds an explicit `outreach_track` to Gmail operations, manual outreach, and manual audit rows. Its default is `professional`, preserving the meaning of every historical row. Recruiter candidates also carry versioned track/classification data in their immutable imported snapshot JSON.
 
+Migration `0012` adds `daily_refresh_runs`. Each row stores one immutable campaign-day/generation result with the selected candidate IDs, track counts, target and shortfall, reserve count, provider-use flag, bounded enrichment attempts, before/after credit telemetry, and any safe operator warning. The unique campaign-date/generation key supports normal same-day reuse and explicit advanced reruns without rewriting prior plans.
+
 `candidate_suppression_entries` extends the existing suppression boundary to provider-ready candidates that are not materialized as simulation prospects. Repository reads overlay these durable entries as non-overridable suppression and preserve the normalized source snapshot unchanged.

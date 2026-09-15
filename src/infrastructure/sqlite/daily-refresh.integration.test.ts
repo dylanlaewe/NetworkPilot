@@ -1,0 +1,10 @@
+import {mkdtempSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {afterEach,describe,expect,it} from "vitest";
+import {SqliteSimulationRepository} from "./database";
+import {SqliteDailyRefreshRepository} from "./daily-refresh";
+import type {DailyRefreshResult} from "@/application/daily-refresh";
+const dirs:string[]=[];
+afterEach(()=>{for(const dir of dirs.splice(0))rmSync(dir,{recursive:true,force:true});});
+describe("SQLite daily refresh persistence",()=>{it("persists generations and returns the latest campaign-day result",()=>{const dir=mkdtempSync(join(tmpdir(),"np-refresh-"));dirs.push(dir);const repository=new SqliteSimulationRepository(join(dir,"test.sqlite"));try{repository.migrate();const store=new SqliteDailyRefreshRepository(repository.native),base:DailyRefreshResult={id:"2026-09-15:1",campaignDate:"2026-09-15",generation:1,createdAt:"2026-09-15T12:00:00Z",candidateIds:["a"],professionalCount:1,recruiterCount:0,target:15,shortfall:14,reserveCount:1,providerUsed:false,enrichmentAttempts:0,creditBefore:null,creditAfter:null,warning:null};store.save(base);store.save({...base,id:"2026-09-15:2",generation:2,candidateIds:["b"]});expect(store.findLatest("2026-09-15")?.candidateIds).toEqual(["b"]);}finally{repository.close();}});});
