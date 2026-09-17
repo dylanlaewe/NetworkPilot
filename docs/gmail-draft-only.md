@@ -85,3 +85,7 @@ npm run manual-send:bounce -- \
 ```
 
 This records the manual attempt, terminal human-reported `hard-bounce` outcome, durable candidate/address suppression, and two audit events in one transaction. It makes no provider call. Repeating it is idempotent. A hard bounce permanently blocks the bad candidate/address but, because it did not reach the recipient, its company cooldown lasts only through that campaign-local calendar day. Normal confirmed manual sends retain the full configured seven-day company cooldown. The same-day rule prevents immediately moving to another employee after a failure without misrepresenting the bounce as successful company contact.
+
+## Optional metadata reconciliation
+
+v1.2 includes exact-match architecture for reconciling a NetworkPilot-owned Gmail draft after a manual Gmail send. It is disabled by default behind `NETWORKPILOT_GMAIL_METADATA_RECONCILIATION_ENABLED=true` and does not change the current `gmail.compose` authorization. Enabling it in a future controlled deployment would require the restricted `gmail.metadata` scope and could add Google verification friction. It must inspect metadata only for persisted NetworkPilot-owned identifiers, never bodies or general inbox content, and ambiguous matches are a no-op. The **I already sent this** fallback remains available regardless of this flag.

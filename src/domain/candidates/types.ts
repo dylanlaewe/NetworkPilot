@@ -81,7 +81,7 @@ export interface NormalizedCandidateRecord {
   recipientPersonaId:string|null;
   industryId:string|null;
   geographyId:string|null;
-  companyMatch:{companyId:string;canonicalName:string;tier:string;enabled:boolean;industryId:string;recognitionScore:number;careerUpsideScore:number;technicalInterestScore:number;reviewStatus:"reviewed"|"unreviewed";method:"domain"|"exact-name"|"simulation-alias";provenance:string}|null;
+  companyMatch:{companyId:string;canonicalName:string;tier:string;enabled:boolean;industryId:string;recognitionScore:number;careerUpsideScore:number;technicalInterestScore:number;reviewStatus:"reviewed"|"unreviewed";method:"domain"|"exact-name"|"simulation-alias"|"discovered-provider";provenance:string}|null;
   dataQualityScore:number;
   sharedSignal:number;
   roleAlignment:number;

@@ -18,6 +18,14 @@ NetworkPilot follows three inward-facing layers:
 
 Replacing SQLite with PostgreSQL requires a new repository implementation, not a rewrite of campaign policy.
 
+## v1.2 product workflow
+
+The primary product concepts are Today, Drafts, Sent, and Candidates. Today is a compact next-action summary. Drafts contains only unsent immutable messages and projects one primary action from internal lifecycle state. Sent is the authoritative outreach CRM. Candidates is the reserve and sourcing surface. System details remain secondary.
+
+Candidate refresh is separate from daily planning. It measures usable reserve against a configurable target (40 by default), bounds provider work to the smaller of the deficit and configured cap, and persists one logical event with search calls, enrichment credits, additions, and qualified additions.
+
+Curated companies are preferred employers, not a hard allowlist. Authorized-provider results can create a separate discovered-company record only after deterministic identity and safety checks. Preferred status provides a modest score boost; it never overrides role relevance, geography, email verification, suppression, or recipient qualification.
+
 ## Persistence model
 
 Versioned SQL migrations create companies, fictional prospects, simulation runs, reason-coded decision snapshots, outreach events, suppression entries, and key/value campaign settings. Precise instants are stored as UTC ISO timestamps. Runs also store their campaign-local date and the IANA timezone used to derive it. See [schema.md](schema.md).

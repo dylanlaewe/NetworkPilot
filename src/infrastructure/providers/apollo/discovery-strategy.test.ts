@@ -1,0 +1,3 @@
+import {describe,expect,it} from "vitest";
+import {BROAD_DISCOVERY_MAX_SEARCH_CALLS,broadCompanyDiscoveryQueries} from "./discovery-strategy";
+describe("Apollo broad company discovery strategy",()=>{it("is role-first, bounded, US-scoped, and does not require the preferred registry",()=>{const queries=broadCompanyDiscoveryQueries();expect(queries.length).toBeLessThanOrEqual(BROAD_DISCOVERY_MAX_SEARCH_CALLS);for(const query of queries){expect(query.companyDomains).toBeUndefined();expect(query.specificTitles?.length).toBeGreaterThan(0);expect(query.personLocations).toEqual(["United States"]);expect(query.includeSimilarTitles).toBe(false);}});});

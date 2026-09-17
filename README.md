@@ -46,6 +46,16 @@ The command center supports distinct Professional and Recruiter outreach tracks.
 
 The reset command refuses to run unless `NODE_ENV` is `development` or `test`, prints its resolved target, and requires that target to remain inside this project’s real `data` directory without symlink escapes. An existing database containing data must carry the exact `datasetType=fictional` marker. Migration source files are never removed.
 
+## v1.2 simplified workflow
+
+The product is organized around **Today**, **Drafts**, **Sent**, and **Candidates**, with implementation details kept behind secondary System views. Professional and Recruiter tracks remain distinct in the domain while sharing one operator workflow. `dylan-outreach-method-v2` produces deterministic 75–100 word messages by default (120 maximum), starts with recipient relevance, uses exactly one CTA, and rejects em dashes and generic outreach phrases. Historical approved snapshots remain immutable.
+
+**Drafts** contains only unsent work and exposes one primary action for the current state. A confirmed NetworkPilot send or manual-send fallback removes the record from Drafts and places it in the authoritative **Sent** history, where human-reported outcomes are updated. **Candidates** presents the reserve and a first-class **Refresh Candidates** action with a default target of 40 usable candidates, reserve-first behavior, a displayed provider cap, and persisted logical refresh accounting.
+
+The curated company registry is a preferred-employer ranking input rather than a closed universe. Authorized-provider records from legitimate, verifiable employers can enter a separate discovered-company registry. Agencies, scam/shell indicators, unverifiable employers, unsuitable geography, irrelevant functions, suppression, and all person/email hard gates still fail closed. Role-first Apollo discovery queries are bounded and do not require a preferred-company domain.
+
+Optional exact-match Gmail metadata reconciliation architecture is disabled by default. A future controlled enablement through `NETWORKPILOT_GMAIL_METADATA_RECONCILIATION_ENABLED=true` would require restricted `gmail.metadata` authorization and may create Google verification friction. It is limited to metadata for NetworkPilot-owned identifiers; ambiguous matches do nothing, and the manual **I already sent this** fallback remains available.
+
 ## Simulation workflow
 
 Two deterministic adapters demonstrate flat and nested provider-shaped inputs without connecting to a provider. Both emit the same neutral source contract with provider/native identity, source-reported organization, timestamps, field provenance, consent evidence, dataset classification, and conservative experience evidence. Import batches are atomic, fingerprint-idempotent, conflict-closed, and retain safe immutable snapshots. Exact `role-classification-v2` mappings never default to the first role in a family; experience gates use the supported lower bound.

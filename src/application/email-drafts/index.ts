@@ -4,4 +4,5 @@ export {reconcileGmailSend} from "./reconcile-gmail-send";
 export type {GmailSendReconciliationOutcome,GmailSendReconciliationRepository} from "./reconcile-gmail-send";
 export type {ClassifiedGmailError,MimeMessageBuilder} from "./create-approved-gmail-draft";
 export {GMAIL_COMPOSE_SCOPE} from "./types";
+export * from "./metadata-reconciliation";
 export type {ApprovedEmailDraftSnapshot,GmailConnectionMetadata,GmailConnectionMetadataRepository,GmailDraftCreator,GmailDraftSender,GmailDraftOperation,GmailDraftOperationRepository,GmailDraftOperationState} from "./types";

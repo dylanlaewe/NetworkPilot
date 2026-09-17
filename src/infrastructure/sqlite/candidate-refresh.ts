@@ -1,0 +1,9 @@
+import type Database from "better-sqlite3";
+import {refreshCandidateReserve,type CandidateRefreshRepository,type CandidateRefreshResult} from "@/application/candidate-refresh";
+import {loadDailyCommandCenter} from "./daily-command-center";
+import {resolveManualOutreachDatabaseSelection} from "./manual-outreach-operator";
+import {SqliteSimulationRepository} from "./database";
+import {ApolloDailyReplenisher} from "@/infrastructure/providers/apollo/daily-replenisher";
+
+export class SqliteCandidateRefreshRepository implements CandidateRefreshRepository{constructor(private readonly db:Database.Database){}saveCandidateRefresh(result:CandidateRefreshResult){this.db.prepare("INSERT INTO candidate_refresh_events(id,created_at_utc,usable_before,target_reserve,provider_cap,search_calls,enrichment_credits_used,candidates_added,qualified_candidates_added,usable_after) VALUES(?,?,?,?,?,?,?,?,?,?)").run(result.id,result.createdAt,result.usableBefore,result.target,result.providerCap,result.searchCalls,result.enrichmentCreditsUsed,result.candidatesAdded,result.qualifiedCandidatesAdded,result.usableAfter);}}
+export async function runCandidateRefresh(input:{allowProvider:boolean;now?:()=>Date}){const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);try{repository.migrate();const state=loadDailyCommandCenter(),now=input.now??(()=>new Date()),provider=new ApolloDailyReplenisher(repository,process.env,now);return await refreshCandidateReserve({usableBefore:state.pipeline.available,repository:new SqliteCandidateRefreshRepository(repository.native),provider,allowProvider:input.allowProvider,now});}finally{repository.close();}}

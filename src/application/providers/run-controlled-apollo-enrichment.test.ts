@@ -12,7 +12,7 @@ describe("controlled Apollo enrichment", () => {
     const enrich = vi.fn(async () => [source]);
     const result = await runControlledApolloEnrichment({ adapter: { enrich }, repository, personIds: ["senior-001"] });
     expect(enrich).toHaveBeenCalledWith(expect.objectContaining({ personIds: ["senior-001"] }));
-    expect(result[0]).toMatchObject({ source: { providerRecordId: "senior-001" }, gateFailures: expect.arrayContaining(["company-unreviewed", "provider-match-confidence-review"]), reviewState: "pending" });
+    expect(result[0]).toMatchObject({ source: { providerRecordId: "senior-001" }, strategyCompanyMatch:{method:"discovered-provider"}, gateFailures: expect.arrayContaining(["provider-match-confidence-review"]), reviewState: "pending" });
     repository.close();
   });
 
