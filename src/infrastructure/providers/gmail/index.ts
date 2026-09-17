@@ -8,3 +8,4 @@ export {GoogleOAuthSession} from "./oauth";
 export {FetchGoogleOAuthTransport} from "./oauth-http";
 export type {GoogleOAuthTransport,GoogleTokenSecretStore,StoredGoogleTokens} from "./oauth";
 export type {GmailAccessToken,GmailHttpResponse,GmailHttpTransport,GmailTokenProvider} from "./types";
+export {beginLocalGmailReauthorization,commitSameAccountReauthorization} from "./reauthorization";

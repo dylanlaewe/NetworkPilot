@@ -46,6 +46,12 @@ For an explicitly Headquarters-authorized controlled validation, the local-only 
 
 The separately authorized human-reviewed pilot uses `gmail:human-reviewed-pilot`. It reuses the immutable operational-scale plan and drafts, rechecks mutable suppression, opt-out, contact, cooldown, and prior-Gmail-operation gates, selects no more than eight companies with diversity preference, and validates all MIME locally before enabling its one profile and eight draft-create caps. NetworkPilot places approved drafts into Gmail; Dylan alone visually reviews, edits, and decides whether to send them manually. Draft creation never implies a send.
 
+## Reauthorization and uncertain-send reconciliation
+
+When a refresh token is revoked or expires with `invalid_grant`, NetworkPilot deletes the unusable Keychain entry and persists `reauthorization-required`. The Today page then offers **Reconnect Gmail**. This starts the same loopback Authorization Code + PKCE flow, requests only `gmail.compose`, stages the returned credential in memory, and verifies the account through the compose-scope profile endpoint. Only the already-pinned account may be committed to macOS Keychain; a different account or any failed flow leaves readiness unchanged. SQLite receives only connected-state metadata, a hash of the account identity, the exact scope list, and an append-only reauthorization audit event.
+
+An explicit send that lacks a terminal provider result is never retried. The Today page instead offers **Resolve Send Status**. The operator must inspect Gmail and may record sent with the actual timestamp, record not-sent, or leave the state uncertain. Sent reconciliation records awaiting response and normal cooldown with `operator-reconciled-sent` provenance; not-sent reconciliation returns the immutable draft to normal mutable-gate evaluation without sending it. Reconciliation never calls Gmail and never fabricates `gmail-send-confirmed` evidence.
+
 ## Human-reported manual outreach
 
 First list the persisted Gmail-created operations and copy the stable `npms-…` operator ID:
