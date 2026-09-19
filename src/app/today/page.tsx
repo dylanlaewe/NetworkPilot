@@ -6,6 +6,7 @@ import {ProductNav} from "@/app/product-nav";
 import {CandidateRefreshControl} from "@/app/candidates/refresh-control";
 import {isDemoMode} from "@/demo/mode";
 import {DemoToday} from "./demo-today";
+import {generateMoreDrafts} from "./actions";
 
 export const dynamic="force-dynamic";
 const greeting=()=>{const hour=Number(new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",hour:"numeric",hour12:false}).format(new Date()));return hour<12?"Good morning":hour<18?"Good afternoon":"Good evening";};
@@ -17,5 +18,5 @@ export default async function TodayPage(){if(isDemoMode())return <DemoToday/>;co
     {o.replied>0?<Link href="/sent?outcome=replied"><strong>{o.replied} replies</strong><span>Review responses and update outcomes</span><b>Open Sent</b></Link>:null}
     {!workflow.gmail.readiness.available?<Link href="/drafts"><strong>Gmail needs attention</strong><span>Reconnect Gmail before creating or sending drafts</span><b>View status</b></Link>:null}
   </div></section>
-  <section className="product-section supply-strip"><div><h2>Candidate supply</h2><p><strong>{data.pipeline.available}</strong> usable candidates are ready for future outreach.</p></div><CandidateRefreshControl available={data.pipeline.available}/></section>
+  <section className="product-section supply-strip"><div><h2>Candidate supply</h2><p><strong>{data.pipeline.available}</strong> usable candidates are ready for future outreach.</p></div>{data.pipeline.available>0?<form action={generateMoreDrafts}><input type="hidden" name="count" value="5"/><button className="primary-action">Add Drafts</button></form>:<CandidateRefreshControl available={data.pipeline.available}/>}</section>
  </main>}

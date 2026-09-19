@@ -30,16 +30,19 @@ export const NEXT_DRAFT_BATCH_TARGET=5;
 export const NEXT_DRAFT_PROFESSIONAL_TARGET=3;
 export const NEXT_DRAFT_RECRUITER_TARGET=2;
 export const NEXT_DRAFT_PREFERRED_MAXIMUM=2;
-export function planNextDraftBatch(candidates:readonly RefreshCandidate[]):RefreshCandidate[]{
+export function planNextDraftBatch(candidates:readonly RefreshCandidate[],target=NEXT_DRAFT_BATCH_TARGET):RefreshCandidate[]{
+  if(!Number.isInteger(target)||target<1||target>20)throw new Error("draft-batch-size-invalid");
   const eligible=[...candidates].filter((candidate)=>candidate.available).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
   const selected:RefreshCandidate[]=[],companies=new Set<string>(),people=new Set<string>();
-  const add=(predicate:(candidate:RefreshCandidate)=>boolean,maximum:number)=>{for(const candidate of eligible){if(selected.length>=NEXT_DRAFT_BATCH_TARGET||maximum<=0)break;if(!predicate(candidate)||people.has(candidate.id)||companies.has(candidate.company))continue;selected.push(candidate);people.add(candidate.id);companies.add(candidate.company);maximum--;}};
-  add((candidate)=>candidate.track==="recruiter",NEXT_DRAFT_RECRUITER_TARGET);
-  add((candidate)=>candidate.track==="professional"&&candidate.companyKind==="discovered",NEXT_DRAFT_PROFESSIONAL_TARGET);
-  add((candidate)=>candidate.track==="professional",NEXT_DRAFT_PROFESSIONAL_TARGET-selected.filter((item)=>item.track==="professional").length);
-  add((candidate)=>candidate.companyKind==="discovered",NEXT_DRAFT_BATCH_TARGET-selected.length);
-  add((candidate)=>candidate.companyKind!=="preferred"||selected.filter((item)=>item.companyKind==="preferred").length<NEXT_DRAFT_PREFERRED_MAXIMUM,NEXT_DRAFT_BATCH_TARGET-selected.length);
-  add(()=>true,NEXT_DRAFT_BATCH_TARGET-selected.length);
+  const recruiterTarget=Math.round(target*.4),professionalTarget=target-recruiterTarget,preferredMaximum=Math.ceil(target*.4);
+  const add=(predicate:(candidate:RefreshCandidate)=>boolean,maximum:number)=>{for(const candidate of eligible){if(selected.length>=target||maximum<=0)break;if(!predicate(candidate)||people.has(candidate.id)||companies.has(candidate.company))continue;selected.push(candidate);people.add(candidate.id);companies.add(candidate.company);maximum--;}};
+  add((candidate)=>candidate.track==="recruiter"&&candidate.companyKind==="discovered",recruiterTarget);
+  add((candidate)=>candidate.track==="recruiter",recruiterTarget-selected.filter((item)=>item.track==="recruiter").length);
+  add((candidate)=>candidate.track==="professional"&&candidate.companyKind==="discovered",professionalTarget);
+  add((candidate)=>candidate.track==="professional",professionalTarget-selected.filter((item)=>item.track==="professional").length);
+  add((candidate)=>candidate.companyKind==="discovered",target-selected.length);
+  add((candidate)=>candidate.companyKind!=="preferred"||selected.filter((item)=>item.companyKind==="preferred").length<preferredMaximum,target-selected.length);
+  add(()=>true,target-selected.length);
   return selected;
 }
 
