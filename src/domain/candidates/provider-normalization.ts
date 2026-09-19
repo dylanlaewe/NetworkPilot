@@ -7,6 +7,7 @@ export const SPECIFIC_ROLE_TAXONOMY={
   "financial-analyst":"industry-professional","investment-analyst":"industry-professional","consulting-analyst":"industry-professional",
   "operations-analyst":"business-delivery","data-scientist":"data-analytics","data-engineer":"data-analytics",
   "analytics-engineer":"data-analytics","software-engineer":"technical-product","ai-ml-engineer":"technical-product",
+  "product-manager":"technical-product","product-analyst":"technical-product","product-operations-analyst":"business-delivery",
   "project-coordinator":"business-delivery","project-manager":"business-delivery","program-analyst":"business-delivery","commodities-analyst":"industry-professional",
 } as const;
 export type SpecificRoleId=keyof typeof SPECIFIC_ROLE_TAXONOMY;
@@ -17,12 +18,13 @@ const canonical:Record<string,SpecificRoleId>={
   "analytics engineer":"analytics-engineer","software engineer":"software-engineer","ai engineer":"ai-ml-engineer","ml engineer":"ai-ml-engineer",
   "ai ml engineer":"ai-ml-engineer","machine learning engineer":"ai-ml-engineer","project coordinator":"project-coordinator",
   "project manager":"project-manager","program analyst":"program-analyst","technical program leader":"project-manager","commodities analyst":"commodities-analyst","analytics manager":"data-analyst",
+  "product manager":"product-manager","technical product manager":"product-manager","data product manager":"product-manager","ai product manager":"product-manager","platform product manager":"product-manager","product analyst":"product-analyst","technical product analyst":"product-analyst","product operations":"product-operations-analyst","product operations analyst":"product-operations-analyst",
 };
 const normalize=(value:string)=>value.toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
 const modifiers=new Set(["senior","sr","lead","principal","staff","associate","asst"]);
 export function classifySpecificRole(title:string):SpecificRoleClassification{
   const normalizedTitle=normalize(title); const tokens=normalizedTitle.split(" ").filter(Boolean);
-  if(tokens.some((token)=>["chief","president","intern","junior","founder","owner"].includes(token))||tokens.includes("vp")||normalizedTitle.includes("vice president"))return{normalizedTitle,specificRoleId:null,roleFamilyId:null,matchedSignals:[],classificationVersion:ROLE_CLASSIFICATION_VERSION,reviewCode:"prohibited-target-seniority"};
+  if(tokens.some((token)=>["chief","president","head","intern","junior","founder","owner"].includes(token))||tokens.includes("vp")||normalizedTitle.includes("vice president"))return{normalizedTitle,specificRoleId:null,roleFamilyId:null,matchedSignals:[],classificationVersion:ROLE_CLASSIFICATION_VERSION,reviewCode:"prohibited-target-seniority"};
   const stripped=tokens.filter((token,index)=>!modifiers.has(token)&&token!=="director"&&!(token==="of"&&index>0&&tokens[index-1]==="director")).join(" ").replace("data engineering","data engineer");
   const matches=new Set<SpecificRoleId>();
   for(const [phrase,id] of Object.entries(canonical))if(stripped===phrase||stripped===`${phrase} associate`||stripped===`associate ${phrase}`)matches.add(id);
