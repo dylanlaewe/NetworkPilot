@@ -28,7 +28,7 @@ describe("deterministic drafts", () => {
     expect(draft.referencedFactIds).toEqual(template.factIds);
     expect(new Set(draft.referencedFactIds).size).toBe(draft.referencedFactIds.length);
     for (const fragmentId of template.fragmentIds) for (const marker of FACT_FRAGMENTS.find((item) => item.id === fragmentId)!.claimMarkers) expect(draft.body).toContain(marker);
-    for (const phrase of [...PROHIBITED_DRAFT_PHRASES, "completing a", "with a May 2026 graduation", "will graduate", "expect to graduate"]) expect(draft.body.toLowerCase()).not.toContain(phrase.toLowerCase());
+    for (const phrase of [...PROHIBITED_DRAFT_PHRASES, "completing a", "with a May 2026 graduation", "will graduate", "expect to graduate", "making that move thoughtfully", "engineering and technical delivery", "what has mattered most in your work"]) expect(draft.body.toLowerCase()).not.toContain(phrase.toLowerCase());
   });
 
   it("aligns every fragment claim with explicitly approved fact IDs", () => {

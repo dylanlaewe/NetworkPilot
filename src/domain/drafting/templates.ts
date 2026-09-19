@@ -1,5 +1,5 @@
 import{fragmentById}from"./facts";import type{DraftTemplate,OutreachLane}from"./types";
-export const TEMPLATE_CATALOG_VERSION="catalog-v6-dylan-outreach-method-v3";
+export const TEMPLATE_CATALOG_VERSION="catalog-v7-dylan-outreach-method-v3";
 type VariantSeed=Pick<DraftTemplate,"variantId"|"structure"|"subject"|"reason"|"question"|"fragmentIds">;
 const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"6.0.0",factIds};});
 const set=(subjects:[string,string,string],fragments:[string,string,string],reasons:[string,string,string],questions:[string,string,string]):VariantSeed[]=>[
@@ -7,9 +7,9 @@ const set=(subjects:[string,string,string],fragments:[string,string,string],reas
  {variantId:"career-curiosity",structure:"reason-first",fragmentIds:[fragments[1]],subject:subjects[1],reason:reasons[1],question:questions[1]},
  {variantId:"common-ground",structure:"experience-first",fragmentIds:[fragments[2]],subject:subjects[2],reason:reasons[2],question:questions[2]},
 ];
-const quick="Would you be open to a quick 15-minute conversation about what has mattered most in your work?";
-const perspective="If you have 15 minutes, could I ask for your perspective on making that move thoughtfully?";
-const approach="Would you have 15 minutes to share how you would approach that path today?";
+const quick="Would you have 15 minutes to share which skill you use most often in the role?";
+const perspective="If you have 15 minutes, could I ask which experience best prepared you for the role?";
+const approach="Would you have 15 minutes to share what you would learn first if you were starting again?";
 export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("data-analytics","Data and analytics",set(
   ["Quick question about data and analytics","Question about analytics at {{company}}","Building toward stronger data work"],
