@@ -7,7 +7,7 @@ export type OutreachTrack="professional"|"recruiter";
 export interface RefreshCandidate {id:string;company:string;track:OutreachTrack;score:number;available:boolean;}
 export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
 export interface DailyRefreshRepository {findLatest(campaignDate:string):DailyRefreshResult|null;save(result:DailyRefreshResult):void;}
-export interface DailyRefreshReplenisher {replenish(maximum:number):Promise<{candidates:RefreshCandidate[];attempts:number;creditBefore:number|null;creditAfter:number|null}>;}
+export interface DailyRefreshReplenisher {replenish(maximum:number):Promise<{candidates:RefreshCandidate[];attempts:number;searchCalls?:number;creditBefore:number|null;creditAfter:number|null}>;}
 
 export const localCampaignDate=(now:Date)=>{
   const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}).formatToParts(now),value=(type:string)=>parts.find((part)=>part.type===type)?.value??"";
