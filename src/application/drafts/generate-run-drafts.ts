@@ -1,4 +1,4 @@
-import { laneForRecipient,renderDraft,selectTemplate } from "@/domain/drafting";
+import { renderDraft,selectTemplate } from "@/domain/drafting";
 import { GEOGRAPHY_PREFERENCES, INDUSTRY_PREFERENCES, ROLE_FAMILIES } from "@/domain/targeting";
 import type { DraftRecord, DraftStudioRepository, RecipientTargetingSnapshot } from "./types";
 
@@ -11,12 +11,12 @@ export class InvalidFictionalTargetingProfileError extends Error {
 export function generateDraftsForRun(repository: DraftStudioRepository, runId: string, now: () => Date): DraftRecord[] {
   const plan=repository.findCampaignPlan(runId);
   if (!repository.listCompletedRuns().some((run) => run.id === runId)||!plan||!(plan.status==="planned"||plan.status==="drafted")) throw new Error(`Completed targeting-first campaign plan not found or not draft-ready: ${runId}`);
-  const laneOrdinals=new Map<string,number>(),prepared = repository.listSelectedRecipients(runId).map((recipient) => {
+  const prepared = repository.listSelectedRecipients(runId).map((recipient,draftOrdinal) => {
     const planned=recipient.planSnapshot;
     if(!planned||!planned.selected||planned.hardGateRejectionCode)throw new InvalidFictionalTargetingProfileError("recipient is not eligible in the persisted plan");
     const snapshot:RecipientTargetingSnapshot={fictional:true,prospectId:planned.prospectId,prospectName:planned.prospectName,professionalTitle:planned.professionalTitle,normalizedTitle:planned.normalizedTitle,classificationVersion:planned.classificationVersion,classificationExplanationCodes:planned.classificationExplanationCodes,classificationReviewCode:planned.classificationReviewCode,recipientFunctionVersion:planned.recipientFunctionVersion,recipientRelevanceVersion:planned.recipientRelevanceVersion,primaryRecipientFunction:planned.primaryRecipientFunction,secondaryRecipientFunctions:planned.secondaryRecipientFunctions,preciseTargetRoleId:planned.preciseTargetRoleId,companyId:planned.companyId,companyName:planned.fictionalEmployer.name,strategyCompanyName:planned.strategyCompanyMatch?.canonicalName??null,companyMatchMethod:planned.matchMethod,companyTier:planned.companyTier as RecipientTargetingSnapshot["companyTier"],roleFamilyId:planned.desiredRoleFamily,desiredRoleId:planned.desiredRoleId,personaId:planned.recipientPersona,industryId:planned.industry,industryDisplayName:INDUSTRY_PREFERENCES.find((item)=>item.id===planned.industry)?.displayName??planned.industry,geographyId:planned.geography,geographyDisplayName:GEOGRAPHY_PREFERENCES.find((item)=>item.id===planned.geography)?.displayName??planned.geography,yearsExperience:planned.yearsExperience,roleAlignment:planned.roleAlignment,functionalRelevance:planned.functionalRelevance,sharedSignal:planned.sharedSignal,dataQuality:planned.dataQuality,roleSpecificUpside:planned.roleSpecificUpside,companyRecognition:planned.companyRecognition,companyCareerUpside:planned.companyCareerUpside,companyTechnicalInterest:planned.companyTechnicalInterest,targetingProfileVersion:planned.targetingProfileVersion,companyProfileVersion:planned.companyProfileVersion};
     const draftRecipient={...recipient,professionalTitle:planned.professionalTitle,primaryRecipientFunction:planned.primaryRecipientFunction};
-    const lane=laneForRecipient(draftRecipient),ordinal=laneOrdinals.get(lane)??0;laneOrdinals.set(lane,ordinal+1);const template = selectTemplate(draftRecipient, { runId },ordinal);
+    const template = selectTemplate(draftRecipient, { runId },draftOrdinal);
     const rendered = renderDraft(draftRecipient, repository.listEvidence(recipient.id), now, template);
     const score = {eligible:true,total:planned.totalScore,version:planned.targetingVersion,components:planned.components,explanationCodes:planned.explanationCodes} as const;
     return { id: `draft-${runId}-${recipient.id}-${template.id}-${template.version}`, recipient, runId, rendered, score, snapshot, status: "generated" as const };
