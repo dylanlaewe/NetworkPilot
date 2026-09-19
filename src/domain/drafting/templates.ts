@@ -1,7 +1,7 @@
 import{fragmentById}from"./facts";import type{DraftTemplate,OutreachLane}from"./types";
-export const TEMPLATE_CATALOG_VERSION="catalog-v7-dylan-outreach-method-v3";
+export const TEMPLATE_CATALOG_VERSION="catalog-v8-dylan-outreach-method-v3";
 type VariantSeed=Pick<DraftTemplate,"variantId"|"structure"|"subject"|"reason"|"question"|"fragmentIds">;
-const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"6.0.0",factIds};});
+const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"8.0.0",factIds};});
 const set=(subjects:[string,string,string],fragments:[string,string,string],reasons:[string,string,string],questions:[string,string,string]):VariantSeed[]=>[
  {variantId:"direct-practical",structure:"facts-first",fragmentIds:[fragments[0]],subject:subjects[0],reason:reasons[0],question:questions[0]},
  {variantId:"career-curiosity",structure:"reason-first",fragmentIds:[fragments[1]],subject:subjects[1],reason:reasons[1],question:questions[1]},
@@ -26,13 +26,13 @@ export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("product-management","Product management",set(
   ["Technical product question","Question about product at {{company}}","Moving from technical work into product"],
   ["compact-product-context","compact-systems-context","compact-product-context"],
-  ["I’m trying to understand how technical practitioners move into product without overstating experience they haven’t built yet.","The part I’m most interested in is learning how good product people prioritize useful systems across business and technical constraints.","I’d value a practical perspective on turning technical depth into sound product judgment."],
+  ["I’m exploring a move from building data systems into product and would like to understand what I should learn first.","I’d like to understand how you decide what to build when users and engineers have different priorities.","I’m curious which parts of a technical background help most when you start working on product decisions."],
   ["Would you be open to a quick 15-minute conversation about what helped you become effective in product?",perspective,approach],
  )),
  ...variants("project-operations","Project, program, and operations",set(
   ["Quick question about technical delivery","Question about program work at {{company}}","Building stronger operations experience"],
   ["compact-systems-context","compact-business-context","compact-technical-context"],
-  ["I’m interested in how strong operators keep technical work moving without losing sight of the people and process around it.","I’m trying to understand which early experiences build credibility in program and operations roles.","The intersection of systems, coordination, and dependable execution is where I’d like to keep growing."],
+  ["I’m interested in how you keep projects moving when the technical work and the team’s priorities change.","I’m trying to understand which early experiences build credibility in program and operations roles.","I enjoy connecting systems and solving day-to-day problems, and I’m curious how that translates to running projects."],
   [quick,perspective,approach],
  )),
  ...variants("consulting","Consulting",set(
@@ -56,13 +56,13 @@ export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("defense-technology","Defense and technology",set(
   ["Quick question about technical defense work","Question about engineering at {{company}}","Building useful experience in defense technology"],
   ["compact-technical-context","compact-systems-context","compact-business-context"],
-  ["I’m trying to understand which early technical experiences are most useful on complex, mission-focused teams.","The combination of dependable systems, engineering judgment, and clear delivery is what interests me.","I’d value a grounded view of how someone early in their career can contribute well in this environment."],
+  ["I’m curious how you got started working on these systems and which skills helped you on your first projects.","I’d like to learn how your team tests changes when reliability matters as much as getting the work done.","I’d value a grounded view of how someone early in their career can contribute well in this environment."],
   [quick,perspective,approach],
  )),
  ...variants("career-path-leader","Career path",set(
-  ["Quick career question","Question about growing into broader ownership","Building a strong technical foundation"],
+  ["Quick career question","Question about taking on larger projects","Building a strong technical foundation"],
   ["compact-technical-context","compact-systems-context","compact-business-context"],
-  ["I’m focused on becoming a strong contributor first and would value your view on which foundations matter most.","I’m curious how experienced practitioners earn broader ownership without getting too far from the work.","I’m trying to make thoughtful early choices that leave room for more responsibility later."],
+  ["I’m focused on becoming a strong contributor first and would value your view on which foundations matter most.","I’m curious how you started taking on larger projects while still staying involved in the technical work.","I’m trying to choose a first role where I can build useful skills and gradually take on larger projects."],
   [quick,perspective,approach],
  )),
 ];

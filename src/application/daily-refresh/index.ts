@@ -6,7 +6,7 @@ export const DAILY_REFRESH_ENRICHMENT_CAP=20;
 export type OutreachTrack="professional"|"recruiter";
 export type CompanyKind="preferred"|"discovered";
 export interface RefreshCandidate {id:string;company:string;track:OutreachTrack;score:number;available:boolean;companyKind?:CompanyKind;}
-export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
+export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];draftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
 export interface DailyRefreshRepository {findLatest(campaignDate:string):DailyRefreshResult|null;save(result:DailyRefreshResult):void;}
 export interface DailyRefreshReplenisher {replenish(maximum:number):Promise<{candidates:RefreshCandidate[];attempts:number;searchCalls?:number;creditBefore:number|null;creditAfter:number|null}>;}
 
@@ -30,19 +30,17 @@ export const NEXT_DRAFT_BATCH_TARGET=5;
 export const NEXT_DRAFT_PROFESSIONAL_TARGET=3;
 export const NEXT_DRAFT_RECRUITER_TARGET=2;
 export const NEXT_DRAFT_PREFERRED_MAXIMUM=2;
-export function planNextDraftBatch(candidates:readonly RefreshCandidate[],target=NEXT_DRAFT_BATCH_TARGET):RefreshCandidate[]{
+export function planNextDraftBatch(candidates:readonly RefreshCandidate[],target=NEXT_DRAFT_BATCH_TARGET,active:readonly RefreshCandidate[]=[]):RefreshCandidate[]{
   if(!Number.isInteger(target)||target<1||target>20)throw new Error("draft-batch-size-invalid");
-  const eligible=[...candidates].filter((candidate)=>candidate.available).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
-  const selected:RefreshCandidate[]=[],companies=new Set<string>(),people=new Set<string>();
-  const recruiterTarget=Math.round(target*.4),professionalTarget=target-recruiterTarget,preferredMaximum=Math.ceil(target*.4);
-  const add=(predicate:(candidate:RefreshCandidate)=>boolean,maximum:number)=>{for(const candidate of eligible){if(selected.length>=target||maximum<=0)break;if(!predicate(candidate)||people.has(candidate.id)||companies.has(candidate.company))continue;selected.push(candidate);people.add(candidate.id);companies.add(candidate.company);maximum--;}};
-  add((candidate)=>candidate.track==="recruiter"&&candidate.companyKind==="discovered",recruiterTarget);
-  add((candidate)=>candidate.track==="recruiter",recruiterTarget-selected.filter((item)=>item.track==="recruiter").length);
-  add((candidate)=>candidate.track==="professional"&&candidate.companyKind==="discovered",professionalTarget);
-  add((candidate)=>candidate.track==="professional",professionalTarget-selected.filter((item)=>item.track==="professional").length);
-  add((candidate)=>candidate.companyKind==="discovered",target-selected.length);
-  add((candidate)=>candidate.companyKind!=="preferred"||selected.filter((item)=>item.companyKind==="preferred").length<preferredMaximum,target-selected.length);
-  add(()=>true,target-selected.length);
+  const eligible=candidates.filter(c=>c.available).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)),selected:RefreshCandidate[]=[],companies=new Set(active.map(c=>c.company)),people=new Set(active.map(c=>c.id));
+  const recruiterTarget=Math.max(0,Math.min(target,Math.round((active.length+target)*.4)-active.filter(c=>c.track==="recruiter").length)),professionalTarget=target-recruiterTarget,preferredMaximum=Math.max(0,Math.ceil((active.length+target)*.4)-active.filter(c=>c.companyKind==="preferred").length);
+  const add=(predicate:(c:RefreshCandidate)=>boolean,maximum:number,cap=true)=>{for(const candidate of eligible){if(selected.length>=target||maximum<=0)break;if(!predicate(candidate)||people.has(candidate.id)||companies.has(candidate.company)||(cap&&candidate.companyKind==="preferred"&&selected.filter(c=>c.companyKind==="preferred").length>=preferredMaximum))continue;selected.push(candidate);companies.add(candidate.company);people.add(candidate.id);maximum--;}};
+  add(c=>c.track==="recruiter",recruiterTarget);
+  add(c=>c.track==="professional",professionalTarget);
+  add(c=>c.companyKind==="discovered",target-selected.length);
+  // Relax the preference only when remaining qualified discovered supply cannot fill the request.
+  add(c=>c.track==="recruiter",recruiterTarget-selected.filter(c=>c.track==="recruiter").length,false);
+  add(()=>true,target-selected.length,false);
   return selected;
 }
 
