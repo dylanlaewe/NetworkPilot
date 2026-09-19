@@ -1,6 +1,6 @@
 export const OUTREACH_TRACKS=["professional","recruiter"] as const;
 export type OutreachTrack=typeof OUTREACH_TRACKS[number];
-export const RECRUITER_CLASSIFICATION_VERSION="recruiter-classification-v2" as const;
+export const RECRUITER_CLASSIFICATION_VERSION="recruiter-classification-v3" as const;
 export const RECRUITER_RELEVANCE_VERSION="recruiter-relevance-v1" as const;
 export type RecruiterType="technical-recruiter"|"talent-acquisition-partner"|"early-career-recruiter"|"general-recruiter"|"recruiting-manager"|"ambiguous";
 export type RecruitingDomain="technical-data-ai"|"early-career"|"general"|"unknown";

@@ -1,0 +1,4 @@
+import {describe,expect,it} from "vitest";
+import {mapApolloPerson} from "./adapter";
+
+describe("Apollo employer identity evidence",()=>{it("preserves provider-native employer identity without inventing industry",()=>{const mapped=mapApolloPerson({id:"person-1",first_name:"Fixture",last_name:"Recruiter",title:"Technical Recruiter",email:"fixture@example.invalid",email_status:"verified",organization:{id:"organization-1",name:"Regional Software",primary_domain:"regional.example"},employment_history:[{start_date:"2020-01-01",current:true}]},{stage:"enrichment",retrievedAt:"2026-09-19T12:00:00.000Z",datasetClassification:"provider-shaped-fixture"});expect(mapped.currentOrganization).toEqual({name:"Regional Software",domain:"regional.example",providerId:"organization-1"});expect(mapped.industrySignals).toEqual([]);});});

@@ -57,7 +57,7 @@ export interface EmploymentPeriod {startDate?:string;endDate?:string;current?:bo
 export type ExperienceEvidence={kind:"exact";years:number;sourceField:string}|{kind:"range";minimum:number;maximum:number;sourceField:string}|{kind:"approximate";years:number;sourceField:string}|{kind:"employment-history";periods:EmploymentPeriod[];referenceDate:string;sourceField:string}|{kind:"unknown";sourceField:string};
 export interface CandidateSourceRecord {
   sourceProviderId:string; providerRecordId:string; datasetClassification:DatasetClassification;
-  person:{firstName:string;lastName:string}; currentTitle:string; currentOrganization:{name:string;domain?:string};
+  person:{firstName:string;lastName:string}; currentTitle:string; currentOrganization:{name:string;domain?:string;providerId?:string};
   location:string; industrySignals:string[]; experienceEvidence:ExperienceEvidence[];
   email:{address:string;verificationStatus:EmailVerificationStatus}; sourceTimestamps:{retrievedAt:string;updatedAt?:string};
   fieldProvenance:Record<string,FieldProvenance>; consent:{suppressed:boolean;optedOut:boolean;evidence?:string};

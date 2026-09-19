@@ -15,6 +15,13 @@ const industryMappings:Array<[RegExp,string]>=[
 ];
 const mappedIndustry=(value?:string)=>value?industryMappings.find(([pattern])=>pattern.test(value))?.[1]:undefined;
 export interface CompanyDiscoveryResult {eligible:boolean;reason:string|null;company:TargetCompany|null;kind:"preferred"|"discovered"|"blocked";}
+export function classifyInternalRecruiterCompany(input:{name:string;domain?:string;providerEmployerId?:string;recruiterTitleRelevant:boolean}):CompanyDiscoveryResult{
+  const name=input.name.trim().replace(/\s+/g," "),domain=input.domain?.trim().toLowerCase().replace(/^www\./,""),providerId=input.providerEmployerId?.trim(),generic=/^(unknown|confidential|stealth|self[- ]employed|n\/a)$/i.test(name);
+  const reason=!input.recruiterTitleRelevant?"recruiter-function-unrelated":agencySignals.test(name)?"recruiter-agency-employer":scamSignals.test(name)?"company-scam-indicator":generic||name.length<2||(!providerId&&(!domain||!domain.includes(".")))?"recruiter-company-identity-unverifiable":null;
+  if(reason)return{eligible:false,reason,company:null,kind:"blocked"};
+  const identity=domain??`provider:${providerId}`,id=`discovered-${createHash("sha256").update(identity).digest("hex").slice(0,16)}`;
+  return{eligible:true,reason:null,kind:"discovered",company:{id,canonicalName:name,industryId:"employer-identity-only",tier:"tier-2",enabled:true,recognitionScore:50,careerUpsideScore:65,technicalInterestScore:65,geographicRelevance:["broader-us","remote-us"],rationale:"Internal recruiter employer established from provider-backed company identity and employment relationship; no industry claim made.",provenance:"authorized-provider-recruiter-identity",lastReviewedDate:"1970-01-01",operatorNotes:"Recruiter-only company eligibility. Provider employer identity is supported; industry remains unspecified."}};
+}
 export function classifyDiscoveredCompany(input:{name:string;domain?:string;industrySignal?:string;preferred?:TargetCompany|null;suppressed?:boolean}):CompanyDiscoveryResult{
   if(input.preferred)return{eligible:input.preferred.enabled&&input.preferred.tier!=="excluded"&&input.preferred.tier!=="unreviewed",reason:null,company:input.preferred,kind:"preferred"};
   const name=input.name.trim().replace(/\s+/g," "),domain=input.domain?.trim().toLowerCase().replace(/^www\./,"");
