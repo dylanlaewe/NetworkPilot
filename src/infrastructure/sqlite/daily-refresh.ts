@@ -1,4 +1,4 @@
-import {readDraftGenerations,readQueueCandidates,loadQueueReviews,renderQueueReview,draftIsDismissed} from "./draft-queue";
+import {readDraftGenerations,readQueueCandidates,readQueueOperations,loadQueueReviews,renderQueueReview,draftIsDismissed,draftCampaignDate} from "./draft-queue";
 import Database from "better-sqlite3";
 import {localCampaignDate,planNextDraftBatch,refreshDailyPipeline,type DailyRefreshRepository,type DailyRefreshResult} from "@/application/daily-refresh";
 import {loadDailyCommandCenter} from "./daily-command-center";
@@ -47,7 +47,10 @@ export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date
 export function recordDraftDisposition(input:{candidateId:string;permanent:boolean;now?:()=>Date}):void{
   const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
   try{repository.migrate();repository.transaction(()=>{
-    const at=(input.now??(()=>new Date()))(),review=loadQueueReviews(repository,at).find(r=>r.candidateId===input.candidateId),generation=readDraftGenerations(repository.native).filter(g=>g.candidateIds.includes(input.candidateId)).at(-1),campaignDate=generation?.campaignDate??localCampaignDate(at);
+    const at=(input.now??(()=>new Date()))(),review=loadQueueReviews(repository,at).find(r=>r.candidateId===input.candidateId);
+    // Resolve even after dismissal so retries find the same disposition/audit key.
+    const operation=readQueueOperations(repository).findLast(op=>op.snapshot.candidateId===input.candidateId&&op.sendState!=="sent");
+    const campaignDate=draftCampaignDate(readDraftGenerations(repository.native),input.candidateId,operation?.snapshot.approvedAt,at);
     const prior=repository.native.prepare("SELECT disposition FROM draft_dispositions WHERE candidate_id=? AND campaign_date=?").get(input.candidateId,campaignDate) as {disposition:string}|undefined;
     if(prior?.disposition==="permanently-excluded"||(prior?.disposition==="skipped"&&!input.permanent))return;
     if(!review)throw new Error("draft-disposition-candidate-unavailable");
