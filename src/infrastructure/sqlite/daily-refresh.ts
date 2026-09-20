@@ -16,21 +16,31 @@ export function loadLatestDailyRefresh():DailyRefreshResult|null{const selection
 export async function runDailyRefreshFromToday(input:{allowProvider:boolean;force:boolean;now?:()=>Date}):Promise<DailyRefreshResult>{const selection=resolveManualOutreachDatabaseSelection(),repository=new SqliteSimulationRepository(selection.path);try{repository.migrate();const state=loadDailyCommandCenter(),store=new SqliteDailyRefreshRepository(repository.native),now=input.now??(()=>new Date());return await refreshDailyPipeline({repository:store,candidates:state.reserve.map((candidate)=>({id:candidate.id,company:candidate.companyId||candidate.company,track:candidate.track??"professional",score:candidate.score,available:candidate.stage==="qualified-available"})),now,allowProvider:input.allowProvider,force:input.force,replenisher:new ApolloDailyReplenisher(repository,process.env,now)});}finally{repository.close();}}
 
 
-export function runNextDraftBatchFromReserve(target=5,now:()=>Date=()=>new Date()):DailyRefreshResult{
-  if(!Number.isInteger(target)||target<1||target>20)throw new Error("draft-batch-size-invalid");
+export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date=()=>new Date()):DailyRefreshResult{
+  if(!Number.isInteger(additionalDraftCount)||additionalDraftCount<1||additionalDraftCount>20)throw new Error("draft-batch-size-invalid");
   const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
   try{repository.migrate();return repository.transaction(()=>{
-    const at=now(),campaignDate=localCampaignDate(at),store=new SqliteDailyRefreshRepository(repository.native),existing=store.findLatest(campaignDate),state=loadDailyCommandCenter(at),generations=readDraftGenerations(repository.native),alreadyPlanned=new Set(generations.filter(g=>g.campaignDate===campaignDate).flatMap(g=>g.candidateIds));
+    const at=now(),campaignDate=localCampaignDate(at),store=new SqliteDailyRefreshRepository(repository.native),existing=store.findLatest(campaignDate),state=loadDailyCommandCenter(at),generations=readDraftGenerations(repository.native);
+    const alreadyPlanned=new Set(generations.filter(g=>g.campaignDate===campaignDate).flatMap(g=>[...g.candidateIds,...(g.carriedDraftReviews??[]).map(r=>r.candidateId)]));
     const operations=(repository.native.prepare("SELECT approved_snapshot_json FROM gmail_draft_operations").all() as {approved_snapshot_json:string}[]).map(row=>JSON.parse(row.approved_snapshot_json) as {candidateId:string});
     for(const op of operations)alreadyPlanned.add(op.candidateId);
-    const active=loadQueueReviews(repository,at).filter(r=>r.operation?.sendState!=="sent"&&!repository.findManualOutreach(r.snapshotId)),activeCandidates=active.map(r=>({id:r.candidateId,company:r.companyId,companyKind:state.reserve.find(c=>c.id===r.candidateId)?.companyKind,track:r.outreachTrack,score:r.score,available:true}));
+    const active=loadQueueReviews(repository,at).filter(r=>r.operation?.sendState!=="sent"&&!repository.findManualOutreach(r.snapshotId));
+    const activeCandidates=active.map(r=>({id:r.candidateId,company:r.companyId,companyKind:state.reserve.find(c=>c.id===r.candidateId)?.companyKind,track:r.outreachTrack,score:r.score,available:true}));
     for(const review of active)alreadyPlanned.add(review.candidateId);
-    const occupied=new Set(active.map(r=>r.companyId)),candidates=readQueueCandidates(repository.native),byId=new Map(candidates.map(c=>[c.id,c]));
-    const selected=planNextDraftBatch(state.reserve.map(c=>({id:c.id,company:c.companyId||c.company,companyKind:c.companyKind,track:c.track??"professional",score:c.score,available:c.stage==="qualified-available"&&!alreadyPlanned.has(c.id)&&!occupied.has(c.companyId||c.company)&&!draftIsDismissed(repository.native,c.id,campaignDate)})),target,activeCandidates);
+    const occupied=new Set(active.map(r=>r.companyId)),byId=new Map(readQueueCandidates(repository.native).map(c=>[c.id,c]));
+    const eligible=state.reserve.filter(c=>c.stage==="qualified-available"&&!alreadyPlanned.has(c.id)&&!occupied.has(c.companyId||c.company)&&!draftIsDismissed(repository.native,c.id,campaignDate));
+    const selected=planNextDraftBatch(eligible.map(c=>({id:c.id,company:c.companyId||c.company,companyKind:c.companyKind,track:c.track??"professional",score:c.score,available:true})),additionalDraftCount,activeCandidates);
     const draftReviews=selected.map((c,i)=>renderQueueReview(byId.get(c.id)!,active.length+i,at)).filter((r):r is NonNullable<typeof r>=>Boolean(r));
-    if(!draftReviews.length)throw new Error("draft-reserve-empty");
-    const result:DailyRefreshResult={id:`${campaignDate}:${(existing?.generation??0)+1}`,campaignDate,generation:(existing?.generation??0)+1,createdAt:at.toISOString(),candidateIds:draftReviews.map(r=>r.candidateId),draftReviews,professionalCount:draftReviews.filter(r=>r.outreachTrack==="professional").length,recruiterCount:draftReviews.filter(r=>r.outreachTrack==="recruiter").length,target,shortfall:target-draftReviews.length,reserveCount:state.pipeline.available,providerUsed:false,enrichmentAttempts:0,creditBefore:null,creditAfter:null,warning:null};
-    store.save(result);return result;
+    const selectedCompanies=new Set(draftReviews.map(r=>r.companyId));
+    const eligibleReserveRemaining=new Set(eligible.filter(c=>!selectedCompanies.has(c.companyId||c.company)).map(c=>c.companyId||c.company)).size;
+    const result:DailyRefreshResult={id:`${campaignDate}:${(existing?.generation??0)+1}`,campaignDate,generation:(existing?.generation??0)+1,createdAt:at.toISOString(),candidateIds:draftReviews.map(r=>r.candidateId),draftReviews,
+      // Freeze the visible legacy queue before the first explicit Add switches projection modes.
+      ...!generations.length&&active.length?{carriedDraftReviews:active}:{},
+      addition:{additionalDraftCount,addedCount:draftReviews.length,activeBefore:active.length,activeAfter:active.length+draftReviews.length,eligibleReserveRemaining},
+      professionalCount:draftReviews.filter(r=>r.outreachTrack==="professional").length,recruiterCount:draftReviews.filter(r=>r.outreachTrack==="recruiter").length,target:additionalDraftCount,shortfall:additionalDraftCount-draftReviews.length,reserveCount:eligible.length,providerUsed:false,enrichmentAttempts:0,creditBefore:null,creditAfter:null,warning:null};
+    // An empty Add is a successful no-op, not navigation intent or a completed empty generation.
+    if(draftReviews.length)store.save(result);
+    return result;
   });}finally{repository.close();}
 }
 

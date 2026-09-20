@@ -71,6 +71,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run dev` — start local development
 - `npm run build` / `npm run app:start` — build and serve the supported local production application
 - `npm test` / `npm run test:watch` — run the isolated Vitest suite
+- `npm run copy:review:offline` — print 40 fictional intent-aware messages without databases or providers; see [the review](docs/outreach-intent-v1-review.md) and [additive Drafts QA](docs/additive-drafts-intent-correction.md)
 - `npm run typecheck` — strict TypeScript validation
 - `npm run lint` — ESLint with zero warnings allowed
 - `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts

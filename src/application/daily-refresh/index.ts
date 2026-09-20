@@ -5,8 +5,9 @@ export const DAILY_REFRESH_ENRICHMENT_CAP=20;
 
 export type OutreachTrack="professional"|"recruiter";
 export type CompanyKind="preferred"|"discovered";
+export interface DraftAdditionMetrics {additionalDraftCount:number;addedCount:number;activeBefore:number;activeAfter:number;eligibleReserveRemaining:number;}
 export interface RefreshCandidate {id:string;company:string;track:OutreachTrack;score:number;available:boolean;companyKind?:CompanyKind;}
-export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];draftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
+export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];addition?:DraftAdditionMetrics;carriedDraftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];draftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
 export interface DailyRefreshRepository {findLatest(campaignDate:string):DailyRefreshResult|null;save(result:DailyRefreshResult):void;}
 export interface DailyRefreshReplenisher {replenish(maximum:number):Promise<{candidates:RefreshCandidate[];attempts:number;searchCalls?:number;creditBefore:number|null;creditAfter:number|null}>;}
 

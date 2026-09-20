@@ -30,6 +30,41 @@ afterEach(()=>{repository.close();vi.useRealTimers();vi.unstubAllEnvs();vi.unstu
 const reviews=()=>loadQueueReviews(repository,at);
 const history=()=>JSON.stringify(["gmail_draft_operations","manual_outreach_records","manual_outreach_audit","outreach_events","drafts"].map(table=>repository.native.prepare(`SELECT * FROM ${table}`).all()));
 describe("persisted offline queue under exhausted Apollo budget",()=>{
+  it("does not retrofit intent or new catalog copy onto historical immutable approvals",()=>{
+    const review=runNextDraftBatchFromReserve(1,now).draftReviews![0]!;
+    const snapshot={...approvedSnapshot(review,at),outreachIntent:undefined,templateCatalogVersion:"catalog-v8-dylan-outreach-method-v3",subject:"Historical approved subject",body:"Historical operator-approved content, unchanged."};
+    const op=approveForGmailDraft(repository,snapshot,"fixture"),before=JSON.stringify(repository.findGmailDraftOperation(op.snapshot.snapshotId));
+    runNextDraftBatchFromReserve(10,now);
+    expect(JSON.stringify(repository.findGmailDraftOperation(op.snapshot.snapshotId))).toBe(before);
+    const hydrated=reviews().find(r=>r.candidateId===review.candidateId)!;
+    expect(hydrated.body).toBe(snapshot.body);expect(hydrated.outreachIntent).toBeUndefined();
+  });
+  it.each([[5,5,10],[5,10,15],[10,5,15],[10,10,20],[10,1,11],[10,20,30],[8,5,13],[12,7,19]])("adds to existing work: %i + %i = %i",(before,additional,after)=>{
+    runNextDraftBatchFromReserve(before,now);const prior=reviews().map(r=>[r.candidateId,r.snapshotId,r.body]);
+    const result=runNextDraftBatchFromReserve(additional,now);
+    expect(result.addition).toMatchObject({additionalDraftCount:additional,addedCount:additional,activeBefore:before,activeAfter:after});
+    expect(reviews()).toHaveLength(after);expect(reviews().slice(0,before).map(r=>[r.candidateId,r.snapshotId,r.body])).toEqual(prior);
+  });
+  it("preserves legacy fallback drafts on the first explicit Add rather than replacing them",()=>{
+    const candidates=repository.listImportedCandidates(),legacy=candidates.filter(c=>c.outreachTrack!=="recruiter").slice(0,5);
+    // Only these five have the latest pilot retrieval date; exclude recruiters to model the real pre-generation boundary.
+    for(const c of candidates){c.source.sourceTimestamps.retrievedAt=legacy.some(r=>r.id===c.id)?at.toISOString():"2026-09-20T14:00:00Z";
+      repository.native.prepare("UPDATE imported_candidates SET normalized_snapshot_json=? WHERE id=?").run(JSON.stringify(c),c.id);
+      if(c.outreachTrack==="recruiter")repository.native.prepare("INSERT INTO candidate_suppression_entries(candidate_id,reason,created_at_utc) VALUES(?,?,?)").run(c.id,"fixture-suppressed",at.toISOString());
+    }
+    const batch=repository.native.prepare("SELECT * FROM import_batches LIMIT 1").get() as Record<string,unknown>;batch.id="operational-enrichment-fixture";batch.source_fingerprint="legacy-fixture";repository.native.prepare(`INSERT INTO import_batches(${Object.keys(batch).join(",")}) VALUES(${Object.keys(batch).map(()=>"?").join(",")})`).run(...Object.values(batch));repository.native.prepare("UPDATE imported_candidates SET batch_id=?").run(batch.id);
+    const existing=reviews();expect(existing).toHaveLength(5);
+    const result=runNextDraftBatchFromReserve(10,now);expect(result.addition?.activeAfter).toBe(15);expect(reviews()).toHaveLength(15);
+    expect(reviews().slice(0,5).map(r=>r.snapshotId)).toEqual(existing.map(r=>r.snapshotId));
+  });
+  it("reports partial and empty additions inline without losing the active queue or persisting empty generations",()=>{
+    runNextDraftBatchFromReserve(5,now);const active=new Set(reviews().map(r=>r.candidateId));
+    const available=loadDailyCommandCenter(at).reserve.filter(c=>c.stage==="qualified-available");
+    for(const c of available.slice(6))repository.native.prepare("INSERT INTO candidate_suppression_entries(candidate_id,reason,created_at_utc) VALUES(?,?,?)").run(c.id,"fixture-exhausted",at.toISOString());
+    const partial=runNextDraftBatchFromReserve(10,now);expect(partial.addition).toMatchObject({addedCount:6,activeBefore:5,activeAfter:11,eligibleReserveRemaining:0});
+    expect(reviews()).toHaveLength(11);expect(reviews().filter(r=>active.has(r.candidateId))).toHaveLength(5);
+    const history=readDraftGenerations(repository.native);expect(runNextDraftBatchFromReserve(10,now).addition).toMatchObject({addedCount:0,activeBefore:11,activeAfter:11});expect(readDraftGenerations(repository.native)).toEqual(history);
+  });
   it("generates, skips, replaces twice, excludes, and adds 5/10/1/20 while preserving queue order and snapshots",()=>{
     const before=history(),first=runNextDraftBatchFromReserve(5,now);expect(first.draftReviews).toHaveLength(5);expect(first.recruiterCount).toBe(2);
     const skipped=[reviews()[1]!.candidateId];recordDraftDisposition({candidateId:skipped[0]!,permanent:false,now});

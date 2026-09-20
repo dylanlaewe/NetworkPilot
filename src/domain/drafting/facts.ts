@@ -1,5 +1,7 @@
 import type{FactFragment,SenderFact}from"./types";
 export const DYLAN_FACTS:SenderFact[]=[
+ {id:"product-motivation",value:"User-approved interest in new technology, deciding what to build, working with people and cross-functional leadership; not prior PM employment",category:"interest",approved:true,enabled:true},
+ {id:"delivery-motivation",value:"User-approved enjoyment of ownership, coordinating technical work across stakeholders and solving operational problems; not formal project/program employment",category:"interest",approved:true,enabled:true},
  {id:"sender-name",value:"Dylan Laewe",category:"identity",approved:true,enabled:true},
  {id:"degree",value:"B.S. in Computer Science",category:"education",approved:true,enabled:true},
  {id:"graduation",value:"May 2026",category:"education",approved:true,enabled:true},
@@ -15,6 +17,10 @@ export function resolveApprovedFacts(ids:string[],registry:SenderFact[]=DYLAN_FA
 const value=(facts:ReadonlyMap<string,SenderFact>,id:string)=>facts.get(id)?.value??(()=>{throw new Error(`Fragment missing fact: ${id}`)})();
 const lowerFirst=(text:string)=>text.charAt(0).toLowerCase()+text.slice(1);
 export const FACT_FRAGMENTS:FactFragment[]=[
+ {id:"product-transition-build",factIds:["internship","product-motivation"],claimMarkers:["background is in BI and data engineering","new technology into useful products"],render:()=>"My background is in BI and data engineering. Working on those systems has made me more interested in deciding what to build, working across teams, and bringing new technology into useful products."},
+ {id:"product-transition-people",factIds:["internship","product-motivation"],claimMarkers:["BI and data engineering","working with people","new features"],render:()=>"My BI and data engineering background helps me understand what can be built. I’ve found I’m especially drawn to working with people, setting priorities, and deciding how new features can solve practical problems."},
+ {id:"product-transition-frontier",factIds:["internship","product-motivation"],claimMarkers:["BI and data engineering","new technology","across technical and business teams"],render:()=>"I’ve worked on BI and data engineering systems, and I want to stay close to new technology. I’m increasingly interested in shaping useful products and working across technical and business teams, not only implementing them."},
+ {id:"delivery-transition-context",factIds:["internship","delivery-motivation"],claimMarkers:["BI and data engineering","coordinating technical work","operational problems"],render:()=>"My background is in BI and data engineering, where I’ve enjoyed coordinating technical work across systems and solving operational problems. I’m interested in roles with more ownership of how teams get work done."},
  {id:"identity-graduated",factIds:["sender-name","graduation","degree"],claimMarkers:["Dylan Laewe","graduated in May 2026","B.S. in Computer Science"],render:(f)=>`I’m ${value(f,"sender-name")}. I graduated in ${value(f,"graduation")} with a ${value(f,"degree")}.`},
  {id:"identity-recent-grad",factIds:["sender-name","degree","graduation"],claimMarkers:["Dylan Laewe","recent computer science graduate","May 2026"],render:(f)=>`I’m ${value(f,"sender-name")}, a recent computer science graduate as of ${value(f,"graduation")}.`},
  {id:"identity-since-may",factIds:["sender-name","graduation","degree"],claimMarkers:["Dylan Laewe","After graduating in May 2026","B.S. in Computer Science"],render:(f)=>`I’m ${value(f,"sender-name")}. After graduating in ${value(f,"graduation")} with a ${value(f,"degree")}, I’ve been looking for a place where I can contribute and keep learning.`},
