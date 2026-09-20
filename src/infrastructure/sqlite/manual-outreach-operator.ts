@@ -58,7 +58,7 @@ export function listManualDraftOperatorEntries(databasePath:string):ManualDraftO
         if(candidate){company=candidate.source.currentOrganization.name;title=candidate.source.currentTitle;persistedSuppressed=candidate.source.consent.suppressed||suppressedCandidates.has(candidate.id);}
       }
       const manual=manualBySnapshot.get(row.draft_snapshot_id)??null,outcome=manual?.outcome??null,suppressed=persistedSuppressed||(manual?.identity_source==="prospect"?suppressedProspects.has(manual.candidate_id):manual?.identity_source==="imported-candidate"?suppressedCandidates.has(manual.candidate_id):false);
-      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),confirmationSource:manual?.confirmation_source??null,effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome)};
+      return{operatorId:manualSendOperatorId(row.operation_id),snapshotId:row.draft_snapshot_id,operationId:row.operation_id,outreachTrack:row.outreach_track,redactedRecipient:redactName(snapshot.recipientDisplayName),company,title,subject:snapshot.subject,gmailDraftCreated:true,manualSendConfirmed:Boolean(manual),confirmationSource:manual?.confirmation_source??null,effectiveSentAt:manual?.effective_sent_at_utc??null,outcome,suppressed,responseState:responseState(outcome),...snapshot.resumeAttachment?{resumeLabel:snapshot.resumeAttachment.displayLabel}:{}};
     });
   }finally{database.close();}
 }

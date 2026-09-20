@@ -29,6 +29,7 @@ describe("Sent compact outreach list",()=>{
     expect(html).toContain("Suppressed");expect(html).toContain("Delivery failed. This address is suppressed.");
     expect(html).not.toContain("Update outcome");
   });
+  it("shows only the attachment label for sent outreach and never a local storage path",async()=>{fixtures.drafts=[{...entry,resumeLabel:"Product Resume"}];const html=await render();expect(html).toContain("Resume:");expect(html).toContain("Product Resume");expect(html).not.toContain("data/resumes");expect(html).not.toContain(".sqlite");});
   it("retains all six outcome filters with accessible current selection",async()=>{
     const html=await render("replied");
     for(const outcome of ["awaiting-response","replied","meeting-scheduled","declined","hard-bounce","opt-out"])expect(html).toContain(`/sent?outcome=${outcome}`);

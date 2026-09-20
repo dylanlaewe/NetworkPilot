@@ -23,6 +23,7 @@ export interface ApprovedEmailDraftSnapshot {
   companyId?: string;
   companyDisplayName?: string;
   professionalTitle?: string;
+  resumeAttachment?: import("@/application/resumes").ResumeAttachmentSnapshot;
 }
 
 export interface GmailDraftOperation {

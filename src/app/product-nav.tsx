@@ -12,7 +12,7 @@ export function ProductNav({current}:{current:"today"|"drafts"|"sent"|"candidate
     <Link className="brand" href="/today"><span className="brand-mark"><i/><i/><i/></span>Network<span>Pilot</span></Link>
     <div className="nav-meta">
       {primary.map(([label,href])=><Link key={href} href={href} aria-current={current===label.toLowerCase()?"page":undefined}>{label}</Link>)}
-      <details className="support-menu"><summary aria-label="Support and diagnostics">⚙</summary><Link className="secondary-nav" href="/" aria-current={current==="system"?"page":undefined}>System</Link></details>
+      <details className="support-menu"><summary aria-label="Support and diagnostics">⚙</summary><Link className="secondary-nav" href="/resumes">Resumes</Link><Link className="secondary-nav secondary-nav-system" href="/" aria-current={current==="system"?"page":undefined}>System</Link></details>
     </div>
   </nav></>;
 }

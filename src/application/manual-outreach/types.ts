@@ -60,6 +60,7 @@ export interface ManualDraftOperatorEntry {
   outcome: ManualOutreachOutcome | null;
   suppressed: boolean;
   responseState: "awaiting-response" | "response-received" | "closed" | "delivery-failed" | null;
+  resumeLabel?:string;
 }
 
 export interface ManualOutreachRepository {

@@ -27,6 +27,7 @@ artifacts/
 data/*.sqlite
 data/*.sqlite-*
 data/*.db
+data/resumes/
 
 # TypeScript
 *.tsbuildinfo

@@ -32,6 +32,12 @@ Versioned SQL migrations create companies, fictional prospects, simulation runs,
 
 Legacy qualification rows remain readable for migration compatibility. New campaign-plan decisions store complete immutable targeting JSON rather than joins that change retroactively when a prospect or strategy is edited.
 
+### Resume Library and attachment snapshots
+
+The private Resume Library separates metadata from file bytes. SQLite stores an opaque resume ID, operator label, sanitized original filename, role-lane hint, size, SHA-256 identity, upload time, active state, and a content-addressed storage key. Exact PDF bytes live under the gitignored local application storage root (`data/resumes/` by default) with restrictive file permissions. Upload validation enforces a `.pdf` extension, PDF signature, 10 MB limit, safe leaf filename, and storage-root containment.
+
+Draft review defaults to no attachment. Recruiter lanes may display an advisory matching resume, but only an explicit selection is approved. The approved Gmail operation snapshots the selected resume ID, display label, sanitized filename, size, SHA-256, and storage key. Renaming or deactivating the library row cannot rewrite that snapshot. Gmail draft creation verifies the stored bytes against the frozen size and hash before producing one `application/pdf` MIME attachment. No-attachment messages retain the existing plain-text MIME path. Sent/CRM projections show only the frozen display label, never the storage path.
+
 ## Provider-ready ingestion and review
 
 `CandidateSourceRecord` is the neutral boundary for a future authorized adapter. It has no fictional-employer requirement and keeps source-reported organization, reviewed strategy-company match, and optional fictional simulation alias as different facts. Current adapters are deterministic local fixtures only: one flat and one nested. `SimulationCandidateSourceRecord` is explicitly named as the legacy seeded planning envelope.

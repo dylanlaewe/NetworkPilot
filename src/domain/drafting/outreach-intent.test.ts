@@ -18,7 +18,7 @@ describe("outreach-intent-v1",()=>{
   });
   it.each(["Product","Project/Program","Finance/Investment","Commodities/Energy"])("uses positive transition framing for %s",group=>{const messages=all.filter(d=>d.group===group);expect(messages.every(d=>d.outreachIntent.intent==="career-transition")).toBe(true);expect(new Set(messages.map(d=>d.cta)).size).toBeGreaterThanOrEqual(3);});
   it("grounds Product motivation in the user-approved frontier, people, and prioritization story",()=>{
-    for(const d of all.filter(d=>d.group==="Product")){expect(d.referencedFactIds).toContain("product-motivation");expect(d.body).toMatch(/new technology|new features/);expect(d.body).toMatch(/working across teams|working with people|across technical and business teams/);expect(d.body).toMatch(/first product role|next step|move into product/);}
+    for(const d of all.filter(d=>d.group==="Product")){expect(d.referencedFactIds).toContain("product-motivation");expect(d.body).toMatch(/new technology|new features/);expect(d.body).toMatch(/working across teams|working with people|business and technical teams/);expect(d.body).toMatch(/first (?:full-time )?product role|Product as my first full-time role|next step|move into product/i);}
   });
   it("preserves the good consulting-analytics style without forcing industry transition",()=>{
     const r:DraftRecipient={id:"fictional-good-style",firstName:"Avery",companyName:"Fictional Consulting",professionalTitle:"AI & Data Analytics Manager",primaryRecipientFunction:"data-analytics",roleFamilyId:"data-analytics",industryId:"consulting",personaId:"team-manager"};
@@ -31,6 +31,6 @@ describe("outreach-intent-v1",()=>{
   });
   it("keeps recruiters opportunity-focused with concise Product transition context",()=>{
     for(const d of all.filter(d=>d.group==="Recruiter"))expect(d.outreachIntent.intent).toBe("recruiter-opportunity");
-    const product=all.find(d=>d.role==="Product Recruiter")!;expect(product.body).toContain("first technical product role");expect(product.cta).toContain("recruiting area");
+    const product=all.find(d=>d.role==="Product Recruiter")!;expect(product.body).toMatch(/Product as my first full-time role/i);expect(product.cta).toContain("recruiting area");
   });
 });

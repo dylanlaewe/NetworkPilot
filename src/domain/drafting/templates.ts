@@ -1,7 +1,7 @@
 import{fragmentById}from"./facts";import type{DraftTemplate,OutreachLane}from"./types";
-export const TEMPLATE_CATALOG_VERSION="catalog-v9-dylan-outreach-method-v4";
+export const TEMPLATE_CATALOG_VERSION="catalog-v10-dylan-outreach-method-v5";
 type VariantSeed=Pick<DraftTemplate,"variantId"|"structure"|"subject"|"reason"|"question"|"fragmentIds">;
-const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"9.0.0",factIds};});
+const variants=(laneId:OutreachLane,displayName:string,seeds:VariantSeed[]):DraftTemplate[]=>seeds.map((seed)=>{const factIds=[...new Set(seed.fragmentIds.flatMap((id)=>fragmentById(id).factIds))];return{...seed,id:`${laneId}-${seed.variantId}`,laneId,displayName:`${displayName}: ${seed.variantId}`,catalogVersion:TEMPLATE_CATALOG_VERSION,version:"10.0.0",factIds};});
 const set=(subjects:[string,string,string],fragments:[string,string,string],reasons:[string,string,string],questions:[string,string,string]):VariantSeed[]=>[
  {variantId:"direct-practical",structure:"facts-first",fragmentIds:[fragments[0]],subject:subjects[0],reason:reasons[0],question:questions[0]},
  {variantId:"career-curiosity",structure:"reason-first",fragmentIds:[fragments[1]],subject:subjects[1],reason:reasons[1],question:questions[1]},
@@ -13,7 +13,7 @@ const approach="Would you have 15 minutes to share what you would learn first if
 export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("data-analytics","Data and analytics",set(
   ["Quick question about data and analytics","Question about analytics at {{company}}","Building toward stronger data work"],
-  ["compact-data-context","compact-systems-context","compact-data-context"],
+  ["compact-data-context","compact-technical-context","compact-data-context"],
   ["I’m trying to understand how strong analysts build toward deeper data engineering responsibility.","The transition from reporting and analysis into more technical data work is the part I’m most curious about.","I’d value a practical view of which skills actually matter once the work moves beyond dashboards."],
   [quick,perspective,"Would you be open to a quick 15-minute call about the experiences that helped you grow in this area?"],
  )),
@@ -26,7 +26,7 @@ export const DRAFT_TEMPLATES:DraftTemplate[]=[
  ...variants("product-management","Product management",set(
   ["Technical product question","Question about product at {{company}}","Moving from technical work into product"],
   ["product-transition-build","product-transition-people","product-transition-frontier"],
-  ["I’m exploring how to turn that interest into a first product role.","I’d like to build on those interests in a first product role.","I’d like to understand how to make that move into product."],
+  ["I’m exploring Product as my first full-time role.","I’d like to bring that mix of technical understanding and people-focused leadership into my first full-time Product role.","I’d like to understand how to make Product my first full-time role."],
   ["Would you have 15 minutes to share what helped you break into product?","If you have 15 minutes, what would you build or learn first to make that move?","Would you have 15 minutes to discuss how technical experience can translate into a first product role?"],
  )),
  ...variants("project-operations","Project, program, and operations",set(
@@ -43,13 +43,13 @@ export const DRAFT_TEMPLATES:DraftTemplate[]=[
  )),
  ...variants("finance","Finance",set(
   ["Quick question about financial data work","Question about analytics at {{company}}","Data and technology in finance"],
-  ["compact-data-context","compact-business-context","compact-systems-context"],
+  ["compact-data-context","compact-business-context","compact-technical-context"],
   ["I’m increasingly interested in how data informs investment and commercial decisions, and I’d like to understand how to enter finance.","I’m exploring finance as a next step and trying to understand where a technical background is useful in a first role.","I’d like to move toward financial analysis and understand which experience would help me make that transition."],
   [quick,perspective,approach],
  )),
  ...variants("commodities-energy","Commodities and energy",set(
   ["Quick question about energy analytics","Question about data at {{company}}","Data work in commodities and energy"],
-  ["compact-data-context","compact-business-context","compact-systems-context"],
+  ["compact-data-context","compact-business-context","compact-technical-context"],
   ["I’m increasingly interested in how data shapes market and operating decisions, and I’d like to find a way into energy or commodities.","I’m exploring commodities and energy because I’d like to connect technical work with how markets and physical operations interact.","I’d like to move from building data systems into a commercial role and understand how to get started."],
   [quick,perspective,approach],
  )),

@@ -15,6 +15,8 @@ npm run dev
 
 Open [http://localhost:3000/today](http://localhost:3000/today). The default campaign timezone is `America/New_York`.
 
+Use the secondary **Resumes** workspace at [http://localhost:3000/resumes](http://localhost:3000/resumes) to upload private PDF resume versions. Files are retained byte-for-byte under gitignored `data/resumes/` by default, capped at 10 MB, and selected explicitly during draft review. Set `NETWORKPILOT_RESUME_STORAGE_PATH` only when a different private local storage root is required.
+
 ### Local production workflow
 
 Keep provider configuration in the gitignored `.env.local` file and OAuth tokens in macOS Keychain; never place secrets in source files. After pulling an update:
