@@ -1,1 +1,1 @@
-export default function Loading() { return <main className="state-page"><span className="loading-mark" aria-hidden="true"/><h1>Loading NetworkPilot</h1><p>Preparing your outreach workspace.</p></main>; }
+export default function Loading() { return <main className="workspace-loading" role="status" aria-live="polite"><span className="loading-mark" aria-hidden="true"/><span>Loading workspace…</span><div className="loading-lines" aria-hidden="true"><i/><i/><i/></div></main>; }
