@@ -30,6 +30,14 @@ afterEach(()=>{repository.close();vi.useRealTimers();vi.unstubAllEnvs();vi.unstu
 const reviews=()=>loadQueueReviews(repository,at);
 const history=()=>JSON.stringify(["gmail_draft_operations","manual_outreach_records","manual_outreach_audit","outreach_events","drafts"].map(table=>repository.native.prepare(`SELECT * FROM ${table}`).all()));
 describe("persisted offline queue under exhausted Apollo budget",()=>{
+  it("projects distinct stable fixture aliases while keeping private records useful as first name plus last initial",()=>{
+    const first=loadDailyCommandCenter(at).reserve.map((candidate)=>candidate.recipient);
+    const second=loadDailyCommandCenter(at).reserve.map((candidate)=>candidate.recipient);
+    expect(second).toEqual(first);expect(new Set(first).size).toBe(first.length);expect(first).toEqual(expect.arrayContaining(["Mara E.","Theo M.","Inez P."]));expect(first.join(" ")).not.toMatch(/Fictional|\*\*\*/);
+    const candidate=repository.listImportedCandidates()[0]!;candidate.source.providerRecordId="private-provider-record";candidate.source.person={firstName:"Ada",lastName:"Lovelace"};candidate.source.currentOrganization.domain="private.example.com";candidate.source.email.address="unrelated-address@example.test";
+    repository.native.prepare("UPDATE imported_candidates SET normalized_snapshot_json=? WHERE id=?").run(JSON.stringify(candidate),candidate.id);
+    expect(loadDailyCommandCenter(at).reserve.find((row)=>row.id===candidate.id)?.recipient).toBe("Ada L.");
+  });
   it("does not retrofit intent or new catalog copy onto historical immutable approvals",()=>{
     const review=runNextDraftBatchFromReserve(1,now).draftReviews![0]!;
     const snapshot={...approvedSnapshot(review,at),outreachIntent:undefined,templateCatalogVersion:"catalog-v8-dylan-outreach-method-v3",subject:"Historical approved subject",body:"Historical operator-approved content, unchanged."};

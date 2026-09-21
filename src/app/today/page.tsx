@@ -21,7 +21,6 @@ export default async function TodayPage(){
   const gmailReady=workflow.gmail.readiness.available,apolloExhausted=data.safety.apolloExposure>=20,lowSupply=data.pipeline.available<10;
   const gmailReason=workflow.gmail.readiness.reason?humanDraftError(workflow.gmail.readiness.reason):"Gmail is ready.";
   const date=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"long",month:"long",day:"numeric"}).format(new Date());
-  const hasWork=uncertain>0||reviewable>0||relationships>0||!gmailReady||lowSupply;
   const health=`${gmailReady?"Gmail ready":"Gmail needs attention"} · ${apolloExhausted?"Candidate refresh tomorrow":`${Math.max(0,20-data.safety.apolloExposure)} refresh credits available`}`;
   const tasks:Array<{href:string;title:string;detail:string;count:string|number;attention?:boolean}>=[];
   if(uncertain>0)tasks.push({href:"/drafts",title:`Resolve ${uncertain} uncertain ${uncertain===1?"send":"sends"}`,detail:"Confirm the existing result before any retry.",count:uncertain});
@@ -29,9 +28,10 @@ export default async function TodayPage(){
   if(drafts.length>0)tasks.push({href:"/drafts",title:reviewable>0?`Review ${reviewable} prepared ${reviewable===1?"draft":"drafts"}`:`Continue ${drafts.length} active ${drafts.length===1?"draft":"drafts"}`,detail:"The next message is ready with intent, evidence, and safety checks.",count:drafts.length});
   if(relationships>0)tasks.push({href:"/sent",title:`${relationships} ${relationships===1?"relationship needs":"relationships need"} attention`,detail:"Review replies and follow-up decisions in Sent.",count:relationships});
   tasks.push({href:"/candidates",title:lowSupply?"Candidate supply needs attention":"Candidate supply is healthy",detail:`${data.pipeline.available} qualified candidates are available for future outreach.`,count:data.pipeline.available,attention:lowSupply});
+  const hasWork=tasks.length>0;
   return <NetworkCommandShell current="today" status={health}>
     <div className={styles.today}>
-      <section className={styles.now}>
+      <section className={styles.now} data-task-count={Math.min(tasks.length,3)}>
         <header><p>{date}</p><h1>{hasWork?"Now":"All caught up"}</h1><span>{hasWork?"Prepared work, ordered by consequence.":"No prepared work needs attention."}</span></header>
         <div className={styles.tasks}>
           {tasks.map((task,index)=><Link key={`${task.href}-${task.title}`} href={task.href} className={task.attention?styles.attention:undefined}><i>{String(index+1).padStart(2,"0")}</i><span><strong>{task.title}</strong><small>{task.detail}</small></span><b>{task.count}</b></Link>)}
