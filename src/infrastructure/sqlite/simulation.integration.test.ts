@@ -135,7 +135,7 @@ describe("SQLite fictional simulation", () => {
 
   it("rejects out-of-policy target bounds before randomness or writes",()=>{const repo=repository();seedFictionalData(repo);repo.setSetting("minimumDailyTarget","14",instant("2026-09-07"));let calls=0;expect(()=>runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>{calls+=1;return 0;}})).toThrow("15–20");expect(calls).toBe(0);expect(repo.recentRuns(1)).toEqual([]);repo.close();});
 
-  it("labels strategy aliases as non-employment exercises in the dashboard source",()=>{const source=readFileSync(join(process.cwd(),"src/app/page.tsx"),"utf8");expect(source).toContain("not an employment claim");expect(source).toContain("fictionalEmployer.name");expect(source).toContain("strategyCompanyMatch");expect(source).not.toMatch(/works (for|at)\s*\{?d\.strategyCompanyMatch/);});
+  it("labels strategy aliases as non-employment exercises in the System surface",()=>{const source=readFileSync(join(process.cwd(),"src/app/page.tsx"),"utf8");expect(source).toContain("not an employment claim");expect(source).not.toMatch(/works (for|at)\s*\{?d\.strategyCompanyMatch/);});
 
   it("supports cancellation without contact-impacting history",()=>{const repo=repository();seedFictionalData(repo);const run=runDailySimulation(repo,{instant:instant("2026-09-07"),random:()=>0});repo.updateCampaignPlanStatus(run.id,"cancelled",instant("2026-09-07"));expect(repo.findCampaignPlan(run.id)?.status).toBe("cancelled");expect(repo.listOutreachEvents()).toHaveLength(0);expect(()=>repo.updateCampaignPlanStatus(run.id,"planned",new Date())).toThrow("Invalid campaign plan transition");repo.close();});
 

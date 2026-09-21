@@ -15,5 +15,5 @@ export function activeDrafts(reviews:readonly CommandCenterDraftReview[],outreac
   });
 }
 
-export const sentOutreach=(entries:readonly ManualDraftOperatorEntry[])=>entries.filter((entry)=>entry.manualSendConfirmed);
+export const sentOutreach=<T extends ManualDraftOperatorEntry>(entries:readonly T[])=>entries.filter((entry):entry is T=>entry.manualSendConfirmed);
 export const humanSelectionReason=(reason:string)=>({"selected-by-targeting-rank":"Strong match for your target roles, experience, and company criteria.","eligible-below-targeting-cutoff":"Qualified for outreach and ready for review.","duplicate-company-in-plan":"Relevant candidate held for company spacing."}[reason]??reason.replaceAll("-"," "));
