@@ -40,6 +40,32 @@ function stateAction(state: DraftState) {
   return { label: "Resolve send status", key: "U" };
 }
 
+function stateGlyph(state: DraftState) {
+  if (state === "needs-review") return "○";
+  if (state === "approved") return "✓";
+  if (state === "gmail-created") return "▣";
+  return "?";
+}
+
+const resumeOptions = [
+  { value: "None", label: "None", meta: "No attachment" },
+  { value: "General Resume · v3", label: "General Resume", meta: "General · v3" },
+  { value: "Product Resume · v4", label: "Product Resume", meta: "Product · v4" },
+  { value: "Data & AI Resume · v6", label: "Data & AI Resume", meta: "Data + AI · v6" },
+  { value: "Software Resume · v5", label: "Software Resume", meta: "Software · v5" },
+] as const;
+
+function candidateCue(candidate: CandidateFixture) {
+  if (candidate.track === "Recruiter") return `Internal ${candidate.lane.toLowerCase()} perspective`;
+  if (candidate.lane === "Product") return "Technical path into product judgment";
+  if (candidate.lane === "Data") return "Data systems and decision infrastructure";
+  if (candidate.lane === "AI / ML") return "Applied AI reliability and platform work";
+  if (candidate.lane === "Software") return "Developer platforms and internal users";
+  if (candidate.lane === "Finance") return "Technology decisions in investment work";
+  if (candidate.lane === "Energy / commodities") return "Market decisions shaped by analytics";
+  return "Cross-functional technical operating experience";
+}
+
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return target.matches("input, textarea, select, [contenteditable='true']");
@@ -365,6 +391,7 @@ function TodayView({ scenario, drafts, sentCount, onNavigate }: { scenario: Scen
     ...(providerIssue ? [{ id: "provider", title: scenario === "gmail-reconnect" ? "Reconnect Gmail to continue" : "Apollo budget resets tomorrow", detail: scenario === "gmail-reconnect" ? "Draft review remains available; external draft creation is blocked." : "Drafts and outreach remain available. Candidate refresh is paused.", count: 1 }] : []),
   ];
   const active = tasks.find((task) => task.id === selectedTask) ?? tasks[0];
+  const focusPerson = drafts.find((draft) => draft.state === "needs-review") ?? drafts[0];
   return (
     <div className={styles.todayView}>
       <section className={styles.nowPlane}>
@@ -374,7 +401,7 @@ function TodayView({ scenario, drafts, sentCount, onNavigate }: { scenario: Scen
             {tasks.map((task, index) => <button key={task.id} className={selectedTask === task.id ? styles.selectedTask : ""} onClick={() => setSelectedTask(task.id)}><i>{String(index + 1).padStart(2, "0")}</i><span><strong>{task.title}</strong><small>{task.detail}</small></span><b>{task.count}</b></button>)}
           </div>
         )}
-        {active ? <div className={styles.taskPreview}><div><small>Selected work</small><strong>{active.title}</strong><p>{active.detail}</p></div>{active.action ? <button onClick={active.action}>Open workspace <span>↗</span></button> : <button disabled>Outside Phase B</button>}</div> : null}
+        {active ? <div className={styles.taskPreview}><div><small>Selected work</small><strong>{active.title}</strong><p>{active.detail}</p>{active.id === "drafts" && focusPerson ? <div className={styles.taskPreviewIdentity}><span>{focusPerson.person}</span><em>{focusPerson.role}</em><b>{focusPerson.company}</b></div> : null}</div>{active.action ? <button onClick={active.action}>Open workspace <span>↗</span></button> : <button disabled>Outside Phase B</button>}</div> : null}
       </section>
       <aside className={styles.liveState}>
         <header><h2>Live state</h2><span>Fictional prototype</span></header>
@@ -404,6 +431,7 @@ function DraftsView(props: DraftsViewProps) {
   const blocked = selected?.state === "approved" && scenario === "gmail-reconnect";
   if (!selected) return <div className={styles.fullEmpty}><EmptyState title="No drafts are waiting" body={scenario === "no-reserve" ? "The reserve is empty. Refresh Candidates is the correct next action." : "The queue is clear. Add drafts from the fictional reserve when you are ready."} action={scenario === "no-reserve" ? "Open Candidates" : "Add drafts"} /></div>;
   const action = stateAction(selected.state);
+  const sealed = selected.state !== "needs-review";
   return (
     <div className={`${styles.draftsView} ${mobileReview ? styles.mobileReviewOpen : ""}`}>
       <header className={styles.localBar}>
@@ -418,27 +446,28 @@ function DraftsView(props: DraftsViewProps) {
         {(["needs-review", "approved", "gmail-created", "uncertain"] as DraftState[]).map((state) => {
           const group = drafts.filter((draft) => draft.state === state);
           if (!group.length) return null;
-          return <section className={styles.queueGroup} key={state}><h2>{stateLabels[state]} <span>{group.length}</span></h2>{group.map((draft, index) => <button key={draft.id} onClick={() => props.onSelect(draft.id)} className={`${styles.queueRow} ${selectedId === draft.id ? styles.selectedRow : ""} ${forceHover && state === "needs-review" && index === 1 ? styles.forcedHover : ""} ${leavingId === draft.id ? styles.leavingRow : ""} ${replacingId === draft.id ? styles.replacingRow : ""}`} aria-current={selectedId === draft.id ? "true" : undefined}><span className={styles.rowIdentity}><strong>{draft.person}</strong><small>{draft.company}</small></span><span className={styles.rowRole}>{draft.role}</span><em>{stateLabels[draft.state]}</em></button>)}</section>;
+          return <section className={styles.queueGroup} key={state}><h2><span>{stateGlyph(state)} {stateLabels[state]}</span><b>{group.length}</b></h2>{group.map((draft, index) => <button key={draft.id} data-state={draft.state} onClick={() => props.onSelect(draft.id)} className={`${styles.queueRow} ${selectedId === draft.id ? styles.selectedRow : ""} ${forceHover && state === "needs-review" && index === 1 ? styles.forcedHover : ""} ${leavingId === draft.id ? styles.leavingRow : ""} ${replacingId === draft.id ? styles.replacingRow : ""}`} aria-current={selectedId === draft.id ? "true" : undefined}><span className={styles.rowIdentity}><strong>{draft.person}</strong><small>{draft.company}</small></span><span className={styles.rowRole}>{draft.role}</span><em><i>{stateGlyph(draft.state)}</i>{stateLabels[draft.state]}</em></button>)}</section>;
         })}
       </div>
-      <div className={styles.messagePlane}>
+      <div className={styles.messagePlane} data-state={selected.state}>
         <button className={styles.mobileBack} onClick={props.onBack}>← Queue <span>{drafts.findIndex((draft) => draft.id === selected.id) + 1} of {drafts.length}</span></button>
-        <div className={styles.planeLabel}><span>Message</span><em>Draft v{selected.version}</em></div>
+        <div className={styles.planeLabel}><span>Message</span><em>{sealed ? `${stateGlyph(selected.state)} ${stateLabels[selected.state]} · ` : ""}v{selected.version}</em></div>
         <div className={styles.messageHeader}>
-          <div><small>To</small><strong>{selected.person}</strong><span>{selected.company} · {selected.role}</span></div>
-          <label><span>Attachment</span><select value={selected.resume} onChange={(event) => props.onUpdate(selected.id, { resume: event.target.value })}><option>None</option><option>General Resume · v3</option><option>Product Resume · v4</option><option>Data & AI Resume · v6</option><option>Software Resume · v5</option></select></label>
+          <div className={styles.recipientIdentity}><small>To</small><strong>{selected.person}</strong><span>{selected.role}</span><b>{selected.company}</b></div>
+          <ResumeSelector value={selected.resume} onChange={(resume) => props.onUpdate(selected.id, { resume })} disabled={sealed} />
         </div>
-        <label className={styles.subjectField}><span>Subject</span><input value={selected.subject} onChange={(event) => props.onUpdate(selected.id, { subject: event.target.value })} /></label>
-        <label className={styles.bodyField}><span className={styles.srOnly}>Message body</span><textarea ref={editorRef} value={selected.body} onChange={(event) => props.onUpdate(selected.id, { body: event.target.value })} /></label>
+        {sealed ? <div className={styles.sealLine}><span>{stateGlyph(selected.state)} Approved snapshot</span><small>{selected.state === "uncertain" ? "Content locked while send status is resolved" : `Content locked at version ${selected.version}`}</small></div> : null}
+        <label className={styles.subjectField} data-sealed={sealed ? "true" : undefined}><span>Subject</span><input value={selected.subject} readOnly={sealed} onChange={(event) => props.onUpdate(selected.id, { subject: event.target.value })} /></label>
+        <label className={styles.bodyField} data-sealed={sealed ? "true" : undefined}><span className={styles.srOnly}>Message body</span><textarea ref={editorRef} value={selected.body} readOnly={sealed} onChange={(event) => props.onUpdate(selected.id, { body: event.target.value })} /></label>
         <details className={styles.mobileEvidence}><summary>Context and evidence</summary><InspectorContent draft={selected} scenario={scenario} /></details>
       </div>
       <aside className={styles.inspectorPlane}>
         <div className={styles.planeLabel}><span>Inspector</span><em>Secondary</em></div>
         <InspectorContent draft={selected} scenario={scenario} />
       </aside>
-      <footer className={styles.actionDock}>
+      <footer className={styles.actionDock} data-state={selected.state}>
         <div><button onClick={props.onSkip}>Skip <kbd>X</kbd></button><button onClick={props.onReplace}>Replace <kbd>R</kbd></button></div>
-        <span>{drafts.findIndex((draft) => draft.id === selected.id) + 1} of {drafts.length} selected</span>
+        <span className={styles.dockProgress}><i>{stateGlyph(selected.state)}</i><b>{stateLabels[selected.state]}</b><small>{drafts.findIndex((draft) => draft.id === selected.id) + 1} of {drafts.length}</small></span>
         <div className={styles.primaryWrap}>{blocked ? <small>Gmail draft creation is unavailable until Gmail is reconnected.</small> : null}<button className={styles.primaryAction} onClick={props.onPrimary} disabled={Boolean(pending) || blocked}>{pending ?? action.label} <kbd>{action.key}</kbd></button>{blocked ? <button className={styles.repairButton}>Reconnect Gmail</button> : null}</div>
       </footer>
     </div>
@@ -453,6 +482,14 @@ function InspectorContent({ draft, scenario }: { draft: DraftFixture; scenario: 
     <section className={draft.state === "uncertain" ? styles.cautionBlock : styles.safeBlock}><h3>Safety state</h3><strong>{draft.state === "uncertain" ? "Send status uncertain" : scenario === "gmail-reconnect" && draft.state === "approved" ? "Gmail action blocked" : "Eligible at last check"}</strong><p>{draft.state === "uncertain" ? "Do not retry until the existing operation is reconciled." : "Mutable gates are rechecked before externalization."}</p></section>
     <section className={styles.versionBlock}><span>Draft version</span><b>v{draft.version}</b><small>{draft.state === "approved" ? "Approved content is immutable." : "Fictional prototype content."}</small></section>
   </div>;
+}
+
+function ResumeSelector({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled: boolean }) {
+  const selected = resumeOptions.find((option) => option.value === value) ?? resumeOptions[0];
+  return <details className={styles.resumeSelector} data-disabled={disabled ? "true" : undefined}>
+    <summary aria-label={`Attachment: ${selected.label}`}><span><small>Attachment</small><strong>{selected.label}</strong><em>{selected.meta}</em></span><b aria-hidden="true">⌄</b></summary>
+    {!disabled ? <div>{resumeOptions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === value} onClick={(event) => { onChange(option.value); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span>{option.label}</span><small>{option.meta}</small></button>)}</div> : null}
+  </details>;
 }
 
 type CandidateProps = {
@@ -471,17 +508,17 @@ function CandidatesView(props: CandidateProps) {
       <div className={styles.filterSummary}><span>{props.filterSummary}</span>{!props.filterSummary.startsWith("All") || props.search ? <button onClick={props.onClear}>Clear</button> : null}</div>
       {props.filterOpen ? <div className={styles.filterSheet}><header><strong>Filter candidates</strong><button onClick={() => props.onFilterOpen(false)}>Done</button></header><fieldset><legend>Track</legend>{(["All", "Professional", "Recruiter"] as const).map((track) => <label key={track}><input type="radio" name="track" checked={props.track === track} onChange={() => props.onTrack(track)} />{track}</label>)}</fieldset><fieldset><legend>Role lanes</legend>{["Product", "Data", "Software", "recruiting"].map((lane) => <label key={lane}><input type="checkbox" checked={props.lanes.includes(lane)} onChange={() => toggleLane(lane)} />{lane === "recruiting" ? "Recruiting" : lane}</label>)}</fieldset><label className={styles.regionCheck}><input type="checkbox" checked={props.northeastOnly} onChange={(event) => props.onNortheast(event.target.checked)} />Northeast only</label><button className={styles.clearFilters} onClick={props.onClear}>Clear all filters</button></div> : null}
     </header>
-    {props.candidates.length === 0 ? <EmptyState title="No candidates match this view" body="The current filters are still visible. Clear them to restore the fictional opportunity pool." action="Clear filters" onAction={props.onClear} /> : <div className={styles.candidateWork}><div className={styles.candidateList}><div className={styles.candidateColumns}><span>Person</span><span>Company</span><span>Role</span><span>Lane</span><span>Location</span><span>Availability</span></div>{props.candidates.map((candidate) => <button key={candidate.id} className={`${styles.candidateRow} ${props.selectedId === candidate.id ? styles.selectedCandidate : ""}`} onClick={() => props.onSelect(candidate.id)}><span className={styles.candidateIdentity}><strong>{candidate.person}</strong><small>{candidate.track}</small></span><span>{candidate.company}</span><span>{candidate.role}</span><span>{candidate.lane}</span><span>{candidate.location}</span><em data-suppressed={candidate.availability === "Suppressed" ? "true" : undefined}>{candidate.availability}</em></button>)}</div>{props.selected ? <aside className={`${styles.candidateInspector} ${props.mobileDetail ? styles.candidateDetailOpen : ""}`}><button className={styles.candidateClose} onClick={props.onCloseDetail}>Close</button><small>Selected candidate</small><h2>{props.selected.person}</h2><p className={styles.candidateRole}>{props.selected.role}<br />{props.selected.company}</p><dl><div><dt>Track</dt><dd>{props.selected.track}</dd></div><div><dt>Location</dt><dd>{props.selected.location}</dd></div><div><dt>Availability</dt><dd>{props.selected.availability}</dd></div></dl><section><h3>Why this person</h3><p>{props.selected.relevance}</p></section><section><h3>Company evidence</h3><p>{props.selected.companyEvidence}</p></section><section><h3>History</h3><p>{props.selected.history}</p></section><section className={props.selected.availability === "Suppressed" ? styles.suppressedBlock : styles.eligibleBlock}><h3>Planning eligibility</h3><strong>{props.selected.availability === "Suppressed" ? "Permanently excluded" : "Eligible for a future plan"}</strong><p>{props.selected.availability === "Suppressed" ? "Ordinary review cannot override this suppression." : "Company cooldown and one-per-company rules still apply at selection time."}</p></section></aside> : null}</div>}
+    {props.candidates.length === 0 ? <EmptyState title="No candidates match this view" body="The current filters are still visible. Clear them to restore the fictional opportunity pool." action="Clear filters" onAction={props.onClear} /> : <div className={styles.candidateWork}><div className={styles.candidateList}><div className={styles.candidateColumns}><span>Person</span><span>Current work</span><span>Lane</span><span>Why now</span><span>Status</span></div>{props.candidates.map((candidate) => <button key={candidate.id} className={`${styles.candidateRow} ${props.selectedId === candidate.id ? styles.selectedCandidate : ""}`} onClick={() => props.onSelect(candidate.id)}><span className={styles.candidateIdentity}><strong>{candidate.person}</strong><small>{candidate.track}</small></span><span className={styles.candidateCurrent}><strong>{candidate.role}</strong><small>{candidate.company}</small></span><span className={styles.candidateLane}>{candidate.lane}</span><span className={styles.candidateCue}>{candidateCue(candidate)}</span><em data-suppressed={candidate.availability === "Suppressed" ? "true" : undefined}><i aria-hidden="true">{candidate.availability === "Suppressed" ? "×" : "·"}</i>{candidate.availability}</em></button>)}</div>{props.selected ? <aside className={`${styles.candidateInspector} ${props.mobileDetail ? styles.candidateDetailOpen : ""}`}><button className={styles.candidateClose} onClick={props.onCloseDetail}>Close</button><small>Selected candidate</small><h2>{props.selected.person}</h2><p className={styles.candidateRole}>{props.selected.role}</p><p className={styles.candidateCompany}>{props.selected.company}</p><dl><div><dt>Track</dt><dd>{props.selected.track}</dd></div><div><dt>Location</dt><dd>{props.selected.location}</dd></div><div><dt>Availability</dt><dd>{props.selected.availability}</dd></div></dl><section><h3>Why this person</h3><p>{props.selected.relevance}</p></section><section><h3>Company evidence</h3><p>{props.selected.companyEvidence}</p></section><section><h3>History</h3><p>{props.selected.history}</p></section><section className={props.selected.availability === "Suppressed" ? styles.suppressedBlock : styles.eligibleBlock}><h3>Planning eligibility</h3><strong>{props.selected.availability === "Suppressed" ? "Permanently excluded" : "Eligible for a future plan"}</strong><p>{props.selected.availability === "Suppressed" ? "Ordinary review cannot override this suppression." : "Company cooldown and one-per-company rules still apply at selection time."}</p></section></aside> : null}</div>}
   </div>;
 }
 
 function CommandPalette({ view, selected, onClose, onNavigate, onApprove, onSkip, onReplace, onAdd, onFilter, onSearch }: { view: View; selected: DraftFixture | null; onClose: () => void; onNavigate: (view: View) => void; onApprove: () => void; onSkip: () => void; onReplace: () => void; onAdd: () => void; onFilter: () => void; onSearch: () => void }) {
   const [query, setQuery] = useState("");
   const items = [
-    { group: "Navigation", label: "Go to Today", hint: "G T", action: () => onNavigate("today") },
-    { group: "Navigation", label: "Go to Drafts", hint: "G D", action: () => onNavigate("drafts") },
+    { group: "Navigation", label: "Open Today", hint: "G T", action: () => onNavigate("today"), current: view === "today" },
+    { group: "Navigation", label: "Open Drafts", hint: "G D", action: () => onNavigate("drafts"), current: view === "drafts" },
     { group: "Navigation", label: "Go to Sent", hint: "", disabled: "Sent is outside this Phase B prototype." },
-    { group: "Navigation", label: "Go to Candidates", hint: "G C", action: () => onNavigate("candidates") },
+    { group: "Navigation", label: "Open Candidates", hint: "G C", action: () => onNavigate("candidates"), current: view === "candidates" },
     { group: "Context", label: "Approve selected draft", hint: "A", action: onApprove, disabled: view !== "drafts" || selected?.state !== "needs-review" ? "Only a draft that needs review can be approved." : undefined },
     { group: "Context", label: "Skip selected draft", hint: "X", action: onSkip, disabled: view !== "drafts" || !selected ? "Select a draft first." : undefined },
     { group: "Context", label: "Replace selected person", hint: "R", action: onReplace, disabled: view !== "drafts" || !selected ? "Select a draft first." : undefined },
@@ -489,11 +526,11 @@ function CommandPalette({ view, selected, onClose, onNavigate, onApprove, onSkip
     { group: "Context", label: "Filter current view", hint: "F", action: onFilter, disabled: view !== "candidates" ? "Filters are available in Candidates." : undefined },
     { group: "Context", label: "Search current view", hint: "/", action: onSearch, disabled: view !== "candidates" ? "Search is available in Candidates." : undefined },
   ].filter((item) => item.label.toLowerCase().includes(query.toLowerCase()));
-  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className={styles.commandPalette} role="dialog" aria-modal="true" aria-label="Command palette"><label><span className={styles.srOnly}>Search commands</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Type a command or destination…" /><kbd>Esc</kbd></label><div>{["Navigation", "Context"].map((group) => <section key={group}><h2>{group}</h2>{items.filter((item) => item.group === group).map((item) => <button key={item.label} disabled={Boolean(item.disabled)} onClick={() => { item.action?.(); onClose(); }}><span><strong>{item.label}</strong>{item.disabled ? <small>{item.disabled}</small> : null}</span>{item.hint ? <kbd>{item.hint}</kbd> : null}</button>)}</section>)}</div><footer><span>↑↓ Navigate</span><span>↵ Run</span><span>Esc Close</span></footer></section></div>;
+  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className={styles.commandPalette} role="dialog" aria-modal="true" aria-label="Command palette"><label><span className={styles.srOnly}>Search commands</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a place or run the next action…" /><kbd>Esc</kbd></label><div>{["Navigation", "Context"].map((group) => <section key={group}><h2>{group === "Context" ? "Selected work" : group}</h2>{items.filter((item) => item.group === group).map((item) => <button key={item.label} className={item.current ? styles.currentCommand : ""} disabled={Boolean(item.disabled)} onClick={() => { item.action?.(); onClose(); }}><span><strong>{item.label}</strong>{item.current ? <small>Current workspace</small> : item.disabled ? <small>{item.disabled}</small> : null}</span>{item.hint ? <kbd>{item.hint}</kbd> : null}</button>)}</section>)}</div><footer><span>↑↓ choose</span><span>↵ run</span><span>Esc close</span></footer></section></div>;
 }
 
 function SendConfirmation({ selected, onCancel, onConfirm }: { selected: DraftFixture | null; onCancel: () => void; onConfirm: () => void }) {
-  return <div className={styles.modalBackdrop}><section className={styles.sendDialog} role="dialog" aria-modal="true" aria-labelledby="send-title"><small>Simulation only</small><h2 id="send-title">Send the approved email?</h2><p>This prototype will simulate a successful lifecycle transfer for <strong>{selected?.person}</strong>. It cannot construct a Gmail provider or send anything.</p><dl><div><dt>Approved version</dt><dd>v{selected?.version}</dd></div><div><dt>Attachment</dt><dd>{selected?.resume}</dd></div><div><dt>Provider calls</dt><dd>Zero</dd></div></dl><div><button onClick={onCancel}>Cancel</button><button onClick={onConfirm}>Simulate send</button></div></section></div>;
+  return <div className={styles.modalBackdrop}><section className={styles.sendDialog} role="dialog" aria-modal="true" aria-labelledby="send-title"><small>Simulation only · external consequence</small><h2 id="send-title">Send this approved email?</h2><div className={styles.sendRecipient}><span>{selected?.person}</span><strong>{selected?.company}</strong><p>{selected?.subject}</p></div><p className={styles.sendConsequence}>In production, this action would place the approved message in the recipient’s inbox. It cannot be recalled from NetworkPilot.</p><dl><div><dt>Approved version</dt><dd>v{selected?.version}</dd></div><div><dt>Attachment</dt><dd>{selected?.resume}</dd></div><div><dt>This prototype</dt><dd>Zero provider calls</dd></div></dl><div><button onClick={onCancel}>Return to review</button><button onClick={onConfirm}>Simulate send</button></div></section></div>;
 }
 
 function EmptyState({ title, body, action, onAction }: { title: string; body: string; action: string; onAction?: () => void }) {
