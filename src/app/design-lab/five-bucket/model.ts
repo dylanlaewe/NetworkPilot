@@ -80,6 +80,9 @@ export function initialState(): State {
   const sent = fixture("ceos", 20, { stage: "sent", name: "Harper Stone" });
   sent.history = [{ ...snapshot(sent, INITIAL_RESUMES), outcome: "sent", at: "2026-09-12 · fictional" }];
   const bounced = people.find(p => p.id === "recruiters-11")!;
+  // A historical recruiter message that claims an attachment must freeze that
+  // attachment as part of the same immutable fictional record.
+  bounced.attachment = "general-v2";
   bounced.history = [{ ...snapshot(bounced, INITIAL_RESUMES), outcome: "bounced", at: "2026-09-08 · fictional" }];
   const uncertain = fixture("peers", 30, { stage: "uncertain", name: "Drew Ash", block: "Uncertain send: verification required before any retry" });
   uncertain.approved = snapshot(uncertain, INITIAL_RESUMES);

@@ -48,3 +48,17 @@ During the 650ms simulated recruiter search, the status originally said `5 share
 - `npx eslint src/app/design-lab/five-bucket --max-warnings=0`: passed after the fixes.
 - No real contact or resume was opened, no production route at port 3000 was visited, and no real send/provider control was invoked.
 - Model/configuration details were not observable through this QA workflow, so none are asserted.
+
+## Acceptance-correction addendum — 2026-09-23
+
+**Disposition: pass, with a live-browser evidence limitation.** I reviewed the uncommitted corrections independently, without changing application source or accessing providers or production data.
+
+| Check | Disposition and evidence |
+| --- | --- |
+| Lifecycle actions and focus | Pass by source and refreshed visual evidence. The review card keeps its action footer outside the independently scrollable message content. The 1440×900 recruiter screenshot shows Skip, Replace, Don't show again, and Review simulated approval in view; the 390×844 screenshots show the same footer both before and after scrolling the message. Focus restoration and modal focus handling remain in the reviewed source. There is no new 1440×900 after-scroll screenshot; its behavior is source-checked. |
+| Fictional Sent consistency | Pass. Jamie North's synthetic Sent fixture now freezes `General Resume · v2`, consistent with its attached-resume claim. Focused tests also cover a reviewed no-attachment copy correction and immutable attachment evidence after later library changes. The refreshed 1440×900 Sent screenshot shows the matching attachment. |
+| Canonical copy | Pass. `templates.ts` is unchanged; Manager, Executive, and CEO/president subjects and bodies retain the approved exact wording, with existing equality tests for all three. |
+| Production plan | Pass as an implementation plan, not a claim that production is already migrated. Its eight sections each identify affected modules, interfaces, migration, legacy compatibility, acceptance tests, and rollout/rollback. Referenced repository paths were checked. It explicitly covers the current `executive recruiter` exclusion, `c-suite-rejected`/selective-VP gates, and `classifySpecificRole`'s `prohibited-target-seniority` gate and planning consumer, while keeping target-role eligibility distinct from relationship-bucket classification. |
+| Historical compatibility | Pass by source/tests and plan. Current Sent snapshots remain immutable after correction, attachment-library changes, or bucket changes; the plan specifies nullable additive storage, legacy reads without backfill, and rollback compatibility. |
+
+Focused validation: `npm test -- src/app/design-lab/five-bucket/model.test.ts` **22/22 passed**; `npm run typecheck`, scoped ESLint, and `git diff --check` passed. This addendum did not repeat live browser interaction: the in-app browser surface was unavailable, and native-browser accessibility/screen-recording permission remained pending. The refreshed screenshots and source/tests therefore support, but do not replace, a fresh independent interactive scroll/focus retest. The coordinator-requested QA worker configuration recorded in `07_AGENT_AND_MODEL_USAGE.md` is `gpt-6-sol` with high reasoning; this worker interface exposed no independent runtime model identity, token usage, or cost data, so none is inferred.

@@ -167,6 +167,12 @@ describe("isolated five-bucket workflow", () => {
     expect(approved.people[0].approved).toEqual(frozen);
     expect(approved.people[0].approved?.attachment?.active).toBe(true);
   });
+  it("keeps the accepted fictional Sent attachment claim and frozen evidence coherent", () => {
+    const sentRecruiter = initialState().people.find(p => p.id === "recruiters-11")!;
+    expect(sentRecruiter.history).toHaveLength(1);
+    expect(sentRecruiter.history[0].body).toContain("I've attached my resume.");
+    expect(sentRecruiter.history[0].attachment).toMatchObject({ id: "general-v2", label: "General Resume" });
+  });
   it("requires explicit attachment-copy review and validates edited copy", () => {
     const s = initialState();
     const p = { ...s.people[0], attachment: null };
@@ -175,6 +181,19 @@ describe("isolated five-bucket workflow", () => {
     expect(validation(p, s.resumes)).toEqual([]);
     expect(validation({ ...p, subject: "Header\r\nBcc: real@example.com" }, s.resumes).length).toBeGreaterThan(0);
     expect(validation({ ...p, body: p.body + "—" }, s.resumes)).toContain("Remove em dashes before approval.");
+  });
+  it("freezes a reviewed recruiter message without an attachment after explicit copy correction", () => {
+    const state = initialState();
+    const recruiter = state.people.find(p => p.id === "recruiters-0")!;
+    recruiter.attachment = null;
+    recruiter.body = recruiter.body.replace(" I've attached my resume.", "");
+    recruiter.userEdited = true;
+    const approved = approve(state, recruiter.id);
+    const created = lifecycle(approved, recruiter.id, "create");
+    const sent = lifecycle(created, recruiter.id, "send");
+    const history = sent.people.find(p => p.id === recruiter.id)!.history[0];
+    expect(history.attachment).toBeNull();
+    expect(history.body).not.toContain("attached my resume");
   });
   it("requires approval then creation then send, freezing content and transferring once", () => {
     const s = initialState();
@@ -188,6 +207,16 @@ describe("isolated five-bucket workflow", () => {
     expect(sent.people[0].history[0].body).toBe(s.people[0].body);
     expect(sent.people[0].history[0].attachment?.id).toBe("general-v2");
     expect(lifecycle(sent, "recruiters-0", "send")).toBe(sent);
+  });
+  it("does not rewrite sent attachment evidence when the resume library later changes", () => {
+    const approved = approve(initialState(), "recruiters-0");
+    const sent = lifecycle(lifecycle(approved, "recruiters-0", "create"), "recruiters-0", "send");
+    const frozen = structuredClone(sent.people[0].history[0]);
+    sent.resumes[0].active = false;
+    sent.resumes[0].label = "Renamed after send";
+    sent.defaultResume = "product-v1";
+    expect(sent.people[0].history[0]).toEqual(frozen);
+    expect(sent.people[0].history[0].attachment).toMatchObject({ id: "general-v2", label: "General Resume", active: true });
   });
   it("finds recruiters despite abundant peers, reports partial results and shares a finite budget", () => {
     const s = initialState();
