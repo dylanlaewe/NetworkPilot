@@ -1,3 +1,6 @@
+import {addBucketDraftsFromRepository,resolveBucketDraftCorrectionInRepository} from "./bucket-reserve";
+import {initialResumeSelection} from "@/application/resumes/recruiter-default";
+import {assertFiveBucketEnabled,type BucketScope} from "@/domain/recipient-buckets";
 import {readDraftGenerations,readQueueCandidates,readQueueOperations,loadQueueReviews,renderQueueReview,draftIsDismissed,draftCampaignDate} from "./draft-queue";
 import Database from "better-sqlite3";
 import {localCampaignDate,planNextDraftBatch,refreshDailyPipeline,type DailyRefreshRepository,type DailyRefreshResult} from "@/application/daily-refresh";
@@ -16,10 +19,11 @@ export function loadLatestDailyRefresh():DailyRefreshResult|null{const selection
 export async function runDailyRefreshFromToday(input:{allowProvider:boolean;force:boolean;now?:()=>Date}):Promise<DailyRefreshResult>{const selection=resolveManualOutreachDatabaseSelection(),repository=new SqliteSimulationRepository(selection.path);try{repository.migrate();const state=loadDailyCommandCenter(),store=new SqliteDailyRefreshRepository(repository.native),now=input.now??(()=>new Date());return await refreshDailyPipeline({repository:store,candidates:state.reserve.map((candidate)=>({id:candidate.id,company:candidate.companyId||candidate.company,track:candidate.track??"professional",score:candidate.score,available:candidate.stage==="qualified-available"})),now,allowProvider:input.allowProvider,force:input.force,replenisher:new ApolloDailyReplenisher(repository,process.env,now)});}finally{repository.close();}}
 
 
-export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date=()=>new Date()):DailyRefreshResult{
+export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date=()=>new Date(),scope?:BucketScope,requestId?:string):DailyRefreshResult{
   if(!Number.isInteger(additionalDraftCount)||additionalDraftCount<1||additionalDraftCount>20)throw new Error("draft-batch-size-invalid");
+  if(scope)assertFiveBucketEnabled();
   const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
-  try{repository.migrate();return repository.transaction(()=>{
+  try{repository.migrate();if(scope)return addBucketDraftsFromRepository(repository,additionalDraftCount,scope,now(),{requestId});return repository.transaction(()=>{
     const at=now(),campaignDate=localCampaignDate(at),store=new SqliteDailyRefreshRepository(repository.native),existing=store.findLatest(campaignDate),state=loadDailyCommandCenter(at),generations=readDraftGenerations(repository.native);
     const alreadyPlanned=new Set(generations.filter(g=>g.campaignDate===campaignDate).flatMap(g=>[...g.candidateIds,...(g.carriedDraftReviews??[]).map(r=>r.candidateId)]));
     const operations=(repository.native.prepare("SELECT approved_snapshot_json FROM gmail_draft_operations").all() as {approved_snapshot_json:string}[]).map(row=>JSON.parse(row.approved_snapshot_json) as {candidateId:string});
@@ -30,7 +34,7 @@ export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date
     const occupied=new Set(active.map(r=>r.companyId)),byId=new Map(readQueueCandidates(repository.native).map(c=>[c.id,c]));
     const eligible=state.reserve.filter(c=>c.stage==="qualified-available"&&!alreadyPlanned.has(c.id)&&!occupied.has(c.companyId||c.company)&&!draftIsDismissed(repository.native,c.id,campaignDate));
     const selected=planNextDraftBatch(eligible.map(c=>({id:c.id,company:c.companyId||c.company,companyKind:c.companyKind,track:c.track??"professional",score:c.score,available:true})),additionalDraftCount,activeCandidates);
-    const draftReviews=selected.map((c,i)=>renderQueueReview(byId.get(c.id)!,active.length+i,at)).filter((r):r is NonNullable<typeof r>=>Boolean(r));
+    const draftReviews=selected.map((c,i)=>renderQueueReview(byId.get(c.id)!,active.length+i,at,initialResumeSelection(byId.get(c.id)!.outreachTrack??"professional",repository))).filter((r):r is NonNullable<typeof r>=>Boolean(r));
     const selectedCompanies=new Set(draftReviews.map(r=>r.companyId));
     const eligibleReserveRemaining=new Set(eligible.filter(c=>!selectedCompanies.has(c.companyId||c.company)).map(c=>c.companyId||c.company)).size;
     const result:DailyRefreshResult={id:`${campaignDate}:${(existing?.generation??0)+1}`,campaignDate,generation:(existing?.generation??0)+1,createdAt:at.toISOString(),candidateIds:draftReviews.map(r=>r.candidateId),draftReviews,
@@ -42,6 +46,15 @@ export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date
     if(draftReviews.length)store.save(result);
     return result;
   });}finally{repository.close();}
+}
+
+export function resolveBucketDraftCorrection(input:{candidateId:string;snapshotId:string;decision:"keep-edits"|"regenerate";subject?:string;body?:string;now?:()=>Date}):void {
+  assertFiveBucketEnabled();const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
+  try{repository.migrate();resolveBucketDraftCorrectionInRepository(repository,input,(input.now??(()=>new Date()))());}finally{repository.close();}
+}
+export function replaceBucketDraftFromReserve(input:{candidateId:string;scope:BucketScope;now?:()=>Date}):DailyRefreshResult {
+  assertFiveBucketEnabled();const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
+  try{repository.migrate();return addBucketDraftsFromRepository(repository,1,input.scope,(input.now??(()=>new Date()))(),{replacementId:input.candidateId});}finally{repository.close();}
 }
 
 export function recordDraftDisposition(input:{candidateId:string;permanent:boolean;now?:()=>Date}):void{

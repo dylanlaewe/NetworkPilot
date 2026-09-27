@@ -1,10 +1,15 @@
 import Database from "better-sqlite3";
+import {bucketProjection,type RecipientBucketClassification} from "@/domain/recipient-buckets";
 import type {ApprovedEmailDraftSnapshot} from "@/application/email-drafts";
 import type {ManualDraftOperatorEntry} from "@/application/manual-outreach";
 import {listManualDraftOperatorEntries,resolveManualOutreachDatabaseSelection} from "./manual-outreach-operator";
 
 export interface RelationshipTimelineEvent {label:string;at:string;detail?:string;}
 export interface RelationshipWorkspaceEntry extends ManualDraftOperatorEntry {
+  recipientBucket?:RecipientBucketClassification|null;
+  historicalRecipientBucket?:RecipientBucketClassification|null;
+  currentRecipientBucket?:RecipientBucketClassification|null;
+  bucketLabel?:string;
   body:string;
   approvedAt:string;
   gmailDraftCreatedAt:string|null;
@@ -27,6 +32,8 @@ export function loadRelationshipWorkspace():RelationshipWorkspaceEntry[]{
     const timeline:RelationshipTimelineEvent[]=[{label:"Draft approved",at:snapshot.approvedAt},...operation.completed_at_utc?[{label:"Gmail draft created",at:operation.completed_at_utc}]:[],...entry.effectiveSentAt?[{label:"Sent",at:entry.effectiveSentAt,detail:entry.confirmationSource==="networkpilot-gmail-send"?"Sent through NetworkPilot Gmail":"Operator-confirmed manual send"}]:[]];
     for(const audit of audits){const label=auditLabel(audit.event_type,audit.outcome);if(label)timeline.push({label,at:audit.occurred_at_utc});}
     timeline.sort((a,b)=>a.at.localeCompare(b.at));
-    return{...entry,body:snapshot.body,approvedAt:snapshot.approvedAt,gmailDraftCreatedAt:operation.completed_at_utc,timeline};
+    const currentRow=database.prepare("SELECT normalized_snapshot_json FROM imported_candidates WHERE id=?").get(snapshot.candidateId??"") as {normalized_snapshot_json:string}|undefined;
+    const currentRecipientBucket=currentRow?(JSON.parse(currentRow.normalized_snapshot_json) as {recipientBucket?:RecipientBucketClassification|null}).recipientBucket??null:null;
+    return{...entry,...bucketProjection(snapshot.recipientBucket),historicalRecipientBucket:snapshot.recipientBucket??null,currentRecipientBucket,body:snapshot.body,approvedAt:snapshot.approvedAt,gmailDraftCreatedAt:operation.completed_at_utc,timeline};
   });}finally{database.close();}
 }
