@@ -8,6 +8,7 @@ export type GmailDraftOperationState =
   | "failed";
 
 export interface ApprovedEmailDraftSnapshot {
+  recipientBucket?:import("@/domain/recipient-buckets").RecipientBucketClassification|null;
   outreachIntent?:import("@/domain/drafting/outreach-intent").IntentSelection;
   snapshotId: string;
   recipientProfessionalEmail: string;

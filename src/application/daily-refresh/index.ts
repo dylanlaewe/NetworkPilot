@@ -1,3 +1,4 @@
+import {matchesBucketScope,type BucketScope} from "@/domain/recipient-buckets";
 export const DAILY_REFRESH_TOTAL_TARGET=15;
 export const DAILY_REFRESH_PROFESSIONAL_TARGET=10;
 export const DAILY_REFRESH_RECRUITER_TARGET=5;
@@ -5,9 +6,9 @@ export const DAILY_REFRESH_ENRICHMENT_CAP=20;
 
 export type OutreachTrack="professional"|"recruiter";
 export type CompanyKind="preferred"|"discovered";
-export interface DraftAdditionMetrics {additionalDraftCount:number;addedCount:number;activeBefore:number;activeAfter:number;eligibleReserveRemaining:number;}
-export interface RefreshCandidate {id:string;company:string;track:OutreachTrack;score:number;available:boolean;companyKind?:CompanyKind;}
-export interface DailyRefreshResult {id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];addition?:DraftAdditionMetrics;carriedDraftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];draftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
+export interface DraftAdditionMetrics {requestId?:string;scope?:import("@/domain/recipient-buckets").BucketScope;shortfallCode?:"scoped-reserve-exhausted"|null;additionalDraftCount:number;addedCount:number;activeBefore:number;activeAfter:number;eligibleReserveRemaining:number;}
+export interface RefreshCandidate {recipientBucket?:import("@/domain/recipient-buckets").RecipientBucketClassification|null;id:string;company:string;track:OutreachTrack;score:number;available:boolean;companyKind?:CompanyKind;}
+export interface DailyRefreshResult {replacement?:{previousCandidateId:string;replacementCandidateId:string;queueIndex:number};scope?:import("@/domain/recipient-buckets").BucketScope;id:string;campaignDate:string;generation:number;createdAt:string;candidateIds:string[];addition?:DraftAdditionMetrics;carriedDraftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];draftReviews?:import("@/application/command-center-drafts").CommandCenterDraftReview[];professionalCount:number;recruiterCount:number;target:number;shortfall:number;reserveCount:number;providerUsed:boolean;enrichmentAttempts:number;creditBefore:number|null;creditAfter:number|null;warning:string|null;}
 export interface DailyRefreshRepository {findLatest(campaignDate:string):DailyRefreshResult|null;save(result:DailyRefreshResult):void;}
 export interface DailyRefreshReplenisher {replenish(maximum:number):Promise<{candidates:RefreshCandidate[];attempts:number;searchCalls?:number;creditBefore:number|null;creditAfter:number|null}>;}
 
@@ -31,9 +32,9 @@ export const NEXT_DRAFT_BATCH_TARGET=5;
 export const NEXT_DRAFT_PROFESSIONAL_TARGET=3;
 export const NEXT_DRAFT_RECRUITER_TARGET=2;
 export const NEXT_DRAFT_PREFERRED_MAXIMUM=2;
-export function planNextDraftBatch(candidates:readonly RefreshCandidate[],target=NEXT_DRAFT_BATCH_TARGET,active:readonly RefreshCandidate[]=[]):RefreshCandidate[]{
+export function planNextDraftBatch(candidates:readonly RefreshCandidate[],target=NEXT_DRAFT_BATCH_TARGET,active:readonly RefreshCandidate[]=[],scope?:BucketScope):RefreshCandidate[]{
   if(!Number.isInteger(target)||target<1||target>20)throw new Error("draft-batch-size-invalid");
-  const eligible=candidates.filter(c=>c.available).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)),selected:RefreshCandidate[]=[],companies=new Set(active.map(c=>c.company)),people=new Set(active.map(c=>c.id));
+  const eligible=candidates.filter(c=>c.available&&matchesBucketScope(c.recipientBucket,scope)).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)),selected:RefreshCandidate[]=[],companies=new Set(active.map(c=>c.company)),people=new Set(active.map(c=>c.id));
   const recruiterTarget=Math.max(0,Math.min(target,Math.round((active.length+target)*.4)-active.filter(c=>c.track==="recruiter").length)),professionalTarget=target-recruiterTarget,preferredMaximum=Math.max(0,Math.ceil((active.length+target)*.4)-active.filter(c=>c.companyKind==="preferred").length);
   const add=(predicate:(c:RefreshCandidate)=>boolean,maximum:number,cap=true)=>{for(const candidate of eligible){if(selected.length>=target||maximum<=0)break;if(!predicate(candidate)||people.has(candidate.id)||companies.has(candidate.company)||(cap&&candidate.companyKind==="preferred"&&selected.filter(c=>c.companyKind==="preferred").length>=preferredMaximum))continue;selected.push(candidate);companies.add(candidate.company);people.add(candidate.id);maximum--;}};
   add(c=>c.track==="recruiter",recruiterTarget);

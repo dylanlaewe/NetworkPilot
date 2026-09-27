@@ -23,6 +23,9 @@ export interface ResumeAttachmentSnapshot {
 }
 
 export interface ResumeRepository {
+  getRecruiterDefaultResumeId():string|null;
+  setRecruiterDefaultResumeId(id:string,at?:Date):void;
+  clearRecruiterDefaultResumeId(at?:Date):void;
   saveResume(record:ResumeRecord):void;
   listResumes():ResumeRecord[];
   findResume(id:string):ResumeRecord|null;

@@ -1,8 +1,10 @@
 import {createHash,randomUUID} from "node:crypto";
+import {fiveBucketEnabled} from "@/domain/recipient-buckets";
 import type {ResumeAttachmentSnapshot,ResumeRecord,ResumeRepository,ResumeRoleLane} from "./types";
 import {RESUME_ROLE_LANES} from "./types";
 
 export * from "./types";
+export {hasResumeAttachmentClaim} from "./attachment-claims";
 export const MAX_RESUME_BYTES=10*1024*1024;
 
 export function sanitizePdfFilename(value:string):string{
@@ -33,8 +35,9 @@ export function attachmentSnapshot(record:ResumeRecord):ResumeAttachmentSnapshot
   return{resumeId:record.id,displayLabel:record.displayLabel,filename:record.originalFilename,storageKey:record.storageKey,sizeBytes:record.sizeBytes,sha256:record.sha256};
 }
 
-export function suggestedResumeId(input:{track:"professional"|"recruiter";lane:string;resumes:readonly ResumeRecord[]}):string|null{
+export function suggestedResumeId(input:{track:"professional"|"recruiter";lane:string;resumes:readonly ResumeRecord[];defaultResumeId?:string|null}):string|null{
   if(input.track==="professional")return null;
+  if(fiveBucketEnabled())return input.resumes.find(item=>item.active&&item.id===input.defaultResumeId)?.id??null;
   const desired=input.lane==="product-management"?"product":input.lane==="engineering-technical"?"software":input.lane==="data-analytics"||input.lane==="recruiter"?"data-analytics":null;
   return input.resumes.find(item=>item.active&&item.roleLane===desired)?.id??input.resumes.find(item=>item.active&&item.roleLane==="general")?.id??null;
 }
