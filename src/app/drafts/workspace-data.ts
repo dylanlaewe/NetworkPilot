@@ -36,10 +36,20 @@ export interface WorkspaceDraft {
   approvedAt:string|null;
   attachment:{label:string;filename:string}|null;
   manualOperatorId:string|null;
+  recipientBucket:import("@/domain/recipient-buckets").RecipientBucketClassification|null;
+  bucketLabel:string;
+  bucketReviewState:string;
+  bucketReviewReason:string|null;
+  bucketEvidenceReferences:string[];
+  bucketClassifierVersion:string|null;
+  resumeSelection:{resumeId:string|null;decisionRequired:boolean;source:"configured-default"|"explicit"|"none"|"unavailable"}|null;
+  classificationChange:{previous:import("@/domain/recipient-buckets").RecipientBucketClassification|null;current:import("@/domain/recipient-buckets").RecipientBucketClassification;decisionRequired:true}|null;
 }
 
 export function workspacePrimaryBlockReason(draft:WorkspaceDraft|null,gmailAvailable:boolean,gmailReason:string|null):string|null{
   if(!draft)return "Select a draft first.";
+  if(draft.classificationChange?.decisionRequired)return "Review the corrected recipient bucket and explicitly keep your edits or regenerate this unapproved message.";
+  if(draft.bucketReviewState==="review-required")return draft.bucketReviewReason?`Bucket review required: ${draft.bucketReviewReason}.`:"Bucket evidence needs review before this draft can be approved or externalized.";
   if(draft.state==="ready")return draft.blockedMessage;
   if(draft.state==="approved")return draft.blockedMessage??(gmailAvailable?null:gmailReason??"Gmail draft creation is unavailable.");
   if(draft.state==="gmail-draft-created")return draft.sendBlockedMessage;
@@ -79,6 +89,14 @@ export function buildWorkspaceDrafts(input:{rows:readonly SimpleDraft[];outreach
       approvedAt:immutable?.approvedAt??null,
       attachment:attachment?{label:attachment.displayLabel,filename:attachment.filename}:null,
       manualOperatorId:manual?.operatorId??null,
+      recipientBucket:review.recipientBucket??null,
+      bucketLabel:review.bucketLabel??(review.recipientBucket?.bucket?({recruiters:"Recruiters",peers:"Peers & practitioners",managers:"Managers & team leaders",executives:"Executives",ceos:"CEOs & presidents"} as const)[review.recipientBucket.bucket]:"Legacy / unclassified"),
+      bucketReviewState:review.bucketReviewState??(review.recipientBucket?.reviewState??"legacy-unclassified"),
+      bucketReviewReason:review.bucketReviewReason??review.recipientBucket?.explanationCodes.join(", ")??null,
+      bucketEvidenceReferences:review.bucketEvidenceReferences??review.recipientBucket?.evidenceReferences??[],
+      bucketClassifierVersion:review.bucketClassifierVersion??review.recipientBucket?.classifierVersion??null,
+      resumeSelection:review.resumeSelection??null,
+      classificationChange:review.classificationChange??null,
     };
   });
 }

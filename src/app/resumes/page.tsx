@@ -1,22 +1,244 @@
 import Link from "next/link";
-import {NetworkCommandShell} from "@/app/network-command-shell";
-import {loadResumeLibrary} from "@/infrastructure/sqlite/resume-library-view";
-import {deactivateResume,updateResume,uploadResume} from "./actions";
+import { NetworkCommandShell } from "@/app/network-command-shell";
+import {loadRecruiterDefaultResumeId,loadResumeLibrary} from "@/infrastructure/sqlite/resume-library-view";
+import {clearRecruiterDefaultResume,deactivateResume,setRecruiterDefaultResume,updateResume,uploadResume} from "./actions";
 import styles from "./resume-command.module.css";
-import {isDemoMode} from "@/demo/mode";
-import {DEMO_RESUMES} from "@/demo/network-command-c3";
+import { isDemoMode } from "@/demo/mode";
+import { DEMO_RESUMES } from "@/demo/network-command-c3";
+import {fiveBucketEnabled} from "@/domain/recipient-buckets";
 
-export const dynamic="force-dynamic";
-const laneLabel=(value:string|null)=>({"data-analytics":"Data / Analytics",product:"Product",software:"Software",general:"General"}[value??""]??"General");
-const when=(value:string)=>new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric"}).format(new Date(value));
-export default async function ResumesPage({searchParams}:{searchParams:Promise<{status?:string;resume?:string;add?:string}>}){
-  const resumes=isDemoMode()?DEMO_RESUMES:loadResumeLibrary(),params=await searchParams,selected=resumes.find(item=>item.id===params.resume)??resumes[0]??null,active=resumes.filter(item=>item.active).length;
-  return <NetworkCommandShell current="resumes" status={`${active} active resume ${active===1?"version":"versions"}`}><div className={styles.page}>
-    <header className={styles.header}><div><p>Private working assets</p><h1>Resume Library</h1><span>Immutable PDF versions, attached only when you choose them during review.</span></div><details className={styles.upload} open={params.add==="true"}><summary>Add resume</summary><div><h2>Add a resume</h2><p>PDF only, up to 10 MB. The file stays in private local application storage.</p><form action={uploadResume}><label>PDF file<input name="resume" type="file" accept="application/pdf,.pdf" required/></label><label>Display label<input name="displayLabel" required maxLength={80} placeholder="Product Resume"/></label><label>Optional role lane<select name="roleLane" defaultValue=""><option value="">General</option><option value="data-analytics">Data / Analytics</option><option value="product">Product</option><option value="software">Software</option><option value="general">General</option></select></label><footer><button type="submit">Upload resume</button></footer></form></div></details></header>
-    {params.status==="uploaded"?<p className={styles.status} role="status">Resume uploaded and ready for explicit review-time selection.</p>:null}
-    {!resumes.length?<section className={styles.empty}><strong>No resumes uploaded.</strong><p>Add a private PDF when you are ready. No attachment is selected automatically.</p></section>:<div className={`${styles.workspace} ${params.resume?styles.selection:""}`}>
-      <section className={styles.list} aria-label="Resume versions">{resumes.map(item=><Link key={item.id} href={`/resumes?resume=${encodeURIComponent(item.id)}`} aria-current={selected?.id===item.id?"page":undefined} data-active={item.active}><span aria-hidden="true">PDF</span><div><strong>{item.displayLabel}</strong><small>{laneLabel(item.roleLane)} · {item.originalFilename}</small><em>{item.active?"Active":"Inactive historical version"}</em></div><b>{item.usageCount} {item.usageCount===1?"use":"uses"}</b></Link>)}</section>
-      {selected?<aside className={styles.detail}><header><div className={styles.document} aria-hidden="true"><span>PDF</span><i/><i/><i/></div><div><p>{selected.active?"Active version":"Inactive historical version"}</p><h2>{selected.displayLabel}</h2><span>{selected.originalFilename}</span></div></header><dl><div><dt>Role lane</dt><dd>{laneLabel(selected.roleLane)}</dd></div><div><dt>File size</dt><dd>{(selected.sizeBytes/1024).toFixed(0)} KB</dd></div><div><dt>Uploaded</dt><dd>{when(selected.uploadedAt)}</dd></div><div><dt>Version</dt><dd>{selected.sha256.slice(0,12)}</dd></div><div><dt>Historical use</dt><dd>{selected.usageCount?`${selected.usageCount} approved ${selected.usageCount===1?"message":"messages"}`:"Not used yet"}</dd></div>{selected.lastUsedAt?<div><dt>Last used</dt><dd>{when(selected.lastUsedAt)}</dd></div>:null}</dl>{selected.active?<><form action={updateResume} className={styles.edit}><input type="hidden" name="id" value={selected.id}/><label>Display label<input name="displayLabel" defaultValue={selected.displayLabel} required maxLength={80}/></label><label>Role lane<select name="roleLane" defaultValue={selected.roleLane??""}><option value="">General</option><option value="data-analytics">Data / Analytics</option><option value="product">Product</option><option value="software">Software</option><option value="general">General</option></select></label><button>Save details</button></form><form action={deactivateResume} className={styles.deactivate}><input type="hidden" name="id" value={selected.id}/><p>Deactivation removes this version from future selection. Historical attachments remain intact.</p><button>Deactivate version</button></form></>:<p className={styles.history}>This version remains available as historical attachment evidence. Deactivation did not remove prior outreach history.</p>}</aside>:null}
-    </div>}
-  </div></NetworkCommandShell>;
+export const dynamic = "force-dynamic";
+const laneLabel = (value: string | null) =>
+  ({
+    "data-analytics": "Data / Analytics",
+    product: "Product",
+    software: "Software",
+    general: "General",
+  })[value ?? ""] ?? "General";
+const when = (value: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+export default async function ResumesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; resume?: string; add?: string }>;
+}) {
+  const demo=isDemoMode(),bucketEnabled=fiveBucketEnabled(),
+    resumes = demo ? DEMO_RESUMES : loadResumeLibrary(),
+    recruiterDefaultId=!demo&&bucketEnabled?loadRecruiterDefaultResumeId():null,
+    params = await searchParams,
+    selected =
+      resumes.find((item) => item.id === params.resume) ?? resumes[0] ?? null,
+    active = resumes.filter((item) => item.active).length;
+  return (
+    <NetworkCommandShell
+      current="resumes"
+      status={`${active} active resume ${active === 1 ? "version" : "versions"}`}
+    >
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <div>
+            <p>Private working assets</p>
+            <h1>Resume Library</h1>
+            <span>
+              Immutable PDF versions, attached only when you choose them during
+              review.
+            </span>
+          </div>
+          <details className={styles.upload} open={params.add === "true"}>
+            <summary>Add resume</summary>
+            <div>
+              <h2>Add a resume</h2>
+              <p>
+                PDF only, up to 10 MB. The file stays in private local
+                application storage.
+              </p>
+              <form action={uploadResume}>
+                <label>
+                  PDF file
+                  <input
+                    name="resume"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    required
+                  />
+                </label>
+                <label>
+                  Display label
+                  <input
+                    name="displayLabel"
+                    required
+                    maxLength={80}
+                    placeholder="Product Resume"
+                  />
+                </label>
+                <label>
+                  Optional role lane
+                  <select name="roleLane" defaultValue="">
+                    <option value="">General</option>
+                    <option value="data-analytics">Data / Analytics</option>
+                    <option value="product">Product</option>
+                    <option value="software">Software</option>
+                    <option value="general">General</option>
+                  </select>
+                </label>
+                <footer>
+                  <button type="submit">Upload resume</button>
+                </footer>
+              </form>
+            </div>
+          </details>
+        </header>
+        {params.status === "uploaded" ? (
+          <p className={styles.status} role="status">
+            Resume uploaded and ready for explicit review-time selection.
+          </p>
+        ) : null}
+        {!resumes.length ? (
+          <section className={styles.empty}>
+            <strong>No resumes uploaded.</strong>
+            <p>
+              Add a private PDF when you are ready. No attachment is selected
+              automatically.
+            </p>
+          </section>
+        ) : (
+          <div
+            className={`${styles.workspace} ${params.resume ? styles.selection : ""}`}
+          >
+            <section className={styles.list} aria-label="Resume versions">
+              {resumes.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/resumes?resume=${encodeURIComponent(item.id)}`}
+                  aria-current={selected?.id === item.id ? "page" : undefined}
+                  data-active={item.active}
+                >
+                  <span aria-hidden="true">PDF</span>
+                  <div>
+                    <strong>{item.displayLabel}</strong>
+                    <small>
+                      {laneLabel(item.roleLane)} · {item.originalFilename}
+                    </small>
+                    <em>
+                      {item.active ? "Active" : "Inactive historical version"}
+                    </em>
+                  </div>
+                  <b>
+                    {item.usageCount} {item.usageCount === 1 ? "use" : "uses"}
+                  </b>
+                </Link>
+              ))}
+            </section>
+            {selected ? (
+              <aside className={styles.detail}>
+                <header>
+                  <div className={styles.document} aria-hidden="true">
+                    <span>PDF</span>
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                  <div>
+                    <p>
+                      {selected.active
+                        ? "Active version"
+                        : "Inactive historical version"}
+                    </p>
+                    <h2>{selected.displayLabel}</h2>
+                    <span>{selected.originalFilename}</span>
+                  </div>
+                </header>
+                <dl>
+                  <div>
+                    <dt>Role lane</dt>
+                    <dd>{laneLabel(selected.roleLane)}</dd>
+                  </div>
+                  <div>
+                    <dt>File size</dt>
+                    <dd>{(selected.sizeBytes / 1024).toFixed(0)} KB</dd>
+                  </div>
+                  <div>
+                    <dt>Uploaded</dt>
+                    <dd>{when(selected.uploadedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Version</dt>
+                    <dd>{selected.sha256.slice(0, 12)}</dd>
+                  </div>
+                  <div>
+                    <dt>Historical use</dt>
+                    <dd>
+                      {selected.usageCount
+                        ? `${selected.usageCount} approved ${selected.usageCount === 1 ? "message" : "messages"}`
+                        : "Not used yet"}
+                    </dd>
+                  </div>
+                  {selected.lastUsedAt ? (
+                    <div>
+                      <dt>Last used</dt>
+                      <dd>{when(selected.lastUsedAt)}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+                {bucketEnabled&&selected.active?<section className={styles.defaultResume}><h3>Recruiter draft default</h3><p>{recruiterDefaultId===selected.id?"This immutable version is the explicit default for newly generated recruiter drafts.":"No resume is attached automatically unless an active version is explicitly configured here."}</p>{recruiterDefaultId===selected.id?<form action={clearRecruiterDefaultResume}><button type="submit">Clear recruiter default</button></form>:<form action={setRecruiterDefaultResume}><input type="hidden" name="id" value={selected.id}/><button type="submit">Use as recruiter default</button></form>}</section>:null}
+                {selected.active ? (
+                  <>
+                    <form action={updateResume} className={styles.edit}>
+                      <input type="hidden" name="id" value={selected.id} />
+                      <label>
+                        Display label
+                        <input
+                          name="displayLabel"
+                          defaultValue={selected.displayLabel}
+                          required
+                          maxLength={80}
+                        />
+                      </label>
+                      <label>
+                        Role lane
+                        <select
+                          name="roleLane"
+                          defaultValue={selected.roleLane ?? ""}
+                        >
+                          <option value="">General</option>
+                          <option value="data-analytics">
+                            Data / Analytics
+                          </option>
+                          <option value="product">Product</option>
+                          <option value="software">Software</option>
+                          <option value="general">General</option>
+                        </select>
+                      </label>
+                      <button>Save details</button>
+                    </form>
+                    <form
+                      action={deactivateResume}
+                      className={styles.deactivate}
+                    >
+                      <input type="hidden" name="id" value={selected.id} />
+                      <p>
+                        Deactivation removes this version from future selection.
+                        Historical attachments remain intact.
+                      </p>
+                      <button>Deactivate version</button>
+                    </form>
+                  </>
+                ) : (
+                  <p className={styles.history}>
+                    This version remains available as historical attachment
+                    evidence. Deactivation did not remove prior outreach
+                    history.
+                  </p>
+                )}
+              </aside>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </NetworkCommandShell>
+  );
 }
