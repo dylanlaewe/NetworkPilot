@@ -1,5 +1,4 @@
 "use server";
-import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getSimulationRepository } from "@/infrastructure/sqlite/runtime";
 import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
@@ -7,9 +6,8 @@ import { resolveManualOutreachDatabaseSelection } from "@/infrastructure/sqlite/
 import {
   fiveBucketEnabled,
   parseBucketScope,
-  type BucketEvidenceKind,
-  type RecipientBucketEvidence,
 } from "@/domain/recipient-buckets";
+import { buildReviewedBucketCorrection } from "@/application/ingestion/review-bucket";
 
 function repository() {
   if (!fiveBucketEnabled())
@@ -20,44 +18,6 @@ function repository() {
   value.migrate();
   return { value, close: true };
 }
-const scopeKind = {
-  recruiters: "recruiting-function",
-  peers: "individual-contributor",
-  managers: "team-leadership",
-  executives: "functional-leadership",
-  ceos: "company-leadership",
-} as const;
-const replaceableKinds = new Set<BucketEvidenceKind>([
-  "relevant-function",
-  "recruiting-function",
-  "internal-recruiting",
-  "recruiting-domain",
-  "individual-contributor",
-  "team-leadership",
-  "functional-leadership",
-  "division-leadership",
-  "company-leadership",
-  "outreach-topic",
-  "contact-reason",
-]);
-function reviewedEvidence(
-  candidateId: string,
-  kind: BucketEvidenceKind,
-  value: string,
-  sourceReference: string,
-  at: Date,
-): RecipientBucketEvidence {
-  return {
-    id: `operator:${createHash("sha256").update(JSON.stringify({ candidateId, kind, value, sourceReference })).digest("hex").slice(0, 24)}`,
-    kind,
-    value: value.trim(),
-    sourceReference: sourceReference.trim(),
-    observedAt: at.toISOString(),
-    verified: true,
-    reviewedBy: "local-operator",
-  };
-}
-
 export async function reviewCandidateAction(formData: FormData) {
   const candidateId = String(formData.get("candidateId") ?? ""),
     action = String(formData.get("action") ?? "") as
@@ -103,72 +63,21 @@ export async function correctRecipientBucketAction(formData: FormData) {
       .find((item) => item.id === candidateId);
     if (!candidate) throw new Error("candidate-not-found");
     const at = new Date(),
-      prior = (
-        candidate.recipientBucket?.evidence ??
-        candidate.source.responsibilityEvidence ??
-        []
-      ).filter((item) => !replaceableKinds.has(item.kind)),
-      next = [
-        ...prior,
-        reviewedEvidence(
-          candidateId,
-          "relevant-function",
-          field,
-          sourceReference,
-          at,
-        ),
-        reviewedEvidence(
-          candidateId,
-          scopeKind[scope.bucket],
-          responsibility,
-          sourceReference,
-          at,
-        ),
-      ];
-    if (scope.bucket === "recruiters")
-      next.push(
-        reviewedEvidence(
-          candidateId,
-          "internal-recruiting",
-          "internal employer recruiting responsibility",
-          sourceReference,
-          at,
-        ),
-        reviewedEvidence(
-          candidateId,
-          "recruiting-domain",
-          context || "general",
-          sourceReference,
-          at,
-        ),
-      );
-    if (scope.bucket === "managers")
-      next.push(
-        reviewedEvidence(
-          candidateId,
-          "outreach-topic",
-          context || responsibility,
-          sourceReference,
-          at,
-        ),
-      );
-    if (scope.bucket === "ceos")
-      next.push(
-        reviewedEvidence(
-          candidateId,
-          "contact-reason",
-          context || responsibility,
-          sourceReference,
-          at,
-        ),
-      );
+      correction = buildReviewedBucketCorrection(candidate, {
+        bucket: scope.bucket,
+        field,
+        responsibility,
+        context,
+        sourceReference,
+        at,
+      });
     selected.value.reviewCandidate(
       candidateId,
       "correct",
       reason,
       undefined,
       at,
-      { bucket: scope.bucket, evidence: next, reviewedBy: "local-operator" },
+      correction,
     );
   } finally {
     if (selected.close) selected.value.close();

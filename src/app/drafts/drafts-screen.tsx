@@ -18,6 +18,10 @@ import type {
   BucketSelection,
   RecipientBucketCounts,
 } from "@/app/recipient-bucket-navigation";
+import {
+  hasActionableBucketReserve,
+  loadBucketReserveMetrics,
+} from "@/infrastructure/sqlite/bucket-reserve";
 
 export interface DraftsSearchParams {
   candidate?: string;
@@ -155,6 +159,18 @@ export async function DraftsScreen({
       (!earlyCareerOnly || candidate.recipientBucket.earlyCareer)
     );
   });
+  const hasReserve = !bucketEnabled
+    ? scopedReserve.length > 0
+    : selectedBucket === "legacy"
+      ? false
+      : selectedBucket === "all"
+        ? hasActionableBucketReserve(
+            RECIPIENT_BUCKETS.map((bucket) => ({ bucket })),
+          )
+        : loadBucketReserveMetrics({
+            bucket: selectedBucket,
+            ...(earlyCareerOnly ? { earlyCareerOnly: true } : {}),
+          }).actionableCapacity > 0;
   const bucketNavigation = bucketEnabled
     ? {
         enabled: true as const,
@@ -180,7 +196,7 @@ export async function DraftsScreen({
           ? humanDraftError(workflow.gmail.readiness.reason)
           : null
       }
-      hasReserve={scopedReserve.length > 0}
+      hasReserve={hasReserve}
       initialCandidateId={candidateId}
       initialMobileReview={reviewMode}
       feedback={feedback(params)}

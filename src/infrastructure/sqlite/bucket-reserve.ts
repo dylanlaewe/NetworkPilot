@@ -33,7 +33,11 @@ export function bucketReserve(
   repository: SqliteSimulationRepository,
   scope: BucketScope,
   at: Date,
-  options: { includeSecondary?: boolean; replacementId?: string;requestId?:string } = {},
+  options: {
+    includeSecondary?: boolean;
+    replacementId?: string;
+    requestId?: string;
+  } = {},
 ) {
   assertFiveBucketEnabled();
   const candidates = readQueueCandidates(repository.native, options),
@@ -140,19 +144,53 @@ export function loadBucketReserveMetrics(
   }
 }
 
+/** One datastore read for the unfiltered Drafts view across accepted buckets. */
+export function hasActionableBucketReserve(
+  scopes: readonly BucketScope[],
+  at = new Date(),
+): boolean {
+  assertFiveBucketEnabled();
+  const repository = new SqliteSimulationRepository(
+    resolveManualOutreachDatabaseSelection().path,
+  );
+  try {
+    repository.migrate();
+    return scopes.some(
+      (scope) => bucketReserve(repository, scope, at).actionableCapacity > 0,
+    );
+  } finally {
+    repository.close();
+  }
+}
+
 export function addBucketDraftsFromRepository(
   repository: SqliteSimulationRepository,
   requested: number,
   scope: BucketScope,
   at: Date,
-  options: { includeSecondary?: boolean; replacementId?: string;requestId?:string } = {},
+  options: {
+    includeSecondary?: boolean;
+    replacementId?: string;
+    requestId?: string;
+  } = {},
 ): DailyRefreshResult {
   assertFiveBucketEnabled();
   if (!Number.isInteger(requested) || requested < 1 || requested > 20)
     throw new Error("draft-batch-size-invalid");
   return repository.transaction(() => {
-    const date = localCampaignDate(at),generations = readDraftGenerations(repository.native),prior=options.requestId?generations.find(g=>g.addition?.requestId===options.requestId):undefined;
-    if(prior){if(prior.addition?.additionalDraftCount!==requested||JSON.stringify(prior.scope)!==JSON.stringify(scope))throw new Error("draft-add-request-conflict");return prior;}
+    const date = localCampaignDate(at),
+      generations = readDraftGenerations(repository.native),
+      prior = options.requestId
+        ? generations.find((g) => g.addition?.requestId === options.requestId)
+        : undefined;
+    if (prior) {
+      if (
+        prior.addition?.additionalDraftCount !== requested ||
+        JSON.stringify(prior.scope) !== JSON.stringify(scope)
+      )
+        throw new Error("draft-add-request-conflict");
+      return prior;
+    }
     const reserve = bucketReserve(repository, scope, at, options);
     const replaced = options.replacementId
       ? reserve.active.find((r) => r.candidateId === options.replacementId)
@@ -223,7 +261,7 @@ export function addBucketDraftsFromRepository(
         ? { carriedDraftReviews: active }
         : {}),
       addition: {
-        ...(options.requestId?{requestId:options.requestId}:{}),
+        ...(options.requestId ? { requestId: options.requestId } : {}),
         scope,
         additionalDraftCount: requested,
         addedCount: reviews.length,
@@ -253,7 +291,26 @@ export function addBucketDraftsFromRepository(
           ? "Qualified reserve in the selected bucket and filters could not fill the request."
           : null,
     };
-    if (!reviews.length) return result;
+    if (!reviews.length) {
+      // A caller-supplied request ID defines an idempotency boundary even when
+      // the scoped reserve is empty. Persist the empty result so a later reserve
+      // change cannot turn a replay into a different operation.
+      if (options.requestId) {
+        repository.native
+          .prepare(
+            "INSERT INTO daily_refresh_runs(id,campaign_date,generation,created_at_utc,result_json,bucket_scope_json) VALUES(?,?,?,?,?,?)",
+          )
+          .run(
+            result.id,
+            date,
+            generation,
+            result.createdAt,
+            JSON.stringify(result),
+            JSON.stringify(scope),
+          );
+      }
+      return result;
+    }
     if (replaced) {
       const campaignDate = draftCampaignDate(
         generations,

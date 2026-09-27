@@ -76,7 +76,7 @@ describe("v1 daily workflow UX", () => {
     const review = source("src/app/drafts/drafts-workspace.tsx"),
       resumes = source("src/app/resumes/page.tsx");
     expect(review).toContain('name="resumeId"');
-    expect(review).toContain('value={selectedResumeId}');
+    expect(review).toContain("value={selectedResumeId}");
     expect(review).toContain('<option value="">None</option>');
     expect(review).toContain('selected.state === "ready"');
     expect(review).toContain("continueWithoutAttachment");
@@ -93,11 +93,16 @@ describe("v1 daily workflow UX", () => {
   it("exposes audited bucket correction and replay-safe scoped Add controls", () => {
     const review = source("src/app/candidate-review/page.tsx"),
       actions = source("src/app/candidate-review/actions.ts"),
-      drafts = source("src/app/drafts/drafts-workspace.tsx");
+      correction = source("src/application/ingestion/review-bucket.ts"),
+      drafts = source("src/app/drafts/drafts-workspace.tsx"),
+      screen = source("src/app/drafts/drafts-screen.tsx");
     expect(review).toContain("Save audited bucket correction");
     expect(actions).toContain("correctRecipientBucketAction");
-    expect(actions).toContain('reviewedBy: "local-operator"');
+    expect(actions).toContain("buildReviewedBucketCorrection");
+    expect(correction).toContain('reviewedBy: "local-operator"');
     expect(drafts).toContain('name="requestId"');
+    expect(screen).toContain("loadBucketReserveMetrics");
+    expect(screen).toContain("hasActionableBucketReserve");
   });
   it("uses stable candidate lookup and the newest immutable operation after a failed attempt", () => {
     const screen = source("src/app/drafts/drafts-screen.tsx"),
