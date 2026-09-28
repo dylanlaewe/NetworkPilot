@@ -4,7 +4,7 @@ The five-bucket workflow is an additive, default-off capability. Migration `0021
 
 ## Activation
 
-Set `NETWORKPILOT_FIVE_BUCKET_ENABLED=true` only after migration and isolated acceptance have completed. With the setting absent or `false`, legacy navigation and behavior remain active, new bucket writes/actions reject safely, and already-stored nullable bucket evidence remains intact.
+Do not set `NETWORKPILOT_FIVE_BUCKET_ENABLED=true` merely because migration and isolated acceptance have completed. Activation additionally requires validated production scoped-Apollo wiring, a separately authorized bounded live run proving real classification and downstream draft quality, and an explicit Headquarters activation decision. With the setting absent or `false`, legacy navigation and behavior remain active, new bucket writes/actions reject safely, and already-stored nullable bucket evidence remains intact.
 
 Disabling the flag is the rollback boundary. It hides bucket actions and prevents new bucket externalization; it does not down-migrate, erase audits, overwrite approved or sent snapshots, or restore an older database over legitimate subsequent outreach.
 
