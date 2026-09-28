@@ -36,9 +36,9 @@ export async function refreshScopedCandidateReserve(input: { requestId: string; 
   if (!/^[a-zA-Z0-9:_-]{8,128}$/.test(input.requestId)) throw new Error("scoped-refresh-request-id-invalid");
   if (!Number.isInteger(input.requested) || input.requested < 1 || input.requested > 20) throw new Error("scoped-refresh-count-invalid");
   if (!input.allowProvider) throw new Error("scoped-refresh-confirmation-required");
-  if (!input.provider) throw new Error("scoped-discovery-live-validation-required");
   const preflightAt = input.now(), readiness = input.store.preflight({ requestId: input.requestId, scope: input.scope, requested: input.requested, policy: input.policy, at: preflightAt });
   if (!readiness.ready) throw new ScopedDiscoveryReadinessError(readiness);
+  if (!input.provider) throw new Error("scoped-discovery-live-validation-required");
   await input.provider.preflight();
   // Provider readiness can involve local credential/configuration checks that
   // cross a daily budget boundary. Claim against a fresh clock reading; the
