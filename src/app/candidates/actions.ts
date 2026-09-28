@@ -3,6 +3,7 @@ import {revalidatePath} from "next/cache";
 import {runCandidateRefresh} from "@/infrastructure/sqlite/candidate-refresh";
 import {parseBucketScope} from "@/domain/recipient-buckets";
 import {redirect} from "next/navigation";
+import {ScopedDiscoveryReadinessError} from "@/application/candidate-refresh/scoped-readiness";
 
 export async function refreshCandidates(formData:FormData){
   if(formData.get("confirmation")!=="confirmed")throw new Error("candidate-refresh-confirmation-required");
@@ -12,6 +13,11 @@ export async function refreshCandidates(formData:FormData){
     const requested=Number(formData.get("requested")??5);
     result=await runCandidateRefresh({allowProvider:formData.get("allowProvider")==="yes",scope,requestId:typeof requestId==="string"?requestId:undefined,requested:scope?requested:undefined});
   }catch(error){
+    if(scope&&error instanceof ScopedDiscoveryReadinessError){
+      const query=new URLSearchParams({bucket:scope.bucket,refreshError:"scoped-readiness-blocked"});
+      if(scope.earlyCareerOnly)query.set("earlyCareerOnly","true");
+      redirect(`/candidates?${query}`);
+    }
     if(scope&&error instanceof Error&&error.message==="scoped-discovery-live-validation-required"){
       const query=new URLSearchParams({bucket:scope.bucket,refreshError:"scoped-provider-validation-required"});
       if(scope.earlyCareerOnly)query.set("earlyCareerOnly","true");

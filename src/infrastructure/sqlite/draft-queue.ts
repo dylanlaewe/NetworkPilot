@@ -12,14 +12,14 @@ import {renderRecruiterDraft} from "@/domain/recruiters";
 import {CONTACT_IMPACTING_EVENT_TYPES} from "@/domain/outreach";
 import type {DailyRefreshResult} from "@/application/daily-refresh";
 import type {SqliteSimulationRepository} from "./database";
-import {assertRuntimeSchema} from "./schema-contract";
+import {assertDatastoreSchema,resolveDatastoreTopology} from "./datastore-topology";
 
 export const hasTable=(db:Database.Database,name:string)=>Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
-export function recruiterDatabasePath(){return resolve(/*turbopackIgnore: true*/ process.cwd(),process.env.NETWORKPILOT_RECRUITER_DATABASE_PATH??"data/apollo-recruiter-enrichment.sqlite");}
+export function recruiterDatabasePath(){return resolveDatastoreTopology().recruiterSource.path;}
 export function readQueueCandidates(db:Database.Database,options:{includeSecondary?:boolean}={}):ImportedCandidateSnapshot[]{
   const read=(source:Database.Database)=>(source.prepare("SELECT normalized_snapshot_json FROM imported_candidates ORDER BY created_at_utc,id").all() as {normalized_snapshot_json:string}[]).map(row=>JSON.parse(row.normalized_snapshot_json) as ImportedCandidateSnapshot);
   const candidates=read(db),path=recruiterDatabasePath();
-  if(options.includeSecondary!==false&&existsSync(/*turbopackIgnore: true*/ path)&&resolve(db.name)!==path){const other=new Database(path,{readonly:true,fileMustExist:true});try{assertRuntimeSchema(other);candidates.push(...read(other));}finally{other.close();}}
+  if(options.includeSecondary!==false&&existsSync(/*turbopackIgnore: true*/ path)&&resolve(db.name)!==path){const other=new Database(path,{readonly:true,fileMustExist:true});try{other.pragma("query_only = ON");assertDatastoreSchema(resolveDatastoreTopology().recruiterSource,other);candidates.push(...read(other));}finally{other.close();}}
   // The primary operational store wins if the same person has since been refreshed.
   return [...new Map(candidates.reverse().map(candidate=>[candidate.id,candidate])).values()].reverse();
 }

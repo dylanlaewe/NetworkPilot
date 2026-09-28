@@ -14,4 +14,6 @@ Disabling the flag is the rollback boundary. It hides bucket actions and prevent
 - Current classification changes never rewrite approved or sent content.
 - Add and Replace use qualified reserve only and cannot invoke a provider.
 - Scoped Find More shares the configured Apollo account, batch, and daily limits. The normal runtime currently fails closed before accounting or provider work until the separately validated scoped live adapter is supplied.
+- Five-bucket classification, corrections, refresh accounting, snapshots, and recruiter resume preference live only in the canonical operational database. The recruiter enrichment database is a read-only evidence source at its own `0011` contract; it does not receive migration 0021 or mutable bucket state.
+- Bucket-specific provider work runs the role-aware datastore and budget preflight before authorization. A blocked readiness state removes the confirmation form and explains the problem without exposing table names or migration versions.
 - Recruiter defaults select one configured active resume for future drafts only. Other buckets default to no attachment, and approvals freeze the chosen resume version.

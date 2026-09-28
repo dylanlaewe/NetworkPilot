@@ -24,6 +24,8 @@ import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import { renderRecruiterDraft } from "@/domain/recruiters";
 import { prepareControlledRealCampaign } from "@/application/providers/prepare-controlled-real-campaign";
 import { assertRuntimeSchema } from "./schema-contract";
+import { externalApolloSpend } from "@/infrastructure/providers/apollo/external-spend";
+import { readPersistedApolloDailyAccounting } from "./apollo-accounting";
 
 const FIXTURE_FIRST_NAMES = [
   "Mara",
@@ -301,25 +303,22 @@ export function loadDailyCommandCenter(
         "SELECT connection_state FROM gmail_connection_metadata WHERE provider='gmail'",
       )
       .get() as { connection_state: string } | undefined;
-    const budget = db
-        .prepare(
-          "SELECT estimated_max_exposure,observed_consumption FROM provider_daily_budgets WHERE provider_id='apollo' AND local_date=?",
-        )
-        .get(today) as
-        | {
-            estimated_max_exposure: number;
-            observed_consumption: number | null;
-          }
-        | undefined,
+    const budget = readPersistedApolloDailyAccounting(db, today),
       apollo = readApolloConfig(process.env);
+    const externalApollo = externalApolloSpend(today),
+      observedApollo = budget.observedConsumption;
     return buildDailyCommandCenter({
       drafts,
       reserve,
       gmailState: gmail?.connection_state ?? "not-configured",
       apolloEnabled: apollo.enabled,
       apolloReady: apollo.enabled && Boolean(apollo.apiKey?.trim()),
-      apolloExposure: budget?.estimated_max_exposure ?? 0,
-      apolloObserved: budget?.observed_consumption ?? null,
+      apolloExposure:
+        budget.effectiveExposure + externalApollo,
+      apolloObserved:
+        observedApollo === null || observedApollo === undefined
+          ? externalApollo || null
+          : observedApollo + externalApollo,
       cooldownCompanies: cooldown.size,
     });
   } finally {

@@ -12,6 +12,7 @@ import type {
 } from "@/app/recipient-bucket-navigation";
 import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import {loadBucketReserveMetrics} from "@/infrastructure/sqlite/bucket-reserve";
+import {loadScopedDiscoveryReadiness} from "@/infrastructure/sqlite/candidate-refresh";
 import {migrationRequiredView} from "@/app/migration-required";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,7 @@ async function renderCandidatesPage({
         (!bucketEnabled || row.recipientBucket?.reviewState === "accepted"),
     ),
     metrics=bucketEnabled&&scopedBucket?loadBucketReserveMetrics({bucket:scopedBucket,...earlyCareerOnly?{earlyCareerOnly:true}:{}}):null,
+    sourcingReadiness=bucketEnabled&&scopedBucket?loadScopedDiscoveryReadiness({bucket:scopedBucket,...earlyCareerOnly?{earlyCareerOnly:true}:{}}):undefined,
     showResult = params.added !== undefined;
   const refreshRequestId = crypto.randomUUID(),
     apolloConfig = readApolloConfig(process.env);
@@ -106,10 +108,13 @@ async function renderCandidatesPage({
       earlyCareerOnly={earlyCareerOnly}
       legacyView={bucketEnabled && selectedBucket === "legacy"}
       requestId={bucketEnabled && scopedBucket ? refreshRequestId : undefined}
+      readiness={sourcingReadiness}
     />
   );
   const result =
-    params.refreshError === "scoped-provider-validation-required"
+    params.refreshError === "scoped-readiness-blocked"
+      ? "No candidates were added. Find More is blocked until its local data and provider readiness checks pass."
+      : params.refreshError === "scoped-provider-validation-required"
       ? "No candidates were added. This bucket’s provider search needs validation before it can continue; the existing reserve was left unchanged."
       : showResult
         ? `${params.searched ?? 0} searched · ${params.enriched ?? 0} enriched · ${params.qualified ?? params.added ?? 0} qualified · ${params.added} added · ${params.rejected ?? 0} rejected${params.requested && Number(params.added) < Number(params.requested) ? ` · ${Number(params.requested) - Number(params.added)} shortfall` : ""} · ${params.companies ?? 0} companies · ${params.credits ?? 0} credits used${params.shortfallCode ? ` · ${params.shortfallCode.replaceAll("-", " ")}` : ""}`

@@ -20,6 +20,8 @@ import type {GmailConnectionMetadata,GmailConnectionMetadataRepository,GmailDraf
 import type {ManualOutreachMetrics,ManualOutreachOutcome,ManualOutreachRecord,ManualOutreachRepository,ResolvedManualDraft} from "@/application/manual-outreach";
 import type {ResumeRecord,ResumeRepository,ResumeRoleLane} from "@/application/resumes";
 import {assertRuntimeSchema} from "./schema-contract";
+import {externalApolloSpend} from "@/infrastructure/providers/apollo/external-spend";
+import {readPersistedApolloDailyAccounting} from "./apollo-accounting";
 
 export const DEFAULT_DATABASE_PATH = "data/networkpilot.sqlite";
 
@@ -170,7 +172,7 @@ export class SqliteSimulationRepository implements SimulationRepository, DraftSt
   }
   authorizeApolloOperation(input:{operationId:string;batchId:string;localDate:string;candidateCount:number;estimatedMaxExposure:number;maximumPerBatch:number;maximumPerDay:number;hardStop:boolean;at:Date}):ApolloBudgetAuthorization{return this.transaction(()=>{
     const existing=this.native.prepare("SELECT estimated_max_exposure FROM provider_operations WHERE id=?").get(input.operationId) as {estimated_max_exposure:number}|undefined;
-    const daily=(this.native.prepare("SELECT estimated_max_exposure FROM provider_daily_budgets WHERE provider_id='apollo' AND local_date=?").get(input.localDate) as {estimated_max_exposure:number}|undefined)?.estimated_max_exposure??0;
+    const daily=readPersistedApolloDailyAccounting(this.native,input.localDate).effectiveExposure+externalApolloSpend(input.localDate);
     if(existing)return{operationId:input.operationId,estimatedMaxExposure:existing.estimated_max_exposure,remainingDaily:Math.max(0,input.maximumPerDay-daily)};
     const batch=(this.native.prepare("SELECT COALESCE(SUM(estimated_max_exposure),0) exposure FROM provider_operations WHERE provider_id='apollo' AND batch_id=?").get(input.batchId) as {exposure:number}).exposure;
     if(!input.hardStop)throw new Error("apollo-budget-hard-stop-required");
@@ -183,5 +185,5 @@ export class SqliteSimulationRepository implements SimulationRepository, DraftSt
   recordApolloAttempt(operationId:string):void{const result=this.native.prepare("UPDATE provider_operations SET attempt_count=attempt_count+1 WHERE id=? AND state='authorized'").run(operationId);if(result.changes!==1)throw new Error("apollo-budget-state-unavailable");}
   completeApolloOperation(operationId:string,observedConsumption:number|null):void{const result=this.native.prepare("UPDATE provider_operations SET state='completed',observed_consumption=? WHERE id=? AND state='authorized'").run(observedConsumption,operationId);if(result.changes!==1)throw new Error("apollo-operation-state-invalid");}
   failApolloOperation(operationId:string,reason:string):void{this.native.prepare("UPDATE provider_operations SET state='failed',failure_reason=? WHERE id=? AND state='authorized'").run(reason,operationId);}
-  getApolloProviderStatus(localDate:string):{attempted:number;estimatedExposure:number;observedConsumption:number|null;failed:number}{const budget=this.native.prepare("SELECT attempted_candidates,estimated_max_exposure,observed_consumption FROM provider_daily_budgets WHERE provider_id='apollo' AND local_date=?").get(localDate) as {attempted_candidates:number;estimated_max_exposure:number;observed_consumption:number|null}|undefined;const failed=(this.native.prepare("SELECT COUNT(*) count FROM provider_operations WHERE provider_id='apollo' AND state='failed'").get() as {count:number}).count;return{attempted:budget?.attempted_candidates??0,estimatedExposure:budget?.estimated_max_exposure??0,observedConsumption:budget?.observed_consumption??null,failed};}
+  getApolloProviderStatus(localDate:string):{attempted:number;estimatedExposure:number;observedConsumption:number|null;failed:number}{const budget=readPersistedApolloDailyAccounting(this.native,localDate),external=externalApolloSpend(localDate),observed=budget.observedConsumption;const failed=(this.native.prepare("SELECT COUNT(*) count FROM provider_operations WHERE provider_id='apollo' AND state='failed'").get() as {count:number}).count;return{attempted:budget.attempted+external,estimatedExposure:budget.effectiveExposure+external,observedConsumption:observed===null?(external||null):observed+external,failed};}
 }

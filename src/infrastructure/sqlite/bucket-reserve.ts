@@ -40,8 +40,12 @@ export function bucketReserve(
   } = {},
 ) {
   assertFiveBucketEnabled();
-  const candidates = readQueueCandidates(repository.native, options),
-    active = loadQueueReviews(repository, at, options).filter(
+  // Bucket classification and reserve are canonical application state. The
+  // legacy recruiter database is evidence-only and must never participate in
+  // five-bucket persistence or capacity calculations.
+  const canonicalOnly = { includeSecondary: false } as const,
+    candidates = readQueueCandidates(repository.native, canonicalOnly),
+    active = loadQueueReviews(repository, at, canonicalOnly).filter(
       (r) =>
         r.operation?.sendState !== "sent" &&
         !repository.findManualOutreach(r.snapshotId),

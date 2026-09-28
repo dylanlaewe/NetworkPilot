@@ -30,4 +30,11 @@ describe("bucket-scoped Find more control",()=>{
     expect(html).toContain("<dt>Maximum credits</dt><dd>1</dd>");
     expect(html).toContain('name="requested" value="1"');
   });
+  it("renders a human readiness reason and no confirmation form when blocked",()=>{
+    const html=renderToStaticMarkup(<CandidateRefreshControl available={0} fiveBucketEnabled bucket="recruiters" requestId="fixture-request-id" readiness={{ready:false,reason:"recruiter-evidence-store-unavailable",technicalDetail:"fixture raw detail"}}/>);
+    expect(html).toContain("Find More is blocked");
+    expect(html).toContain("Recruiter evidence store is unavailable");
+    expect(html).not.toContain("fixture raw detail");
+    expect(html).not.toContain("<form");
+  });
 });
