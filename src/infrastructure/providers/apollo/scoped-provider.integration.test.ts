@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refreshScopedCandidateReserve } from "@/application/candidate-refresh/scoped";
 import type { RecipientBucket } from "@/domain/recipient-buckets";
 import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
+import { SqliteApolloPersonReservationStore } from "@/infrastructure/sqlite/apollo-person-reservations";
 import { loadScopedDiscoveryReadiness } from "@/infrastructure/sqlite/candidate-refresh";
 import { resolveDatastoreTopology } from "@/infrastructure/sqlite/datastore-topology";
 import { SqliteScopedDiscoveryStore } from "@/infrastructure/sqlite/scoped-discovery";
@@ -214,6 +215,7 @@ describe("offline scoped Apollo orchestration", () => {
         sleep: async () => undefined,
         datasetClassification: "authorized-provider",
         localDate: () => "2026-09-28",
+        personReservations: new SqliteApolloPersonReservationStore(canonical),
         existingProviderIds: () =>
           new Set(
             canonical
@@ -275,6 +277,133 @@ describe("offline scoped Apollo orchestration", () => {
       observedConsumption: 5,
     });
     canonical.close();
+  });
+
+  it("allows one People Match call for concurrent distinct requests sharing an Apollo ID", async () => {
+    const { canonical, canonicalPath, topology } = setup();
+    const secondCanonical = new SqliteSimulationRepository(canonicalPath);
+    const candidate = person(
+      "concurrent-shared-001",
+      "Senior Data Engineer",
+      "senior",
+      "Concurrent Technology Employer",
+    );
+    class ConcurrentTransport implements ApolloHttpTransport {
+      calls: Parameters<ApolloHttpTransport["request"]>[0][] = [];
+      async request(
+        input: Parameters<ApolloHttpTransport["request"]>[0],
+      ): Promise<ApolloHttpResponse> {
+        this.calls.push(input);
+        if (input.path.includes("api_search"))
+          return {
+            status: 200,
+            headers: {},
+            body: JSON.stringify({ people: [searchPerson(candidate)] }),
+          };
+        return {
+          status: 200,
+          headers: {},
+          body: JSON.stringify({
+            person: candidate,
+            match_confidence: "high",
+            credits_consumed: 1,
+          }),
+        };
+      }
+    }
+    const transport = new ConcurrentTransport();
+    const makeProvider = (repository: SqliteSimulationRepository) =>
+      new ScopedApolloProvider({
+        config,
+        transport,
+        now: () => at,
+        sleep: async () => undefined,
+        datasetClassification: "authorized-provider",
+        localDate: () => "2026-09-28",
+        personReservations: new SqliteApolloPersonReservationStore(repository),
+        existingProviderIds: () =>
+          new Set(
+            repository
+              .listImportedCandidates()
+              .map((item) => item.source.providerRecordId),
+          ),
+      });
+    try {
+      const results = await Promise.all([
+        refreshScopedCandidateReserve({
+          requestId: "concurrent-shared-request-a",
+          scope: { bucket: "peers" },
+          requested: 1,
+          usableBefore: 0,
+          policy,
+          store: new SqliteScopedDiscoveryStore(canonical, { topology }),
+          provider: makeProvider(canonical),
+          allowProvider: true,
+          now: () => at,
+        }),
+        refreshScopedCandidateReserve({
+          requestId: "concurrent-shared-request-b",
+          scope: { bucket: "peers" },
+          requested: 1,
+          usableBefore: 0,
+          policy,
+          store: new SqliteScopedDiscoveryStore(secondCanonical, { topology }),
+          provider: makeProvider(secondCanonical),
+          allowProvider: true,
+          now: () => at,
+        }),
+      ]);
+      expect(results.map((result) => result.enrichmentCreditsUsed).sort()).toEqual([
+        0, 1,
+      ]);
+      expect(results.map((result) => result.enrichedCandidates).sort()).toEqual([
+        0, 1,
+      ]);
+      expect(
+        results.find((result) => result.enrichmentCreditsUsed === 0),
+      ).toMatchObject({
+        searchedCandidates: 2,
+        enrichedCandidates: 0,
+        rejectedCandidates: 2,
+        qualifiedCandidatesAdded: 0,
+      });
+      expect(
+        transport.calls.filter((call) => call.path.includes("people/match")),
+      ).toHaveLength(1);
+      expect(canonical.listImportedCandidates()).toHaveLength(1);
+      expect(canonical.getApolloProviderStatus("2026-09-28")).toMatchObject({
+        attempted: 2,
+        estimatedExposure: 2,
+        observedConsumption: 1,
+      });
+      expect(
+        canonical.native
+          .prepare(
+            "SELECT state,attempt_count,estimated_max_exposure,observed_consumption FROM provider_operations WHERE candidate_count=0",
+          )
+          .get(),
+      ).toEqual({
+        state: "completed",
+        attempt_count: 1,
+        estimated_max_exposure: 0,
+        observed_consumption: null,
+      });
+      const outerOperations = canonical.native
+        .prepare(
+          "SELECT state,attempt_count,observed_consumption FROM provider_operations WHERE candidate_count>0",
+        )
+        .all();
+      expect(outerOperations).toHaveLength(2);
+      expect(outerOperations).toEqual(
+        expect.arrayContaining([
+          { state: "completed", attempt_count: 1, observed_consumption: 1 },
+          { state: "completed", attempt_count: 0, observed_consumption: 0 },
+        ]),
+      );
+    } finally {
+      canonical.close();
+      secondCanonical.close();
+    }
   });
 
   it("recognizes configured runtime readiness without constructing a network request", () => {

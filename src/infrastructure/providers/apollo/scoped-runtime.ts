@@ -4,6 +4,8 @@ import {
   isScopedApolloProviderConfigured,
   ScopedApolloProvider,
 } from "./scoped-provider";
+import { SqliteApolloPersonReservationStore } from "@/infrastructure/sqlite/apollo-person-reservations";
+import type { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
 
 const localDate = (date: Date) =>
   new Intl.DateTimeFormat("en-CA", {
@@ -24,11 +26,7 @@ export function scopedApolloProviderConfigured(
 }
 
 export function createServerScopedApolloProvider(
-  repository: {
-    listImportedCandidates(): Array<{
-      source: { sourceProviderId: string; providerRecordId: string };
-    }>;
-  },
+  repository: SqliteSimulationRepository,
   environment: Readonly<Record<string, string | undefined>> = process.env,
   now: () => Date = () => new Date(),
 ): ScopedApolloProvider {
@@ -40,6 +38,7 @@ export function createServerScopedApolloProvider(
       new Promise((resolve) => setTimeout(resolve, milliseconds)),
     datasetClassification: "authorized-provider",
     localDate,
+    personReservations: new SqliteApolloPersonReservationStore(repository),
     existingProviderIds: () =>
       new Set(
         repository

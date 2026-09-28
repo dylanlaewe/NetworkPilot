@@ -17,6 +17,7 @@ class ScopedOperationBudget implements ApolloBudgetRepository {
   private observed = 0;
   private observedKnown = true;
   private readonly completedOperations = new Set<string>();
+  private pendingAttempt: (() => void) | null = null;
 
   constructor(private readonly maximum: number) {}
 
@@ -38,9 +39,22 @@ class ScopedOperationBudget implements ApolloBudgetRepository {
     };
   }
 
+  beginPersonAttempt(onAttempt: () => void): void {
+    if (this.pendingAttempt)
+      throw new Error("scoped-apollo-attempt-marker-already-active");
+    this.pendingAttempt = onAttempt;
+  }
+
+  clearPersonAttempt(): void {
+    this.pendingAttempt = null;
+  }
+
   recordApolloAttempt(): void {
-    // Scoped transport retries are disabled below. The outer scoped store
-    // records this logical enrichment against its already-claimed hold.
+    if (!this.pendingAttempt)
+      throw new Error("scoped-apollo-attempt-marker-unavailable");
+    const mark = this.pendingAttempt;
+    this.pendingAttempt = null;
+    mark();
   }
 
   completeApolloOperation(
@@ -93,6 +107,7 @@ function diversifiedCandidates(
   candidates: readonly CandidateSourceRecord[],
   maximum: number,
 ): CandidateSourceRecord[] {
+  if (maximum === 0) return [];
   const ranked = [...candidates].sort((left, right) =>
     left.providerRecordId.localeCompare(right.providerRecordId),
   );
@@ -115,6 +130,25 @@ function diversifiedCandidates(
   return selected;
 }
 
+export interface ApolloPersonReservationStore {
+  claim(input: { personId: string; operationId: string; at: Date }): boolean;
+  markAttempted(input: {
+    personId: string;
+    operationId: string;
+    at: Date;
+  }): void;
+  retainAttempted(input: {
+    personId: string;
+    operationId: string;
+    at: Date;
+    outcome: "completed" | "uncertain";
+  }): void;
+  releaseUnattempted(input: {
+    personId: string;
+    operationId: string;
+  }): void;
+}
+
 export interface ScopedApolloProviderDependencies {
   config: ApolloConfig;
   transport: ApolloHttpTransport;
@@ -122,6 +156,7 @@ export interface ScopedApolloProviderDependencies {
   sleep: (milliseconds: number) => Promise<void>;
   datasetClassification: "provider-shaped-fixture" | "authorized-provider";
   localDate: (date: Date) => string;
+  personReservations: ApolloPersonReservationStore;
   existingProviderIds?: () => ReadonlySet<string>;
 }
 
@@ -211,25 +246,77 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
       );
     }
 
-    const shortlist = diversifiedCandidates(candidates, input.maximum);
-    rejectedCandidates += candidates.length - shortlist.length;
+    const orderedCandidates = diversifiedCandidates(
+      candidates,
+      candidates.length,
+    );
     const records: CandidateSourceRecord[] = [];
     let enrichmentAttempts = 0;
     try {
-      for (const [index, candidate] of shortlist.entries()) {
-        enrichmentAttempts += 1;
-        const enriched = await adapter.enrich({
-          batchId: `${input.operationId}:enrichment:${index + 1}`,
-          personIds: [candidate.providerRecordId],
-          persistedSearchPersonIds: [candidate.providerRecordId],
-          creditCostPolicy: "disabled-phone-v1",
-        });
+      for (const [index, candidate] of orderedCandidates.entries()) {
+        if (enrichmentAttempts >= input.maximum) {
+          rejectedCandidates += 1;
+          continue;
+        }
+        const reservation = {
+          personId: candidate.providerRecordId,
+          operationId: input.operationId,
+        };
         if (
-          enriched.length !== 1 ||
-          enriched[0]?.providerRecordId !== candidate.providerRecordId
-        )
-          throw new Error("scoped-apollo-enrichment-identity-invalid");
-        records.push(enriched[0]);
+          !this.dependencies.personReservations.claim({
+            ...reservation,
+            at: this.dependencies.now(),
+          })
+        ) {
+          rejectedCandidates += 1;
+          continue;
+        }
+        let attempted = false;
+        budget.beginPersonAttempt(() => {
+          this.dependencies.personReservations.markAttempted({
+            ...reservation,
+            at: this.dependencies.now(),
+          });
+          attempted = true;
+          enrichmentAttempts += 1;
+        });
+        try {
+          const enriched = await adapter.enrich({
+            batchId: `${input.operationId}:enrichment:${index + 1}`,
+            personIds: [candidate.providerRecordId],
+            persistedSearchPersonIds: [candidate.providerRecordId],
+            creditCostPolicy: "disabled-phone-v1",
+          });
+          if (
+            enriched.length !== 1 ||
+            enriched[0]?.providerRecordId !== candidate.providerRecordId
+          )
+            throw new Error("scoped-apollo-enrichment-identity-invalid");
+          this.dependencies.personReservations.retainAttempted({
+            ...reservation,
+            at: this.dependencies.now(),
+            outcome: "completed",
+          });
+          records.push(enriched[0]);
+        } catch (error) {
+          if (attempted) {
+            try {
+              this.dependencies.personReservations.retainAttempted({
+                ...reservation,
+                at: this.dependencies.now(),
+                outcome: "uncertain",
+              });
+            } catch {
+              // attempt_count=1 remains a permanent conservative lock even
+              // if final reservation annotation cannot be persisted.
+            }
+          } else {
+            this.dependencies.personReservations.releaseUnattempted(reservation);
+          }
+          throw error;
+        } finally {
+          budget.clearPersonAttempt();
+        }
       }
     } catch (error) {
       throw new ScopedDiscoveryProviderFailure(

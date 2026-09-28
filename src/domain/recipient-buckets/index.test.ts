@@ -24,6 +24,48 @@ describe("provider-independent relationship buckets", () => {
     expect(classifyRecipientBucket({ title: "President, Energy Division", outreachTrack: "professional", evidence: [...base, fixtureEvidence("division-leadership", "the Energy Division")] })).toMatchObject({ bucket: "executives", reviewState: "accepted" });
     expect(classifyRecipientBucket({ title: "VP", outreachTrack: "professional", evidence: [...base, fixtureEvidence("individual-contributor"), fixtureEvidence("team-leadership")] }).reviewState).toBe("review-required");
   });
+  it.each([
+    ["President", "accepted"],
+    ["Company President", "accepted"],
+    ["President, East Region", "review-required"],
+    ["Regional President", "review-required"],
+    ["Division President", "review-required"],
+    ["Divisional President", "review-required"],
+    ["Business Unit President", "review-required"],
+  ] as const)(
+    "normalizes company-wide president scope for %s",
+    (title, reviewState) => {
+      const { source } = bucketFixture("ceos");
+      expect(
+        classifyRecipientBucket({
+          title,
+          outreachTrack: "professional",
+          evidence: source.responsibilityEvidence,
+        }),
+      ).toMatchObject({
+        bucket: reviewState === "accepted" ? "ceos" : null,
+        reviewState,
+      });
+    },
+  );
+  it("does not let human-reviewed company leadership bypass a regional-title contradiction", () => {
+    const { source } = bucketFixture("ceos");
+    const evidence = source.responsibilityEvidence!.map((item) => ({
+      ...item,
+      reviewedBy: "local-operator",
+    }));
+    expect(
+      classifyRecipientBucket({
+        title: "President, East Region",
+        outreachTrack: "professional",
+        evidence,
+      }),
+    ).toMatchObject({
+      bucket: null,
+      reviewState: "review-required",
+      explanationCodes: ["company-and-division-scope-conflicting"],
+    });
+  });
   it("accepts supported internal Executive Recruiter evidence without admitting agencies or unsupported domains", () => {
     const input = { title: "Executive Recruiter", employerName: "Fictional Juniper", internalCompanyMatch: true, minimumExperience: 8, maximumExperience: 8 };
     expect(classifyRecruiter(input).accepted).toBe(false);

@@ -4,7 +4,7 @@ export type RecipientBucket = typeof RECIPIENT_BUCKETS[number];
 export const RECIPIENT_BUCKET_VERSION = "recipient-bucket-v1" as const;
 export const BUCKET_LABELS: Record<RecipientBucket, string> = { recruiters: "Recruiters", peers: "Peers & practitioners", managers: "Managers & team leaders", executives: "Executives", ceos: "CEOs & presidents" };
 export type BucketEvidenceKind = "professional-identity" | "current-employment" | "company-identity" | "relevant-function" | "recruiting-function" | "internal-recruiting" | "recruiting-domain" | "individual-contributor" | "early-career" | "team-leadership" | "functional-leadership" | "division-leadership" | "company-leadership" | "outreach-topic" | "contact-reason";
-export interface RecipientBucketEvidence { id: string; kind: BucketEvidenceKind; value: string; sourceReference: string; observedAt: string; verified: boolean; reviewedBy?: string; }
+export interface RecipientBucketEvidence { id: string; kind: BucketEvidenceKind; value: string; sourceReference: string; sourceReferences?: string[]; observedAt: string; verified: boolean; reviewedBy?: string; }
 export interface RecipientBucketClassification {
   bucket: RecipientBucket | null;
   classifierVersion: typeof RECIPIENT_BUCKET_VERSION;
@@ -33,11 +33,11 @@ export function matchesBucketScope(classification: RecipientBucketClassification
   return classification?.reviewState === "accepted" && classification.bucket === scope.bucket && (!scope.earlyCareerOnly || classification.earlyCareer);
 }
 export function verifiedBucketEvidence(evidence: readonly RecipientBucketEvidence[], kind: BucketEvidenceKind): RecipientBucketEvidence | undefined {
-  return evidence.find(e => e.kind === kind && e.verified && e.id.trim() && e.value.trim() && e.sourceReference.trim() && Number.isFinite(Date.parse(e.observedAt)));
+  return evidence.find(e => e.kind === kind && e.verified && e.id.trim() && e.value.trim() && e.sourceReference.trim() && (!e.sourceReferences || e.sourceReferences.length > 0 && e.sourceReferences.every(reference => reference.trim())) && Number.isFinite(Date.parse(e.observedAt)));
 }
 export function classifyRecipientBucket(input: { title: string; outreachTrack: "professional" | "recruiter"; recruiterAccepted?: boolean; evidence?: readonly RecipientBucketEvidence[] }): RecipientBucketClassification {
   const evidence = (input.evidence ?? []).map(e => ({ ...e })), has = (kind: BucketEvidenceKind) => Boolean(verifiedBucketEvidence(evidence, kind));
-  const result = (bucket: RecipientBucket | null, accepted: boolean, code: string): RecipientBucketClassification => ({ bucket, classifierVersion: RECIPIENT_BUCKET_VERSION, confidence: accepted ? "high" : "low", reviewState: accepted ? "accepted" : "review-required", explanationCodes: [code], evidence, evidenceReferences: evidence.map(e => e.sourceReference), earlyCareer: Boolean(verifiedBucketEvidence(evidence, "early-career")?.reviewedBy?.trim()) });
+  const result = (bucket: RecipientBucket | null, accepted: boolean, code: string): RecipientBucketClassification => ({ bucket, classifierVersion: RECIPIENT_BUCKET_VERSION, confidence: accepted ? "high" : "low", reviewState: accepted ? "accepted" : "review-required", explanationCodes: [code], evidence, evidenceReferences: [...new Set(evidence.flatMap(e => e.sourceReferences ?? [e.sourceReference]))], earlyCareer: Boolean(verifiedBucketEvidence(evidence, "early-career")?.reviewedBy?.trim()) });
   const base = has("professional-identity") && has("current-employment") && has("company-identity") && has("relevant-function");
   if (input.outreachTrack === "recruiter" || has("recruiting-function")) return result("recruiters", base && input.outreachTrack === "recruiter" && Boolean(input.recruiterAccepted) && has("recruiting-function") && has("internal-recruiting") && has("recruiting-domain"), "recruiter-function-and-domain-evidence-required");
   const scopes = (["individual-contributor", "team-leadership", "functional-leadership", "division-leadership", "company-leadership"] as const).filter(has);
@@ -45,7 +45,7 @@ export function classifyRecipientBucket(input: { title: string; outreachTrack: "
   const scope = scopes[0];
   const bucket: RecipientBucket = scope === "company-leadership" ? "ceos" : scope === "functional-leadership" || scope === "division-leadership" ? "executives" : scope === "team-leadership" ? "managers" : "peers";
   if (bucket === "ceos" && !/\b(ceo|chief executive officer|president)\b/i.test(input.title)) return result(null, false, "company-chief-role-unverified");
-  if (bucket === "ceos" && /\b(division|business unit|regional)\b/i.test(input.title)) return result(null, false, "company-and-division-scope-conflicting");
+  if (bucket === "ceos" && /\b(division|divisional|business unit|region|regional)\b/i.test(input.title)) return result(null, false, "company-and-division-scope-conflicting");
   return result(bucket, base, base ? `supported-${scope}` : "professional-context-evidence-missing");
 }
 /** Only reviewed bucket policy exceptions are removed. All other gates remain authoritative. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { classifyRecipientBucket } from "@/domain/recipient-buckets";
 import { mapApolloPerson } from "./adapter";
 import { mapApolloProviderEvidence } from "./evidence";
 import { APOLLO_PEOPLE } from "./fixtures";
@@ -33,7 +34,11 @@ describe("Apollo provider-neutral evidence mapping", () => {
         }),
         expect.objectContaining({
           kind: "current-employment",
-          sourceReference: "apollo.person.organization",
+          sourceReference: "apollo.person.title",
+          sourceReferences: [
+            "apollo.person.title",
+            "apollo.person.organization.name",
+          ],
           verified: true,
         }),
         expect.objectContaining({
@@ -55,6 +60,11 @@ describe("Apollo provider-neutral evidence mapping", () => {
     );
     expect(mapped.sourceFields).toMatchObject({
       rawTitle: "apollo.person.title",
+      employment: [
+        "apollo.person.title",
+        "apollo.person.organization.name",
+      ],
+      industries: ["apollo.person.organization.industry"],
       seniority: "apollo.person.seniority",
       responsibility: "apollo.person.seniority",
     });
@@ -88,32 +98,68 @@ describe("Apollo provider-neutral evidence mapping", () => {
     expect(evidenceKinds).not.toContain("early-career");
   });
 
-  it("qualifies internal recruiting evidence only with employer identity", () => {
-    const mapped = mapApolloProviderEvidence(
-      person({
-        title: "Senior Technical Recruiter",
-        seniority: "senior",
-      }),
-      { observedAt },
-    );
-    expect(mapped.recruiterEmployerStatus).toBe("internal");
-    expect(mapped.evidence).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: "recruiting-function", verified: true }),
-        expect.objectContaining({
-          kind: "internal-recruiting",
-          value: "internal",
-          sourceReference: "apollo.person.organization.id",
-          verified: true,
-        }),
-        expect.objectContaining({
-          kind: "recruiting-domain",
-          value: "technical-data-ai",
-          verified: true,
-        }),
-      ]),
-    );
+  it("keeps absent provider fields absent from evidence lineage", () => {
+    const mapped = mapApolloProviderEvidence({}, { observedAt });
+    expect(mapped.evidence).toEqual([]);
+    expect(mapped.sourceFields).toEqual({
+      rawTitle: null,
+      employment: null,
+      providerPersonId: null,
+      providerEmployerId: null,
+      employerDomain: null,
+      industries: [],
+      function: null,
+      seniority: null,
+      responsibility: null,
+    });
   });
+
+  it.each(["Senior Technical Recruiter", "Talent Acquisition Partner"])(
+    "qualifies %s only with identity and positive operating-company evidence",
+    (title) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title,
+          seniority: "senior",
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterEmployerStatus).toBe("internal");
+      expect(mapped.evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "recruiting-function",
+            verified: true,
+          }),
+          expect.objectContaining({
+            kind: "internal-recruiting",
+            value: "internal",
+            sourceReference: "apollo.person.organization.industry",
+            sourceReferences: [
+              "apollo.person.organization.industry",
+              "apollo.person.organization.id",
+            ],
+            verified: true,
+          }),
+          expect.objectContaining({
+            kind: "recruiting-domain",
+            value: title.includes("Technical")
+              ? "technical-data-ai"
+              : "general",
+            verified: true,
+          }),
+        ]),
+      );
+      expect(
+        classifyRecipientBucket({
+          title,
+          outreachTrack: "recruiter",
+          recruiterAccepted: true,
+          evidence: mapped.evidence,
+        }),
+      ).toMatchObject({ bucket: "recruiters", reviewState: "accepted" });
+    },
+  );
 
   it("preserves agency contradiction and its provenance instead of discarding it", () => {
     const mapped = mapApolloProviderEvidence(
@@ -163,6 +209,117 @@ describe("Apollo provider-neutral evidence mapping", () => {
         verified: false,
       }),
     );
+  });
+
+  it.each([
+    ["neutral staffing industry", "Northwind Partners", "Staffing and Recruiting"],
+    ["human resources services", "Northwind Partners", "Human Resources Services"],
+    ["executive search name", "Northwind Executive Search", "Technology"],
+  ])("rejects %s as agency evidence", (_case, name, industry) => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-agency-case",
+          name,
+          primary_domain: "northwind.example",
+          industry,
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("agency");
+    expect(
+      mapped.evidence.find((item) => item.kind === "internal-recruiting"),
+    ).toMatchObject({ value: "agency", verified: false });
+  });
+
+  it.each([
+    ["Executive Recruiter", "Technology"],
+    ["Technical Recruiter", undefined],
+  ])(
+    "keeps %s ambiguous when positive employer-type evidence is insufficient",
+    (title, industry) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title,
+          organization: {
+            id: "org-ambiguous",
+            name: "Northwind Partners",
+            primary_domain: "northwind.example",
+            ...(industry ? { industry } : {}),
+          },
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
+      expect(
+        mapped.evidence.find((item) => item.kind === "internal-recruiting"),
+      ).toMatchObject({ value: "ambiguous", verified: false });
+      expect(
+        classifyRecipientBucket({
+          title,
+          outreachTrack: "recruiter",
+          recruiterAccepted: true,
+          evidence: mapped.evidence,
+        }),
+      ).toMatchObject({ bucket: "recruiters", reviewState: "review-required" });
+    },
+  );
+
+  it("lets an exact industries-array agency contradiction override a positive primary industry", () => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-conflict",
+          name: "Northwind Partners",
+          primary_domain: "northwind.example",
+          industry: "Technology",
+          industries: ["Staffing and Recruiting"],
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("agency");
+    expect(
+      mapped.evidence.find((item) => item.kind === "internal-recruiting"),
+    ).toMatchObject({
+      sourceReference: "apollo.person.organization.industries",
+      sourceReferences: ["apollo.person.organization.industries"],
+      verified: false,
+    });
+  });
+
+  it("retains exact fallback employer-name provenance", () => {
+    const value = person({
+      organization_name: "Fallback Software",
+      organization: {
+        id: "org-fallback",
+        primary_domain: "fallback.example",
+        industry: "Software",
+      },
+    });
+    const mapped = mapApolloProviderEvidence(value, { observedAt });
+    expect(
+      mapped.evidence.find((item) => item.kind === "current-employment"),
+    ).toMatchObject({
+      sourceReferences: [
+        "apollo.person.title",
+        "apollo.person.organization_name",
+      ],
+    });
+    expect(mapped.sourceFields.employment).toEqual([
+      "apollo.person.title",
+      "apollo.person.organization_name",
+    ]);
+    expect(
+      mapApolloPerson(value, {
+        stage: "enrichment",
+        retrievedAt: observedAt,
+        datasetClassification: "provider-shaped-fixture",
+      }).fieldProvenance.currentOrganization,
+    ).toMatchObject({ sourceField: "apollo.person.organization_name" });
   });
 
   it("keeps missing employer identity missing", () => {

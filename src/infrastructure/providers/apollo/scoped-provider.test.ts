@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ScopedDiscoveryProviderFailure } from "@/application/candidate-refresh/scoped";
-import { ScopedApolloProvider } from "./scoped-provider";
+import {
+  type ApolloPersonReservationStore,
+  ScopedApolloProvider,
+} from "./scoped-provider";
 import type {
   ApolloConfig,
   ApolloHttpResponse,
@@ -78,11 +81,56 @@ class Transport implements ApolloHttpTransport {
   }
 }
 
+class Reservations implements ApolloPersonReservationStore {
+  readonly states = new Map<
+    string,
+    { owner: string; attempted: boolean; outcome?: "completed" | "uncertain" }
+  >();
+
+  claim(input: { personId: string; operationId: string }): boolean {
+    if (this.states.has(input.personId)) return false;
+    this.states.set(input.personId, {
+      owner: input.operationId,
+      attempted: false,
+    });
+    return true;
+  }
+
+  markAttempted(input: { personId: string; operationId: string }): void {
+    const state = this.states.get(input.personId);
+    if (!state || state.owner !== input.operationId || state.attempted)
+      throw new Error("fixture-reservation-attempt-unavailable");
+    state.attempted = true;
+  }
+
+  retainAttempted(input: {
+    personId: string;
+    operationId: string;
+    outcome: "completed" | "uncertain";
+  }): void {
+    const state = this.states.get(input.personId);
+    if (!state || state.owner !== input.operationId || !state.attempted)
+      throw new Error("fixture-reservation-completion-unavailable");
+    state.outcome = input.outcome;
+  }
+
+  releaseUnattempted(input: {
+    personId: string;
+    operationId: string;
+  }): void {
+    const state = this.states.get(input.personId);
+    if (!state || state.owner !== input.operationId || state.attempted)
+      throw new Error("fixture-reservation-release-unavailable");
+    this.states.delete(input.personId);
+  }
+}
+
 function provider(
   transport: Transport,
   options: {
     config?: ApolloConfig;
     existing?: ReadonlySet<string>;
+    reservations?: ApolloPersonReservationStore;
   } = {},
 ) {
   return new ScopedApolloProvider({
@@ -92,6 +140,7 @@ function provider(
     sleep: async () => undefined,
     datasetClassification: "provider-shaped-fixture",
     localDate: () => "2026-09-28",
+    personReservations: options.reservations ?? new Reservations(),
     existingProviderIds: () => options.existing ?? new Set(),
   });
 }
@@ -302,6 +351,128 @@ describe("concrete scoped Apollo provider", () => {
     });
   });
 
+  it("deduplicates the same Apollo ID repeated within one search response", async () => {
+    const peer = person("duplicate-search-001", "Senior Data Engineer", "senior");
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [searchPerson(peer), searchPerson(peer)],
+        }),
+        response(200, { people: [] }),
+      ],
+      [
+        response(200, {
+          person: peer,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    const result = await discover(provider(transport), "peers", 1);
+    expect(result).toMatchObject({
+      searchedCandidates: 2,
+      rejectedCandidates: 1,
+      enrichmentAttempts: 1,
+      records: [expect.objectContaining({ providerRecordId: peer.id })],
+    });
+    expect(
+      transport.calls.filter((call) => call.path.includes("people/match")),
+    ).toHaveLength(1);
+  });
+
+  it("atomically enriches one shared Apollo ID across distinct bucket operations", async () => {
+    const shared = person(
+      "cross-bucket-001",
+      "Senior Technical Recruiter",
+      "senior",
+    );
+    const reservations = new Reservations();
+    const recruiterTransport = new Transport(
+      [
+        response(200, { people: [searchPerson(shared)] }),
+        response(200, { people: [] }),
+      ],
+      [
+        response(200, {
+          person: shared,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    const peerTransport = new Transport(
+      [
+        response(200, { people: [searchPerson(shared)] }),
+        response(200, { people: [] }),
+      ],
+      [
+        response(200, {
+          person: shared,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    const results = await Promise.all([
+      discover(
+        provider(recruiterTransport, { reservations }),
+        "recruiters",
+        1,
+      ),
+      discover(provider(peerTransport, { reservations }), "peers", 1),
+    ]);
+    expect(results.map((result) => result.enrichmentAttempts).sort()).toEqual([
+      0, 1,
+    ]);
+    expect(results.map((result) => result.records.length).sort()).toEqual([0, 1]);
+    expect(
+      [...recruiterTransport.calls, ...peerTransport.calls].filter((call) =>
+        call.path.includes("people/match"),
+      ),
+    ).toHaveLength(1);
+    expect(reservations.states.get(shared.id)).toMatchObject({
+      attempted: true,
+      outcome: "completed",
+    });
+  });
+
+  it("continues to another eligible person when the first ID is already reserved", async () => {
+    const duplicate = person("reserved-001", "Senior Data Engineer", "senior");
+    const available = person("reserved-002", "Senior Data Engineer", "senior");
+    const reservations = new Reservations();
+    expect(
+      reservations.claim({
+        personId: duplicate.id,
+        operationId: "other-operation",
+      }),
+    ).toBe(true);
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [searchPerson(duplicate), searchPerson(available)],
+        }),
+        response(200, { people: [] }),
+      ],
+      [
+        response(200, {
+          person: available,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    const result = await discover(
+      provider(transport, { reservations }),
+      "peers",
+      1,
+    );
+    expect(result).toMatchObject({
+      rejectedCandidates: 1,
+      enrichmentAttempts: 1,
+      records: [expect.objectContaining({ providerRecordId: available.id })],
+    });
+  });
+
   it("fails search with zero enrichment accounting", async () => {
     const transport = new Transport(
       [response(500, {}), response(200, { people: [] })],
@@ -333,12 +504,20 @@ describe("concrete scoped Apollo provider", () => {
         response(500, {}),
       ],
     );
-    const error = await discover(provider(transport), "peers").catch(
+    const reservations = new Reservations();
+    const error = await discover(
+      provider(transport, { reservations }),
+      "peers",
+    ).catch(
       (caught: unknown) => caught,
     );
     expect(error).toBeInstanceOf(ScopedDiscoveryProviderFailure);
     expect(error).toMatchObject({
       accounting: { attempts: 2, observedCredits: null },
+    });
+    expect(reservations.states.get(second.id)).toMatchObject({
+      attempted: true,
+      outcome: "uncertain",
     });
   });
 
