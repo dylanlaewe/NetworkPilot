@@ -23,6 +23,7 @@ import {
 import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import { renderRecruiterDraft } from "@/domain/recruiters";
 import { prepareControlledRealCampaign } from "@/application/providers/prepare-controlled-real-campaign";
+import { assertRuntimeSchema } from "./schema-contract";
 
 const FIXTURE_FIRST_NAMES = [
   "Mara",
@@ -126,6 +127,7 @@ export function loadDailyCommandCenter(
   const drafts = listManualDraftOperatorEntries(selected.path),
     db = new Database(selected.path, { readonly: true, fileMustExist: true });
   try {
+    assertRuntimeSchema(db);
     const now = at.getTime(),
       cooldownCutoff = new Date(now - 7 * 86400000).toISOString(),
       today = at.toLocaleDateString("en-CA", { timeZone: "America/New_York" });

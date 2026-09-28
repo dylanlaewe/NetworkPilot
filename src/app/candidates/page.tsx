@@ -12,10 +12,11 @@ import type {
 } from "@/app/recipient-bucket-navigation";
 import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import {loadBucketReserveMetrics} from "@/infrastructure/sqlite/bucket-reserve";
+import {migrationRequiredView} from "@/app/migration-required";
 
 export const dynamic = "force-dynamic";
 
-export default async function CandidatesPage({
+async function renderCandidatesPage({
   searchParams,
 }: {
   searchParams: Promise<{
@@ -145,3 +146,4 @@ export default async function CandidatesPage({
     </NetworkCommandShell>
   );
 }
+export default async function CandidatesPage(input:{searchParams:Promise<{selected?:string;filters?:string;added?:string;searched?:string;enriched?:string;qualified?:string;rejected?:string;professional?:string;recruiter?:string;companies?:string;credits?:string;requested?:string;shortfallCode?:string;refreshError?:string;bucket?:string;earlyCareerOnly?:string}>}){try{return await renderCandidatesPage(input);}catch(error){return migrationRequiredView(error);}}

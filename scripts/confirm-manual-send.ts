@@ -25,7 +25,7 @@ function main(): void {
   if(Number.isNaN(effectiveSentAt.getTime()))throw new Error("manual-send-time-invalid");
   const repository = new SqliteSimulationRepository(database.path);
   try {
-    repository.migrate();
+    repository.assertRuntimeSchema();
     const record = confirmManualSendByOperatorId({
       entries:[entry],
       operatorId,

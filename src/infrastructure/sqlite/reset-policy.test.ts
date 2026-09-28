@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,17 +19,17 @@ describe("reset protection", () => {
   });
 
   it("refuses an existing unmarked database containing data", () => {
-    const root = project(); const target = join(root, "data", "unmarked.sqlite"); const repo = new SqliteSimulationRepository(target); repo.migrate(); repo.close();
+    const root = project(); const target = join(root, "data", "unmarked.sqlite"); const repo = new SqliteSimulationRepository(target); migrateTestDatabase(repo); repo.close();
     expect(() => assertExistingDatabaseIsResettable(resolveSafeResetTarget(target, root))).toThrow("no fictional dataset marker");
   });
 
   it("refuses an existing database with a non-fictional marker", () => {
-    const root = project(); const target = join(root, "data", "other.sqlite"); const repo = new SqliteSimulationRepository(target); repo.migrate(); repo.setSetting("datasetType", "live", new Date()); repo.close();
+    const root = project(); const target = join(root, "data", "other.sqlite"); const repo = new SqliteSimulationRepository(target); migrateTestDatabase(repo); repo.setSetting("datasetType", "live", new Date()); repo.close();
     expect(() => assertExistingDatabaseIsResettable(resolveSafeResetTarget(target, root))).toThrow("not exactly fictional");
   });
 
   it("permits an approved fictional database", () => {
-    const root = project(); const target = join(root, "data", "fictional.sqlite"); const repo = new SqliteSimulationRepository(target); repo.migrate(); seedFictionalData(repo); repo.close();
+    const root = project(); const target = join(root, "data", "fictional.sqlite"); const repo = new SqliteSimulationRepository(target); migrateTestDatabase(repo); seedFictionalData(repo); repo.close();
     expect(() => assertExistingDatabaseIsResettable(resolveSafeResetTarget(target, root))).not.toThrow();
   });
 
@@ -46,7 +47,7 @@ describe("reset protection", () => {
 
   it("refuses a target symlink and a data-directory symlink that escape", () => {
     const root = project(); const outside = mkdtempSync(join(tmpdir(), "networkpilot-outside-")); directories.push(outside);
-    const outsideDb = join(outside, "outside.sqlite"); const repo = new SqliteSimulationRepository(outsideDb); repo.migrate(); repo.close();
+    const outsideDb = join(outside, "outside.sqlite"); const repo = new SqliteSimulationRepository(outsideDb); migrateTestDatabase(repo); repo.close();
     symlinkSync(outsideDb, join(root, "data", "linked.sqlite"));
     expect(() => resolveSafeResetTarget("data/linked.sqlite", root)).toThrow("symbolic link");
     const secondRoot = mkdtempSync(join(tmpdir(), "networkpilot-reset-")); directories.push(secondRoot); symlinkSync(outside, join(secondRoot, "data"));

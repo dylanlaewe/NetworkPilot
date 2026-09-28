@@ -13,7 +13,7 @@ function main():void{
   if(Number.isNaN(effectiveSentAt.getTime()))throw new Error("manual-send-time-invalid");
   const repository=new SqliteSimulationRepository(database.path);
   try{
-    repository.migrate();
+    repository.assertRuntimeSchema();
     const record=recordOperatorReportedHardBounce({snapshotId:entry.snapshotId,effectiveSentAt,now:()=>new Date(),repository});
     process.stdout.write(`${JSON.stringify({database:database.displayPath,databaseSource:database.source,operatorId,state:"operator-reported-hard-bounce",confirmationSource:record.confirmationSource,effectiveSentAt:record.effectiveSentAt,outcome:record.outcome,operationVersion:record.operationVersion},null,2)}\n`);
   }finally{repository.close();}

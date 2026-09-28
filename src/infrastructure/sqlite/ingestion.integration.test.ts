@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { SqliteSimulationRepository } from "./database";
 import { seedFictionalData } from "./seed";
 
 const dirs:string[]=[];
-const repository=()=>{const dir=mkdtempSync(join(tmpdir(),"networkpilot-import-"));dirs.push(dir);const repo=new SqliteSimulationRepository(join(dir,"test.sqlite"));repo.migrate();return repo;};
+const repository=()=>{const dir=mkdtempSync(join(tmpdir(),"networkpilot-import-"));dirs.push(dir);const repo=new SqliteSimulationRepository(join(dir,"test.sqlite"));migrateTestDatabase(repo);return repo;};
 afterEach(()=>{for(const dir of dirs.splice(0))rmSync(dir,{recursive:true,force:true});});
 
 describe("provider-independent import and review",()=>{

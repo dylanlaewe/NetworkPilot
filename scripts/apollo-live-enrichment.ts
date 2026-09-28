@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   const repository = new SqliteSimulationRepository(ENRICHMENT_DATABASE);
   const transport = new CappedApolloEnrichmentTransport(new FetchApolloTransport(), 4);
   try {
-    search.migrate(); repository.migrate();
+    search.assertRuntimeSchema(); repository.assertRuntimeSchema();
     if (repository.getSetting("apolloLiveEnrichmentCorrectionCompleted") === "true") throw new Error("controlled-apollo-enrichment-correction-already-completed");
     const selectedId = search.getSetting("apolloLiveEnrichmentCandidate1Id");
     if (!selectedId) throw new Error("controlled-apollo-enrichment-candidate-one-not-authorized");

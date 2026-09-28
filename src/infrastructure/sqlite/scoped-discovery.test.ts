@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SqliteSimulationRepository } from "./database";
 import { SqliteScopedDiscoveryStore } from "./scoped-discovery";
@@ -9,7 +10,7 @@ const repos: SqliteSimulationRepository[] = [];
 beforeEach(() => vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "true"));
 afterEach(() => { repos.splice(0).forEach(r => r.close()); vi.unstubAllEnvs(); });
 function setup() {
-  const repository = new SqliteSimulationRepository(":memory:"); repos.push(repository); repository.migrate();
+  const repository = new SqliteSimulationRepository(":memory:"); repos.push(repository); migrateTestDatabase(repository);
   const recruiter = bucketFixture("recruiters", 1), peer = bucketFixture("peers", 2, true);
   const store = new SqliteScopedDiscoveryStore(repository, { companies: [recruiter.company, peer.company], companyDomains: { [recruiter.company.id]: recruiter.source.currentOrganization.domain!, [peer.company.id]: peer.source.currentOrganization.domain! }, includeSecondary: false });
   const policy = { maximumPerBatch: 5, maximumPerDay: 7, maximumSearchCalls: 2, hardStop: true };

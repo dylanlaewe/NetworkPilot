@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import {mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -11,7 +12,7 @@ import {CONTROLLED_REAL_BATCH_COMPANIES,CONTROLLED_REAL_BATCH_FUNCTION_SOFT_CAP,
 import {prepareControlledRealCampaign} from "./prepare-controlled-real-campaign";
 
 const dirs:string[]=[];
-const repository=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-controlled-batch-"));dirs.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));repo.migrate();return repo;};
+const repository=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-controlled-batch-"));dirs.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));migrateTestDatabase(repo);return repo;};
 afterEach(()=>dirs.splice(0).forEach((directory)=>rmSync(directory,{recursive:true,force:true})));
 const source=(id:string,domain:string,index:number,stage:"search"|"enrichment"):CandidateSourceRecord=>({sourceProviderId:"apollo",providerRecordId:id,datasetClassification:"authorized-provider",person:{firstName:"Fixture",lastName:stage==="search"?"C.":"Candidate"},currentTitle:index%2===0?"Senior Data Engineer":"Analytics Manager",currentOrganization:{name:CONTROLLED_REAL_BATCH_COMPANIES.find((item)=>item.domain===domain)!.id.replaceAll("-"," "),domain},location:"Boston, Massachusetts, United States",industrySignals:["technology"],experienceEvidence:stage==="search"?[{kind:"unknown",sourceField:"person.employment_history"}]:[{kind:"exact",years:9,sourceField:"fixture"}],email:{address:stage==="search"?"":`fictional-${id}@example.invalid`,verificationStatus:stage==="search"?"unknown":"verified"},sourceTimestamps:{retrievedAt:"2026-09-09T12:00:00.000Z"},fieldProvenance:{},consent:{suppressed:false,optedOut:false},sourceFingerprint:`fixture-${stage}-${id}-fingerprint`,providerMetadata:{adapterVersion:"fixture",responseMappingVersion:"fixture",requestContractVersion:"fixture",importArchitectureVersion:"fixture",providerSeniority:"senior",matchConfidence:"high",identityEvidenceBasis:"provider-native-id-exact",providerNativeRequestId:id,providerNativeReturnedId:id}});
 

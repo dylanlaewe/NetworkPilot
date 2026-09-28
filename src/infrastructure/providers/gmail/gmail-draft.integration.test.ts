@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import {mkdtempSync,rmSync} from "node:fs";
 import {createHash} from "node:crypto";
 import {tmpdir} from "node:os";
@@ -14,7 +15,7 @@ import {generateDraftsForRun} from "@/application/drafts";
 import {sendAndRecordCommandCenterDraft,withOpenCommandCenterRepository} from "@/infrastructure/sqlite/command-center-drafts";
 
 const directories:string[]=[];
-const setup=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-gmail-"));directories.push(directory);const repository=new SqliteSimulationRepository(join(directory,"test.sqlite"));repository.migrate();return repository;};
+const setup=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-gmail-"));directories.push(directory);const repository=new SqliteSimulationRepository(join(directory,"test.sqlite"));migrateTestDatabase(repository);return repository;};
 afterEach(()=>{while(directories.length)rmSync(directories.pop()!,{recursive:true,force:true});});
 const snapshot=():ApprovedEmailDraftSnapshot=>({snapshotId:"fictional-draft-snapshot-001",recipientProfessionalEmail:"recipient@example.invalid",recipientDisplayName:"Fictional Résumé",subject:"A thoughtful question — data work",body:"Hello Fictional,\n\nCould I ask for 15 minutes?\n\nThank you,\nDylan",planningSnapshotId:"fictional-plan-001",templateCatalogVersion:"catalog-v3",evidenceIds:["fictional-evidence-001"],approvedAt:"2026-09-10T12:00:00.000Z"});
 const config={enabled:true,clientId:"fixture-client",redirectUri:"http://127.0.0.1:9876/oauth/google/callback",scope:GMAIL_COMPOSE_SCOPE,timeoutMs:1000,maxResponseBytes:10000} as const;

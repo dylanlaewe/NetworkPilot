@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +10,7 @@ import { seedFictionalData } from "./seed";
 
 const directories:string[]=[];
 const instant=new Date("2026-09-07T15:00:00.000Z");
-function repository(){const directory=mkdtempSync(join(tmpdir(),"networkpilot-function-plan-"));directories.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));repo.migrate();seedFictionalData(repo);return repo;}
+function repository(){const directory=mkdtempSync(join(tmpdir(),"networkpilot-function-plan-"));directories.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));migrateTestDatabase(repo);seedFictionalData(repo);return repo;}
 afterEach(()=>{for(const directory of directories.splice(0))rmSync(directory,{recursive:true,force:true});});
 
 function isolateCandidate(repo:SqliteSimulationRepository,title:string,desiredRoleId="",roleFamilyId="",personaId="team-manager"){

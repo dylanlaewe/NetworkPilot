@@ -131,9 +131,10 @@ export function loadBucketReserveMetrics(
   assertFiveBucketEnabled();
   const repository = new SqliteSimulationRepository(
     resolveManualOutreachDatabaseSelection().path,
+    {readonly:true,fileMustExist:true},
   );
   try {
-    repository.migrate();
+    repository.assertRuntimeSchema();
     const state = bucketReserve(repository, scope, at);
     return {
       totalReserve: state.totalReserve,
@@ -152,9 +153,10 @@ export function hasActionableBucketReserve(
   assertFiveBucketEnabled();
   const repository = new SqliteSimulationRepository(
     resolveManualOutreachDatabaseSelection().path,
+    {readonly:true,fileMustExist:true},
   );
   try {
-    repository.migrate();
+    repository.assertRuntimeSchema();
     return scopes.some(
       (scope) => bucketReserve(repository, scope, at).actionableCapacity > 0,
     );

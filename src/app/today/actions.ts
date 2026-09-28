@@ -1,16 +1,16 @@
 "use server";
 import {draftAdditionDestination} from "@/application/daily-refresh/addition-feedback";
 import {revalidatePath} from "next/cache";
-import {SqliteSimulationRepository} from "@/infrastructure/sqlite/database";
 import {listManualDraftOperatorEntries,resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
 import {confirmManualSendByOperatorId,recordOperatorReportedHardBounce,reportManualOutreachOutcome,resolveManualSendOperatorEntry,MANUAL_OUTREACH_OUTCOMES,type ManualOutreachOutcome} from "@/application/manual-outreach";
 import {approveCommandCenterDraft,approveEditedCommandCenterDraft,createCommandCenterGmailDraft,reconcileCommandCenterGmailSend,sendCommandCenterGmailDraft} from "@/infrastructure/sqlite/command-center-drafts";
 import {recordDraftDisposition,replaceBucketDraftFromReserve,resolveBucketDraftCorrection,runDailyRefreshFromToday,runNextDraftBatchFromReserve} from "@/infrastructure/sqlite/daily-refresh";
 import {parseBucketScope,type BucketScope} from "@/domain/recipient-buckets";
 import {redirect} from "next/navigation";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 
 function refreshProductPages(){for(const path of ["/today","/drafts","/sent","/candidates"])revalidatePath(path);}
-function context(){const selection=resolveManualOutreachDatabaseSelection(),entries=listManualDraftOperatorEntries(selection.path),repository=new SqliteSimulationRepository(selection.path);repository.migrate();return{entries,repository};}
+function context(){const selection=resolveManualOutreachDatabaseSelection(),entries=listManualDraftOperatorEntries(selection.path),repository=openRuntimeRepository(selection.path);return{entries,repository};}
 export async function confirmAlreadySent(formData:FormData){if(formData.get("confirmation")!=="confirmed")throw new Error("manual-send-explicit-confirmation-required");const id=String(formData.get("id")??""),sentAt=new Date(String(formData.get("sentAt")??"")),{entries,repository}=context();try{confirmManualSendByOperatorId({entries,operatorId:id,effectiveSentAt:sentAt,now:()=>new Date(),repository});}finally{repository.close();}refreshProductPages();}
 export async function recordOutcome(formData:FormData){const id=String(formData.get("id")??""),outcome=String(formData.get("outcome")??"") as ManualOutreachOutcome;if(!MANUAL_OUTREACH_OUTCOMES.includes(outcome)||outcome==="hard-bounce")throw new Error("manual-outcome-invalid");const{entries,repository}=context();try{const entry=resolveManualSendOperatorEntry(entries,id);reportManualOutreachOutcome({snapshotId:entry.snapshotId,outcome,now:()=>new Date(),repository});}finally{repository.close();}revalidatePath("/today");}
 export async function reportDeliveryFailure(formData:FormData){if(formData.get("confirmation")!=="address-not-found")throw new Error("manual-hard-bounce-explicit-confirmation-required");const id=String(formData.get("id")??""),sentAt=new Date(String(formData.get("sentAt")??"")),{entries,repository}=context();try{const entry=resolveManualSendOperatorEntry(entries,id);recordOperatorReportedHardBounce({snapshotId:entry.snapshotId,effectiveSentAt:sentAt,now:()=>new Date(),repository});}finally{repository.close();}revalidatePath("/today");}

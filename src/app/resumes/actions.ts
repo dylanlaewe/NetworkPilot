@@ -7,15 +7,11 @@ import {
   type ResumeRoleLane,
 } from "@/application/resumes";
 import { LocalResumeStore } from "@/infrastructure/resumes/local-store";
-import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
 import { resolveManualOutreachDatabaseSelection } from "@/infrastructure/sqlite/manual-outreach-operator";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 
 function repository() {
-  const repo = new SqliteSimulationRepository(
-    resolveManualOutreachDatabaseSelection().path,
-  );
-  repo.migrate();
-  return repo;
+  return openRuntimeRepository(resolveManualOutreachDatabaseSelection().path);
 }
 function lane(value: FormDataEntryValue | null): ResumeRoleLane | null {
   const text = String(value ?? "");

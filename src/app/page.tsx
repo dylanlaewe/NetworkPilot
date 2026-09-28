@@ -2,28 +2,31 @@ import {getDashboardData} from "@/application/simulation/dashboard";
 import {NetworkCommandShell} from "@/app/network-command-shell";
 import {APOLLO_ADAPTER_VERSION,readApolloConfig} from "@/infrastructure/providers/apollo";
 import {loadDailyCommandCenter} from "@/infrastructure/sqlite/daily-command-center";
-import {getSimulationRepository} from "@/infrastructure/sqlite/runtime";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 import {runTodaySimulation} from "./actions";
 import {ReadySimulationControl,SimulationUnavailableControl} from "./simulation-control";
 import styles from "./system-command.module.css";
 import {isDemoMode} from "@/demo/mode";
 import {DEMO_RELATIONSHIPS} from "@/demo/network-command-c3";
 import {buildDailyCommandCenter} from "@/application/daily-command-center";
+import {explicitMigrationCommand,isDatabaseMigrationRequired,type DatabaseMigrationRequiredError} from "@/infrastructure/sqlite/schema-contract";
 export const dynamic="force-dynamic";
 
 const tone=(healthy:boolean)=>healthy?styles.healthy:styles.attention;
 export default async function Home({searchParams}:{searchParams?:Promise<{fixture?:string}>}={}){
-  const params:{fixture?:string}=await(searchParams??Promise.resolve({})),demo=isDemoMode(),fixture=demo?params.fixture:undefined,repository=demo?null:getSimulationRepository();
-  const simulation=repository?getDashboardData(repository,new Date()):{today:"2026-09-21",timezone:"America/New_York",prospectCount:120,suppressionCount:2,simulationReady:true,latestRun:null};
-  const daily=demo?buildDailyCommandCenter({drafts:DEMO_RELATIONSHIPS,reserve:[],gmailState:fixture==="gmail"?"reauthorization-required":"connected",apolloEnabled:true,apolloReady:true,apolloExposure:fixture==="apollo"?20:7,apolloObserved:fixture==="apollo"?20:7,cooldownCompanies:3}):loadDailyCommandCenter(),apollo=readApolloConfig(process.env);
+  const params:{fixture?:string}=await(searchParams??Promise.resolve({})),demo=isDemoMode(),fixture=demo?params.fixture:undefined;
+  let migrationRequired:DatabaseMigrationRequiredError|null=null,simulation:{today:string;timezone:string;prospectCount:number;suppressionCount:number;simulationReady:boolean;latestRun:ReturnType<typeof getDashboardData>["latestRun"]},daily;
+  if(demo){simulation={today:"2026-09-21",timezone:"America/New_York",prospectCount:120,suppressionCount:2,simulationReady:true,latestRun:null};daily=buildDailyCommandCenter({drafts:DEMO_RELATIONSHIPS,reserve:[],gmailState:fixture==="gmail"?"reauthorization-required":"connected",apolloEnabled:true,apolloReady:true,apolloExposure:fixture==="apollo"?20:7,apolloObserved:fixture==="apollo"?20:7,cooldownCompanies:3});}
+  else try{const repository=openRuntimeRepository(undefined,{readonly:true});try{simulation=getDashboardData(repository,new Date());}finally{repository.close();}daily=loadDailyCommandCenter();}catch(error){if(!isDatabaseMigrationRequired(error))throw error;migrationRequired=error;simulation={today:new Date().toISOString().slice(0,10),timezone:"America/New_York",prospectCount:0,suppressionCount:0,simulationReady:false,latestRun:null};daily=buildDailyCommandCenter({drafts:[],reserve:[],gmailState:"not-configured",apolloEnabled:false,apolloExposure:0,apolloObserved:null,cooldownCompanies:0});}
+  const apollo=readApolloConfig(process.env);
   const gmailReady=daily.safety.gmailState==="connected",apolloExhausted=daily.safety.apolloExposure>=20,databaseReady=simulation.simulationReady;
-  const overall=gmailReady&&databaseReady?"Operational":"Action required";
+  const overall=gmailReady&&databaseReady&&!migrationRequired?"Operational":"Action required";
   return <NetworkCommandShell current="system" status={`System · ${overall}`}><div className={styles.page}>
     <header className={styles.header}><div><p>Quiet operational diagnostics</p><h1>System</h1><span>Healthy systems recede. Exceptions stay visible and actionable.</span></div><strong className={tone(overall==="Operational")}>{overall}</strong></header>
     <section className={styles.summary} aria-labelledby="health-summary"><header><h2 id="health-summary">Health</h2><span>Local production</span></header><dl>
       <div className={tone(gmailReady)}><dt><i/>Gmail</dt><dd><strong>{gmailReady?"Ready":"Connection needs attention"}</strong><span>{gmailReady?"Compose access is connected.":"Reconnect before creating or sending approved drafts."}</span></dd></div>
       <div className={tone(!apolloExhausted)}><dt><i/>Apollo</dt><dd><strong>{apolloExhausted?"Available tomorrow":`${Math.max(0,20-daily.safety.apolloExposure)} refresh credits available`}</strong><span>{apolloExhausted?"Candidate refresh is paused; other workflows remain available.":"Bounded read-only sourcing is available when explicitly requested."}</span></dd></div>
-      <div className={tone(databaseReady)}><dt><i/>Data</dt><dd><strong>{databaseReady?"Healthy":"Fictional dataset unavailable"}</strong><span>{simulation.prospectCount} fictional simulation prospects · persistent local storage</span></dd></div>
+      <div className={tone(databaseReady&&!migrationRequired)}><dt><i/>Data</dt><dd><strong>{migrationRequired?"Migration required":databaseReady?"Healthy":"Fictional dataset unavailable"}</strong><span>{migrationRequired?<>Review the target, then run <code>{explicitMigrationCommand(migrationRequired.databasePath)}</code> ({migrationRequired.requiredVersion}).</>:`${simulation.prospectCount} fictional simulation prospects · persistent local storage`}</span></dd></div>
       <div className={styles.healthy}><dt><i/>Safety</dt><dd><strong>Guards active</strong><span>{daily.safety.suppressed} suppressed · {daily.safety.cooldownCompanies} companies cooling down</span></dd></div>
     </dl></section>
     <section className={styles.groups}>

@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import type { ApprovedEmailDraftSnapshot } from "@/application/email-drafts";
 import type { ResumeRecord } from "@/application/resumes";
 import { resolveManualOutreachDatabaseSelection } from "./manual-outreach-operator";
+import { assertRuntimeSchema } from "./schema-contract";
 
 export interface ResumeLibraryEntry extends ResumeRecord {
   usageCount: number;
@@ -14,6 +15,7 @@ export function loadRecruiterDefaultResumeId(): string | null {
     fileMustExist: true,
   });
   try {
+    assertRuntimeSchema(database);
     const table = database
       .prepare(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recruiter_resume_preference'",
@@ -41,6 +43,7 @@ export function loadResumeLibrary(): ResumeLibraryEntry[] {
     fileMustExist: true,
   });
   try {
+    assertRuntimeSchema(database);
     const rows = database
       .prepare(
         "SELECT id,display_label,original_filename,size_bytes,sha256,uploaded_at_utc,role_lane,active FROM resume_library ORDER BY active DESC,uploaded_at_utc DESC,id",

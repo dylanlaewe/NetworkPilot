@@ -6,6 +6,7 @@ import styles from "./resume-command.module.css";
 import { isDemoMode } from "@/demo/mode";
 import { DEMO_RESUMES } from "@/demo/network-command-c3";
 import {fiveBucketEnabled} from "@/domain/recipient-buckets";
+import {migrationRequiredView} from "@/app/migration-required";
 
 export const dynamic = "force-dynamic";
 const laneLabel = (value: string | null) =>
@@ -21,7 +22,7 @@ const when = (value: string) =>
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-export default async function ResumesPage({
+async function renderResumesPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string; resume?: string; add?: string }>;
@@ -242,3 +243,4 @@ export default async function ResumesPage({
     </NetworkCommandShell>
   );
 }
+export default async function ResumesPage(input:{searchParams:Promise<{status?:string;resume?:string;add?:string}>}){try{return await renderResumesPage(input);}catch(error){return migrationRequiredView(error);}}

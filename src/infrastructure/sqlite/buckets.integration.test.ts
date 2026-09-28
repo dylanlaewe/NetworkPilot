@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -24,7 +25,7 @@ const repos: SqliteSimulationRepository[] = [],
   folders: string[] = [];
 const repo = () => {
   const r = new SqliteSimulationRepository(":memory:");
-  r.migrate();
+  migrateTestDatabase(r);
   repos.push(r);
   return r;
 };
@@ -615,7 +616,7 @@ describe("bucket persistence and reserve integration", () => {
     const original = new SqliteSimulationRepository(
       join(dir, "synthetic-old.sqlite"),
     );
-    original.migrate(migrationDir);
+    migrateTestDatabase(original, migrationDir);
     const legacy = {
       snapshotId: "legacy-fixture",
       recipientProfessionalEmail: "legacy@example.invalid",
@@ -641,7 +642,7 @@ describe("bucket persistence and reserve integration", () => {
       join(dir, "synthetic-copy.sqlite"),
     );
     repos.push(migrated);
-    migrated.migrate();
+    migrateTestDatabase(migrated);
     expect(
       migrated.native
         .prepare("SELECT approved_snapshot_json FROM gmail_draft_operations")

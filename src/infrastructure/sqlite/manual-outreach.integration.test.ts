@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -19,7 +20,7 @@ function setup() {
   const directory = mkdtempSync(join(tmpdir(), "networkpilot-manual-outreach-"));
   directories.push(directory);
   const databasePath=join(directory,"test.sqlite"),repository = new SqliteSimulationRepository(databasePath);
-  repository.migrate();
+  migrateTestDatabase(repository);
   seedFictionalData(repository);
   const run = runDailySimulation(repository, { instant: new Date("2026-09-07T15:00:00.000Z"), random: () => 0 });
   const draft = generateDraftsForRun(repository, run.id, () => new Date("2026-09-07T16:00:00.000Z"))[0]!;
@@ -70,7 +71,7 @@ describe("operator-confirmed manual outreach production path", () => {
       repository.native.prepare("INSERT OR IGNORE INTO schema_migrations(version,applied_at_utc) VALUES(?,?)").run(file,"2026-09-10T00:00:00.000Z");
     }
     const fixture={operationId:"gmail-draft:historical",snapshot:{snapshotId:"historical-snapshot",recipientProfessionalEmail:"fictional@example.invalid",recipientDisplayName:"Fictional Person",subject:"Historical subject",body:"Historical body",planningSnapshotId:"historical-plan",templateCatalogVersion:"catalog-v3",evidenceIds:[],approvedAt:"2026-09-10T00:00:00.000Z"},provider:"gmail" as const,state:"approved-for-gmail-draft" as const,gmailDraftId:null,gmailMessageId:null,attemptStartedAt:null,completedAt:null,errorCategory:null,adapterVersion:"fixture-v1",outreachTrack:"professional" as const};
-    repository.approveGmailDraftOperation(fixture);seedFictionalData(repository);const prospect=repository.listProspects()[0]!;repository.createManualOutreach({id:"historical-manual",draftSnapshotId:"historical-snapshot",gmailOperationId:fixture.operationId,candidateId:prospect.id,companyId:prospect.companyId,identitySource:"prospect",confirmationSource:"operator",confirmedAt:"2026-09-10T01:00:00.000Z",effectiveSentAt:"2026-09-10T00:59:00.000Z",outcome:"awaiting-response",operationVersion:"manual-outreach-v1",createdAt:"2026-09-10T01:00:00.000Z",updatedAt:"2026-09-10T01:00:00.000Z"});repository.migrate();
+    repository.approveGmailDraftOperation(fixture);seedFictionalData(repository);const prospect=repository.listProspects()[0]!;repository.createManualOutreach({id:"historical-manual",draftSnapshotId:"historical-snapshot",gmailOperationId:fixture.operationId,candidateId:prospect.id,companyId:prospect.companyId,identitySource:"prospect",confirmationSource:"operator",confirmedAt:"2026-09-10T01:00:00.000Z",effectiveSentAt:"2026-09-10T00:59:00.000Z",outcome:"awaiting-response",operationVersion:"manual-outreach-v1",createdAt:"2026-09-10T01:00:00.000Z",updatedAt:"2026-09-10T01:00:00.000Z"});migrateTestDatabase(repository);
     expect(repository.findGmailDraftOperation("historical-snapshot")).toMatchObject({...fixture,sendState:"not-sent",sentAt:null,gmailSentMessageId:null});
     expect(repository.findManualOutreach("historical-snapshot")).toMatchObject({id:"historical-manual",outcome:"awaiting-response",operationVersion:"manual-outreach-v1"});
     expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_audit WHERE manual_outreach_id='historical-manual'").get()).toEqual({count:1});

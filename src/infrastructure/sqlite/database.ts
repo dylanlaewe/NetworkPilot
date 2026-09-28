@@ -1,8 +1,8 @@
 import Database from "better-sqlite3";
 import {assertFiveBucketEnabled,type BucketCorrection} from "@/domain/recipient-buckets";
 import {reviewedBucketCorrection} from "@/application/ingestion/review-bucket";
-import { mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { DecisionReasonCode, Industry, OutreachEvent, OutreachEventType, Prospect, QualificationDecision } from "@/domain/outreach";
 import { DECISION_REASON_CODES } from "@/domain/outreach";
 import type { PersistedDecision, RunSummary, SimulationRepository, SimulationRunView } from "@/application/simulation/types";
@@ -19,6 +19,7 @@ import {scoreRecipientRelevance} from "@/domain/candidates";
 import type {GmailConnectionMetadata,GmailConnectionMetadataRepository,GmailDraftOperation,GmailDraftOperationRepository,GmailDraftOperationState} from "@/application/email-drafts";
 import type {ManualOutreachMetrics,ManualOutreachOutcome,ManualOutreachRecord,ManualOutreachRepository,ResolvedManualDraft} from "@/application/manual-outreach";
 import type {ResumeRecord,ResumeRepository,ResumeRoleLane} from "@/application/resumes";
+import {assertRuntimeSchema} from "./schema-contract";
 
 export const DEFAULT_DATABASE_PATH = "data/networkpilot.sqlite";
 
@@ -28,23 +29,15 @@ type DecisionRow = { prospect_id: string; reason_code: DecisionReasonCode; accep
 type DraftRow={id:string;prospect_id:string;run_id:string|null;template_id:string;template_version:string;template_catalog_version:string;subject:string;body:string;fact_ids_json:string;evidence_ids_json:string;targeting_score_version:string;targeting_score:number;score_components_json:string;explanation_codes_json:string;rejection_code:string|null;recipient_snapshot_json:string;status:DraftStatus;created_at_utc:string;updated_at_utc:string};
 export class SqliteSimulationRepository implements SimulationRepository, DraftStudioRepository, IngestionRepository, ApolloBudgetRepository, GmailDraftOperationRepository, GmailConnectionMetadataRepository, ManualOutreachRepository, ResumeRepository {
   readonly native: Database.Database;
-  constructor(databasePath = process.env.NETWORKPILOT_DATABASE_PATH ?? DEFAULT_DATABASE_PATH) {
-    if (databasePath !== ":memory:") mkdirSync(dirname(resolve(databasePath)), { recursive: true });
-    this.native = new Database(databasePath);
+  constructor(databasePath = process.env.NETWORKPILOT_DATABASE_PATH ?? DEFAULT_DATABASE_PATH, options: {readonly?:boolean;fileMustExist?:boolean} = {}) {
+    if (databasePath !== ":memory:" && !options.readonly) mkdirSync(dirname(resolve(databasePath)), { recursive: true });
+    this.native = new Database(databasePath, options);
     this.native.pragma("foreign_keys = ON");
-    this.native.pragma("journal_mode = WAL");
+    if(options.readonly)this.native.pragma("query_only = ON");
   }
   close(): void { this.native.close(); }
-  migrate(migrationsDirectory = resolve(process.cwd(), "migrations")): void {
-    this.native.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at_utc TEXT NOT NULL)");
-    const applied = this.native.prepare("SELECT version FROM schema_migrations WHERE version = ?");
-    const record = this.native.prepare("INSERT INTO schema_migrations(version, applied_at_utc) VALUES (?, ?)");
-    for (const file of readdirSync(migrationsDirectory).filter((name) => name.endsWith(".sql")).sort()) {
-      if (applied.get(file)) continue;
-      const sql = readFileSync(join(migrationsDirectory, file), "utf8");
-      this.native.transaction(() => { this.native.exec(sql); record.run(file, new Date().toISOString()); }).immediate();
-    }
-  }
+  /** Runtime compatibility check only; never applies or creates schema. */
+  assertRuntimeSchema(env: Readonly<Record<string,string|undefined>> = process.env): void { assertRuntimeSchema(this.native,env); }
   transaction<T>(work: () => T): T { return this.native.transaction(work).immediate(); }
   getSetting(key: string): string | undefined { return (this.native.prepare("SELECT value FROM campaign_settings WHERE key = ?").get(key) as { value: string } | undefined)?.value; }
   getDatasetStatus(): { datasetType?: string; prospectCount: number } { return { datasetType: this.getSetting("datasetType"), prospectCount: this.countProspects() }; }

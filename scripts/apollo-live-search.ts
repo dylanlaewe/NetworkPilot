@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   const transport = new OneRequestSearchTransport(new FetchApolloTransport());
   const controlledEnvironment = { ...process.env, NETWORKPILOT_APOLLO_MAX_RETRIES: "0" };
   try {
-    repository.migrate();
+    repository.assertRuntimeSchema();
     const firstSessionRequests = (repository.native.prepare("SELECT COUNT(*) count FROM import_batches WHERE adapter_id = 'apollo' AND id LIKE 'apollo-live-search-%' AND id NOT LIKE 'apollo-live-search-61b-%'").get() as { count: number }).count;
     if (firstSessionRequests !== 3) throw new Error("controlled-apollo-first-session-history-invalid");
     const priorRequests = Number(repository.getSetting("apolloLiveSearch61bRequestCount") ?? 0);

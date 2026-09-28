@@ -8,7 +8,7 @@ export const QA_PROFESSIONAL_TITLES=["Data Analyst","Analytics Engineer","Data E
 export const QA_RECRUITER_TITLES=["Technical Recruiter","Engineering Recruiter","Campus Recruiter","Product Recruiter","Early Career Recruiter","University Recruiter","Data Recruiter","AI Recruiter"];
 // Entirely synthetic identities and reserved domains; never live-provider inputs.
 export function seedOfflineReserve(repository:SqliteSimulationRepository,at=new Date("2026-09-21T14:00:00Z")){
-  repository.migrate();seedTargetCompanyRegistry(repository);
+  repository.assertRuntimeSchema();seedTargetCompanyRegistry(repository);
   const preferred=TARGET_COMPANIES.filter(c=>c.enabled&&c.tier!=="excluded"&&c.tier!=="unreviewed").slice(0,20);
   const records:CandidateSourceRecord[]=Array.from({length:90},(_,i)=>{
     const recruiter=i>=60,known=i<15?preferred[i]:i>=60&&i<65?preferred[i-45]:undefined,id=`offline-qa-${i}`;

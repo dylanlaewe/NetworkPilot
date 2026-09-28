@@ -13,6 +13,7 @@ import {approveForGmailDraft,createApprovedGmailDraft} from "@/application/email
 import {DeterministicPlainTextMimeBuilder} from "@/infrastructure/providers/gmail";
 import {activeDrafts} from "@/application/product-workflow";
 import {recordOperatorReportedHardBounce} from "@/application/manual-outreach";
+import {migrateTestDatabase} from "./test-migrations";
 
 let directory:string,repository:SqliteSimulationRepository;
 const at=new Date("2026-09-21T14:00:00Z"),now=()=>at;
@@ -23,7 +24,7 @@ beforeEach(()=>{
   vi.stubEnv("NETWORKPILOT_GMAIL_ENABLED","false");vi.stubEnv("NETWORKPILOT_APOLLO_ENABLED","false");
   vi.useFakeTimers();vi.setSystemTime(at);
   vi.stubGlobal("fetch",vi.fn(()=>{throw new Error("offline-qa-network-prohibited");}));
-  repository=new SqliteSimulationRepository(join(directory,"fixture.sqlite"));seedOfflineReserve(repository,at);
+  repository=new SqliteSimulationRepository(join(directory,"fixture.sqlite"));migrateTestDatabase(repository);seedOfflineReserve(repository,at);
   repository.native.prepare("INSERT INTO provider_daily_budgets(provider_id,local_date,attempted_candidates,estimated_max_exposure,updated_at_utc) VALUES('apollo','2026-09-21',20,20,?)").run(at.toISOString());
 });
 afterEach(()=>{repository.close();vi.useRealTimers();vi.unstubAllEnvs();vi.unstubAllGlobals();rmSync(directory,{recursive:true,force:true});});

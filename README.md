@@ -44,7 +44,7 @@ The command center supports distinct Professional and Recruiter outreach tracks.
 
 - `npm run db:migrate` — apply pending versioned SQL migrations
 - `npm run db:seed` — idempotently insert 180 original fabricated prospects, two eligible provider-shaped fixtures, review fixtures, and campaign settings
-- `NODE_ENV=development npm run db:reset` — development-only reset and reseed of the exact configured database
+- `NODE_ENV=development npm run db:reset` — development-only reset of the exact configured database; then run `npm run db:migrate` and `npm run db:seed` explicitly
 
 The reset command refuses to run unless `NODE_ENV` is `development` or `test`, prints its resolved target, and requires that target to remain inside this project’s real `data` directory without symlink escapes. An existing database containing data must carry the exact `datasetType=fictional` marker. Migration source files are never removed.
 
@@ -78,6 +78,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run lint` — ESLint with zero warnings allowed
 - `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts
 - `npm run check:no-email-send` — permit only the reviewed explicit Gmail draft-send path and reject generic, bulk, scheduled, background, SMTP, or bypass delivery paths
+- `npm run check:no-implicit-migrations` — reject runtime imports of migration authority and the retired implicit migration API
 - `npm run manual-send:list` — list confirmable pilot drafts with privacy-safe operation-derived IDs
 - `npm run manual-send:confirm` — after sending independently in Gmail, record an explicit operator confirmation by listed ID
 - `npm run manual-send:bounce` — atomically record a manual attempt and human-reported address-not-found hard bounce

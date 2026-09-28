@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import {mkdtempSync,readFileSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -8,7 +9,7 @@ import {LocalResumeStore} from "@/infrastructure/resumes/local-store";
 import {addResume,attachmentSnapshot,MAX_RESUME_BYTES,sanitizePdfFilename,suggestedResumeId,validateResumePdf} from ".";
 
 const directories:string[]=[];
-const setup=()=>{const root=mkdtempSync(join(tmpdir(),"networkpilot-resume-"));directories.push(root);const repository=new SqliteSimulationRepository(join(root,"test.sqlite"));repository.migrate();return{root,repository,store:new LocalResumeStore(join(root,"private-resumes"))};};
+const setup=()=>{const root=mkdtempSync(join(tmpdir(),"networkpilot-resume-"));directories.push(root);const repository=new SqliteSimulationRepository(join(root,"test.sqlite"));migrateTestDatabase(repository);return{root,repository,store:new LocalResumeStore(join(root,"private-resumes"))};};
 const pdf=Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
 afterEach(()=>{while(directories.length)rmSync(directories.pop()!,{recursive:true,force:true});});
 

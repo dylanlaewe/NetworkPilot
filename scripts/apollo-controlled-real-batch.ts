@@ -14,7 +14,7 @@ async function main():Promise<void>{
   loadEnvFile(resolve(process.cwd(),".env.local"));
   const searchRepository=new SqliteSimulationRepository(SEARCH_DATABASE),enrichmentRepository=new SqliteSimulationRepository(ENRICHMENT_DATABASE);
   try{
-    searchRepository.migrate();enrichmentRepository.migrate();seedTargetCompanyRegistry(enrichmentRepository);
+    searchRepository.assertRuntimeSchema();enrichmentRepository.assertRuntimeSchema();seedTargetCompanyRegistry(enrichmentRepository);
     const config=readApolloConfig({...process.env,NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_BATCH:"20",NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_DAY:"20",NETWORKPILOT_APOLLO_MAX_RETRIES:"0",NETWORKPILOT_APOLLO_HARD_STOP:"true"});assertApolloEnabled(config);
     if(enrichmentRepository.getSetting("controlledRealBatchStarted")==="true")throw new Error("controlled-real-batch-already-started");
     enrichmentRepository.setSetting("controlledRealBatchStarted","true",new Date());

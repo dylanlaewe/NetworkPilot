@@ -9,6 +9,7 @@ import {seedOfflineReserve} from "../fixtures/offline-reserve";
 import {SqliteSimulationRepository} from "./database";
 import {draftCampaignDate,loadQueueReviews,readDraftGenerations,renderQueueReview} from "./draft-queue";
 import {recordDraftDisposition,SqliteDailyRefreshRepository} from "./daily-refresh";
+import {migrateTestDatabase} from "./test-migrations";
 
 let directory:string,repository:SqliteSimulationRepository;
 beforeEach(()=>{
@@ -18,6 +19,7 @@ beforeEach(()=>{
   vi.stubEnv("NETWORKPILOT_GMAIL_ENABLED","false");vi.stubEnv("NETWORKPILOT_APOLLO_ENABLED","false");
   vi.stubGlobal("fetch",vi.fn(()=>{throw new Error("provider-calls-prohibited");}));
   repository=new SqliteSimulationRepository(join(directory,"fixture.sqlite"));
+  migrateTestDatabase(repository);
   seedOfflineReserve(repository,new Date("2026-09-18T12:00:00Z"));
 });
 afterEach(()=>{expect(fetch).not.toHaveBeenCalled();repository.close();vi.unstubAllEnvs();vi.unstubAllGlobals();rmSync(directory,{recursive:true,force:true});});

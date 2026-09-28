@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import {mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -10,7 +11,7 @@ import {seedTargetCompanyRegistry} from "@/infrastructure/sqlite/seed";
 import {OPERATIONAL_COMPANIES,OPERATIONAL_MAX_ENRICHMENTS,OperationalScaleTransport,runOperationalScaleBatch} from "./run-operational-scale-batch";
 
 const directories:string[]=[];
-const repository=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-operational-"));directories.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));repo.migrate();return repo;};
+const repository=()=>{const directory=mkdtempSync(join(tmpdir(),"networkpilot-operational-"));directories.push(directory);const repo=new SqliteSimulationRepository(join(directory,"test.sqlite"));migrateTestDatabase(repo);return repo;};
 afterEach(()=>directories.splice(0).forEach((directory)=>rmSync(directory,{recursive:true,force:true})));
 const titles=["Senior Data Engineer","Senior Software Engineer","Analytics Manager","Technical Program Manager"];
 const record=(companyId:string,domain:string,index:number,stage:"search"|"enrichment"):CandidateSourceRecord=>{const company=TARGET_COMPANIES.find((item)=>item.id===companyId)!;return{sourceProviderId:"apollo",providerRecordId:`${companyId}-fixture-${index}`,datasetClassification:"authorized-provider",person:{firstName:"Fictional",lastName:stage==="search"?"P***n":"Person"},currentTitle:titles[index%titles.length]!,currentOrganization:{name:company.canonicalName,domain},location:"Boston, Massachusetts, United States",industrySignals:[company.industryId],experienceEvidence:stage==="search"?[{kind:"unknown",sourceField:"fixture"}]:[{kind:"exact",years:9,sourceField:"fixture"}],email:{address:stage==="search"?"":`fictional-${companyId}-${index}@example.invalid`,verificationStatus:stage==="search"?"unknown":"verified"},sourceTimestamps:{retrievedAt:"2026-09-10T12:00:00.000Z"},fieldProvenance:{},consent:{suppressed:false,optedOut:false},sourceFingerprint:`fixture-${stage}-${companyId}-${index}-fingerprint`,providerMetadata:{adapterVersion:"fixture",responseMappingVersion:"fixture",requestContractVersion:"fixture",importArchitectureVersion:"fixture",providerSeniority:"senior",identityEvidenceBasis:"provider-native-id-exact",providerNativeRequestId:`${companyId}-fixture-${index}`,providerNativeReturnedId:`${companyId}-fixture-${index}`,matchConfidence:"high"}};};

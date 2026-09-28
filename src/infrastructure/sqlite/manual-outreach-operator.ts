@@ -4,6 +4,7 @@ import { basename, relative, resolve } from "node:path";
 import { manualSendOperatorId, type ManualDraftOperatorEntry, type ManualOutreachOutcome } from "@/application/manual-outreach";
 import type { ApprovedEmailDraftSnapshot } from "@/application/email-drafts";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
+import {assertRuntimeSchema} from "./schema-contract";
 
 export const DEFAULT_MANUAL_OUTREACH_DATABASE = "data/apollo-operational-scale-enrichment.sqlite" as const;
 export const MANUAL_OUTREACH_DATABASE_ENV = "NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH" as const;
@@ -43,6 +44,7 @@ function importedCandidateForPlanningSnapshot(database:Database.Database,plannin
 export function listManualDraftOperatorEntries(databasePath:string):ManualDraftOperatorEntry[]{
   const database=new Database(databasePath,{readonly:true,fileMustExist:true});
   try{
+    assertRuntimeSchema(database);
     const manualRows=tableExists(database,"manual_outreach_records")?database.prepare("SELECT draft_snapshot_id,candidate_id,identity_source,confirmation_source,effective_sent_at_utc,outcome FROM manual_outreach_records").all() as Array<{draft_snapshot_id:string;candidate_id:string;identity_source:"prospect"|"imported-candidate";confirmation_source:"operator"|"networkpilot-gmail-send";effective_sent_at_utc:string;outcome:ManualOutreachOutcome}>:[];
     const manualBySnapshot=new Map(manualRows.map((row)=>[row.draft_snapshot_id,row]));
     const suppressedProspects=tableExists(database,"suppression_entries")?new Set((database.prepare("SELECT prospect_id FROM suppression_entries").all() as Array<{prospect_id:string}>).map((row)=>row.prospect_id)):new Set<string>();

@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import {describe,expect,it,vi} from "vitest";
 import {SqliteSimulationRepository} from "@/infrastructure/sqlite/database";
 import {seedTargetCompanyRegistry} from "@/infrastructure/sqlite/seed";
@@ -14,7 +15,7 @@ import {join} from "node:path";
 import {seedOfflineReserve} from "@/infrastructure/fixtures/offline-reserve";
 
 function setup(fail=false,searchPaths:readonly string[]=[]){
-  const repository=new SqliteSimulationRepository(":memory:");repository.migrate();seedTargetCompanyRegistry(repository);
+  const repository=new SqliteSimulationRepository(":memory:");migrateTestDatabase(repository);seedTargetCompanyRegistry(repository);
   let searches=0,credits=0;
   const people=new Map<string,Record<string,unknown>>();
   const transport:ApolloHttpTransport={request:vi.fn(async input=>{
@@ -36,7 +37,7 @@ function setup(fail=false,searchPaths:readonly string[]=[]){
 }
 describe("one-run refresh evidence with mocked Apollo transport",()=>{
   it("does not let a full preferred-only cache bypass broad discovery, and keeps the cache byte-identical",async()=>{
-    const dir=mkdtempSync(join(tmpdir(),"np-offline-search-cache-")),path=join(dir,"fixture.sqlite"),fixtures=new SqliteSimulationRepository(":memory:");
+    const dir=mkdtempSync(join(tmpdir(),"np-offline-search-cache-")),path=join(dir,"fixture.sqlite"),fixtures=new SqliteSimulationRepository(":memory:");migrateTestDatabase(fixtures);
     const candidates=seedOfflineReserve(fixtures).filter(c=>c.strategyCompanyMatch?.method!=="discovered-provider");fixtures.close();
     const cache=new Database(path);cache.exec("CREATE TABLE imported_candidates(normalized_snapshot_json TEXT NOT NULL)");
     for(const c of candidates)cache.prepare("INSERT INTO imported_candidates VALUES(?)").run(JSON.stringify(c));cache.close();

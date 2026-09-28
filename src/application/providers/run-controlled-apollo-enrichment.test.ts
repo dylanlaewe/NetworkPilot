@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { mapApolloPerson, type ApolloHttpTransport } from "@/infrastructure/providers/apollo";
@@ -7,7 +8,7 @@ import { CappedApolloEnrichmentTransport, runControlledApolloEnrichment } from "
 
 describe("controlled Apollo enrichment", () => {
   it("imports only an explicitly bounded Apollo-ID result through normal gates", async () => {
-    const repository = new SqliteSimulationRepository(":memory:"); repository.migrate();
+    const repository = new SqliteSimulationRepository(":memory:"); migrateTestDatabase(repository);
     const source = { ...mapApolloPerson(APOLLO_PEOPLE.senior, { stage: "enrichment", retrievedAt: "2026-09-09T12:00:00Z", datasetClassification: "authorized-provider" }), providerMetadata: { ...mapApolloPerson(APOLLO_PEOPLE.senior, { stage: "enrichment", retrievedAt: "2026-09-09T12:00:00Z", datasetClassification: "authorized-provider" }).providerMetadata!, matchConfidence: "medium" as const } };
     const enrich = vi.fn(async () => [source]);
     const result = await runControlledApolloEnrichment({ adapter: { enrich }, repository, personIds: ["senior-001"] });
@@ -17,7 +18,7 @@ describe("controlled Apollo enrichment", () => {
   });
 
   it("rejects empty, duplicate, excessive, malformed, and mismatched selections", async () => {
-    const repository = new SqliteSimulationRepository(":memory:"); repository.migrate();
+    const repository = new SqliteSimulationRepository(":memory:"); migrateTestDatabase(repository);
     const adapter = { enrich: vi.fn(async () => []) };
     await expect(runControlledApolloEnrichment({ adapter, repository, personIds: [] })).rejects.toThrow("selection-invalid");
     await expect(runControlledApolloEnrichment({ adapter, repository, personIds: ["1234567890abcdef", "1234567890abcdef"] })).rejects.toThrow("selection-invalid");

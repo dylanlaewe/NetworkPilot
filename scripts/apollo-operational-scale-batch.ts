@@ -15,7 +15,7 @@ async function main():Promise<void>{
   loadEnvFile(resolve(process.cwd(),".env.local"));
   const searchRepository=new SqliteSimulationRepository(SEARCH_DATABASE),enrichmentRepository=new SqliteSimulationRepository(ENRICHMENT_DATABASE);
   try{
-    searchRepository.migrate();enrichmentRepository.migrate();seedTargetCompanyRegistry(enrichmentRepository);
+    searchRepository.assertRuntimeSchema();enrichmentRepository.assertRuntimeSchema();seedTargetCompanyRegistry(enrichmentRepository);
     const config=readApolloConfig({...process.env,NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_BATCH:"30",NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_DAY:"30",NETWORKPILOT_APOLLO_MAX_RETRIES:"0",NETWORKPILOT_APOLLO_HARD_STOP:"true"});assertApolloEnabled(config);
     if(enrichmentRepository.getSetting("dailyCommandCenterReserveStarted")==="true")throw new Error("daily-command-center-reserve-already-started");
     enrichmentRepository.setSetting("dailyCommandCenterReserveStarted","true",new Date());

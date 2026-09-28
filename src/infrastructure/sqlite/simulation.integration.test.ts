@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +14,7 @@ function repository(): SqliteSimulationRepository {
   const directory = mkdtempSync(join(tmpdir(), "networkpilot-test-"));
   cleanup.push(directory);
   const repo = new SqliteSimulationRepository(join(directory, "test.sqlite"));
-  repo.migrate();
+  migrateTestDatabase(repo);
   return repo;
 }
 afterEach(() => { while (cleanup.length) rmSync(cleanup.pop()!, { recursive: true, force: true }); });

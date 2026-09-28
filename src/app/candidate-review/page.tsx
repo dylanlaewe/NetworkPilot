@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { SPECIFIC_ROLE_TAXONOMY } from "@/domain/candidates";
 import { getSimulationRepository } from "@/infrastructure/sqlite/runtime";
-import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
 import { resolveManualOutreachDatabaseSelection } from "@/infrastructure/sqlite/manual-outreach-operator";
 import {
   fiveBucketEnabled,
@@ -9,10 +8,12 @@ import {
   BUCKET_LABELS,
 } from "@/domain/recipient-buckets";
 import { correctRecipientBucketAction, reviewCandidateAction } from "./actions";
+import {migrationRequiredView} from "@/app/migration-required";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 
 export const dynamic = "force-dynamic";
 
-export default async function CandidateReviewPage({
+async function renderCandidateReviewPage({
   searchParams,
 }: {
   searchParams: Promise<{ candidate?: string }>;
@@ -20,12 +21,13 @@ export default async function CandidateReviewPage({
   const enabled = fiveBucketEnabled(),
     params = await searchParams,
     selected = enabled
-      ? new SqliteSimulationRepository(
+      ? openRuntimeRepository(
           resolveManualOutreachDatabaseSelection().path,
+          {readonly:true},
         )
       : null;
   const candidates = selected
-    ? (selected.migrate(), selected.listImportedCandidates())
+    ? selected.listImportedCandidates()
     : getSimulationRepository().listImportedCandidates();
   selected?.close();
   return (
@@ -281,3 +283,4 @@ export default async function CandidateReviewPage({
     </main>
   );
 }
+export default async function CandidateReviewPage(input:{searchParams:Promise<{candidate?:string}>}){try{return await renderCandidateReviewPage(input);}catch(error){return migrationRequiredView(error);}}

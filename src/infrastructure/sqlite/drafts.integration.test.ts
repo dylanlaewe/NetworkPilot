@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +12,7 @@ import { seedFictionalData } from "./seed";
 const directories: string[] = [];
 function setup() {
   const directory = mkdtempSync(join(tmpdir(), "networkpilot-drafts-")); directories.push(directory);
-  const repository = new SqliteSimulationRepository(join(directory, "test.sqlite")); repository.migrate(); seedFictionalData(repository);
+  const repository = new SqliteSimulationRepository(join(directory, "test.sqlite")); migrateTestDatabase(repository); seedFictionalData(repository);
   const run = runDailySimulation(repository, { instant: new Date("2026-09-07T15:00:00Z"), random: () => 0 });
   return { repository, run };
 }

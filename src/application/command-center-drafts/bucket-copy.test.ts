@@ -1,3 +1,4 @@
+import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CANONICAL, TEMPLATE_VERSION } from "@/domain/drafting/bucket-templates";
@@ -18,7 +19,7 @@ const repos: SqliteSimulationRepository[] = [];
 beforeEach(() => vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "true"));
 afterEach(() => { repos.splice(0).forEach(r => r.close()); vi.unstubAllEnvs(); });
 function setup(bucket: RecipientBucket) {
-  const repository = new SqliteSimulationRepository(":memory:"); repos.push(repository); repository.migrate();
+  const repository = new SqliteSimulationRepository(":memory:"); repos.push(repository); migrateTestDatabase(repository);
   const fixture = bucketFixture(bucket, 1, bucket === "peers");
   importCandidateBatch(repository, [fixture.company], { batchId: "fictional-copy-batch", adapterId: "bucket-fixture", adapterVersion: "fixture-v1", datasetClassification: "provider-shaped-fixture", sourceFingerprint: "fictional-copy-fingerprint", records: [fixture.source], strategyCompanyDomains: { [fixture.company.id]: fixture.source.currentOrganization.domain! } }, FIXTURE_AT);
   const candidate = repository.listImportedCandidates()[0];

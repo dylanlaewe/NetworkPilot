@@ -1,21 +1,18 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getSimulationRepository } from "@/infrastructure/sqlite/runtime";
-import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
 import { resolveManualOutreachDatabaseSelection } from "@/infrastructure/sqlite/manual-outreach-operator";
 import {
   fiveBucketEnabled,
   parseBucketScope,
 } from "@/domain/recipient-buckets";
 import { buildReviewedBucketCorrection } from "@/application/ingestion/review-bucket";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 
 function repository() {
   if (!fiveBucketEnabled())
     return { value: getSimulationRepository(), close: false };
-  const value = new SqliteSimulationRepository(
-    resolveManualOutreachDatabaseSelection().path,
-  );
-  value.migrate();
+  const value = openRuntimeRepository(resolveManualOutreachDatabaseSelection().path);
   return { value, close: true };
 }
 export async function reviewCandidateAction(formData: FormData) {

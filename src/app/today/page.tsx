@@ -10,10 +10,11 @@ import {loadCommandCenterDraftReviews} from "@/infrastructure/sqlite/command-cen
 import {generateMoreDrafts} from "./actions";
 import {DemoToday} from "./demo-today";
 import styles from "./today-command.module.css";
+import {migrationRequiredView} from "@/app/migration-required";
 
 export const dynamic="force-dynamic";
 
-export default async function TodayPage(){
+async function renderTodayPage(){
   if(isDemoMode())return <DemoToday/>;
   const data=loadDailyCommandCenter(),workflow=await loadCommandCenterDraftReviews();
   const drafts=activeDrafts(workflow.items,data.drafts),uncertain=drafts.filter((item)=>item.state==="needs-send-verification").length;
@@ -60,3 +61,4 @@ export default async function TodayPage(){
     </div>
   </NetworkCommandShell>;
 }
+export default async function TodayPage(){try{return await renderTodayPage();}catch(error){return migrationRequiredView(error);}}

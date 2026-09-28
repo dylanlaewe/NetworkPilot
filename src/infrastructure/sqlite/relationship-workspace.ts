@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import {assertRuntimeSchema} from "./schema-contract";
 import {bucketProjection,type RecipientBucketClassification} from "@/domain/recipient-buckets";
 import type {ApprovedEmailDraftSnapshot} from "@/application/email-drafts";
 import type {ManualDraftOperatorEntry} from "@/application/manual-outreach";
@@ -25,7 +26,7 @@ const auditLabel=(event:string,outcome:string|null)=>{
 /** Read-only relationship projection. Provider identifiers never leave this boundary. */
 export function loadRelationshipWorkspace():RelationshipWorkspaceEntry[]{
   const path=resolveManualOutreachDatabaseSelection().path,entries=listManualDraftOperatorEntries(path),database=new Database(path,{readonly:true,fileMustExist:true});
-  try{return entries.map(entry=>{
+  try{assertRuntimeSchema(database);return entries.map(entry=>{
     const operation=database.prepare("SELECT approved_snapshot_json,completed_at_utc FROM gmail_draft_operations WHERE draft_snapshot_id=?").get(entry.snapshotId) as {approved_snapshot_json:string;completed_at_utc:string|null};
     const snapshot=JSON.parse(operation.approved_snapshot_json) as ApprovedEmailDraftSnapshot;
     const audits=entry.manualSendConfirmed?database.prepare("SELECT a.event_type,a.outcome,a.occurred_at_utc FROM manual_outreach_audit a JOIN manual_outreach_records r ON r.id=a.manual_outreach_id WHERE r.draft_snapshot_id=? ORDER BY a.occurred_at_utc,a.id").all(entry.snapshotId) as Array<{event_type:string;outcome:string|null;occurred_at_utc:string}>:[];
