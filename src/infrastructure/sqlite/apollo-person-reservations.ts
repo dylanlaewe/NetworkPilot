@@ -25,6 +25,7 @@ type ReservationMetadata = {
   lifecycle: ApolloPersonReservationLifecycle;
   attemptedForOwner: boolean;
   observedConsumption?: number | null;
+  providerViolation?: "provider-credit-model-exceeded";
   retainedRecord?: CandidateSourceRecord;
   retainedResultFingerprint?: string;
   importedCandidateId?: string;
@@ -48,6 +49,7 @@ export interface ApolloParentOperationAccounting {
   attemptCount: number;
   knownConsumptionLowerBound: number;
   hasUnknownConsumption: boolean;
+  hasProviderViolation: boolean;
   observedConsumption: number | null;
 }
 
@@ -64,6 +66,7 @@ function systemAudit(input: {
   resultingState: ApolloPersonReservationLifecycle;
   at: Date;
   reason: string;
+  observedConsumption?: number;
 }): ApolloPersonReservationAuditEvent {
   const commandId = `system:${fingerprint({
     ...input,
@@ -78,6 +81,9 @@ function systemAudit(input: {
     reason: input.reason,
     previousState: input.previousState,
     resultingState: input.resultingState,
+    ...(input.observedConsumption !== undefined
+      ? { observedConsumption: input.observedConsumption }
+      : {}),
     occurredAt: input.at.toISOString(),
   };
 }
@@ -132,7 +138,9 @@ export class SqliteApolloPersonReservationStore
         updatedAt: input.at.toISOString(),
         audit: [
           systemAudit({
-            ...input,
+            personId: input.personId,
+            operationId: input.operationId,
+            at: input.at,
             previousState: null,
             resultingState: lifecycle,
             reason: "provider-person-reserved-before-attempt",
@@ -168,6 +176,7 @@ export class SqliteApolloPersonReservationStore
         lifecycle,
         attemptedForOwner: false,
         observedConsumption: undefined,
+        providerViolation: undefined,
         retainedRecord: undefined,
         retainedResultFingerprint: undefined,
         importedCandidateId: undefined,
@@ -210,7 +219,9 @@ export class SqliteApolloPersonReservationStore
         audit: [
           ...metadata.audit,
           systemAudit({
-            ...input,
+            personId: input.personId,
+            operationId: input.operationId,
+            at: input.at,
             previousState: metadata.lifecycle,
             resultingState: lifecycle,
             reason: "provider-request-dispatched-outcome-not-yet-known",
@@ -229,6 +240,7 @@ export class SqliteApolloPersonReservationStore
     outcome: "usable" | "uncertain";
     record?: CandidateSourceRecord;
     observedConsumption: number | null;
+    providerViolation?: "provider-credit-model-exceeded";
   }): void {
     this.repository.transaction(() => {
       const row = this.requiredOwnedRow(input);
@@ -252,10 +264,16 @@ export class SqliteApolloPersonReservationStore
         input.outcome === "usable"
           ? "attempted-result-usable"
           : "reconciliation-required";
+      const providerViolation =
+        input.providerViolation ??
+        (input.observedConsumption !== null && input.observedConsumption > 1
+          ? "provider-credit-model-exceeded"
+          : metadata.providerViolation);
       const next: ReservationMetadata = {
         ...metadata,
         lifecycle,
         observedConsumption: input.observedConsumption,
+        ...(providerViolation ? { providerViolation } : {}),
         ...(input.outcome === "usable"
           ? {
               retainedRecord: structuredClone(input.record!),
@@ -266,11 +284,18 @@ export class SqliteApolloPersonReservationStore
         audit: [
           ...metadata.audit,
           systemAudit({
-            ...input,
+            personId: input.personId,
+            operationId: input.operationId,
+            at: input.at,
             previousState: metadata.lifecycle,
             resultingState: lifecycle,
+            ...(input.observedConsumption !== null
+              ? { observedConsumption: input.observedConsumption }
+              : {}),
             reason:
-              input.outcome === "usable"
+              providerViolation
+                ? providerViolation
+                : input.outcome === "usable"
                 ? "normalized-enrichment-result-retained"
                 : "provider-outcome-remains-uncertain",
           }),
@@ -422,6 +447,12 @@ export class SqliteApolloPersonReservationStore
       } else if (command.outcome === "no-consumption-safe-release") {
         if (metadata.lifecycle !== "reconciliation-required")
           throw new Error("apollo-person-reconciliation-release-unavailable");
+        if (
+          metadata.observedConsumption !== null &&
+          metadata.observedConsumption !== undefined &&
+          metadata.observedConsumption !== 0
+        )
+          throw new Error("apollo-person-reconciliation-consumption-conflict");
         observedConsumption = 0;
         resultingState = "released-no-consumption";
       } else {
@@ -458,6 +489,9 @@ export class SqliteApolloPersonReservationStore
         ...metadata,
         lifecycle: resultingState,
         observedConsumption,
+        ...(typeof observedConsumption === "number" && observedConsumption > 1
+          ? { providerViolation: "provider-credit-model-exceeded" as const }
+          : {}),
         retainedRecord: undefined,
         importedCandidateId,
         updatedAt: command.at.toISOString(),
@@ -556,11 +590,13 @@ export class SqliteApolloPersonReservationStore
           attemptCount: 0,
           knownConsumptionLowerBound: 0,
           hasUnknownConsumption: false,
+          hasProviderViolation: false,
           observedConsumption: null,
         };
       let attemptCount = 0;
       let knownConsumptionLowerBound = 0;
       let hasUnknownConsumption = false;
+      let hasProviderViolation = false;
       for (const child of children) {
         let attempted = child.attempt_count > 0;
         let observed: number | null | undefined;
@@ -577,6 +613,9 @@ export class SqliteApolloPersonReservationStore
               observed = Object.hasOwn(parsed, "observedConsumption")
                 ? parsed.observedConsumption
                 : undefined;
+              hasProviderViolation ||=
+                parsed.providerViolation === "provider-credit-model-exceeded" ||
+                (typeof observed === "number" && observed > 1);
             }
           } catch {
             // A legacy attempted child remains unknown and conservatively held.
@@ -593,9 +632,15 @@ export class SqliteApolloPersonReservationStore
         : knownConsumptionLowerBound;
       this.repository.native
         .prepare(
-          "UPDATE provider_operations SET attempt_count=?,observed_consumption=? WHERE id=? AND provider_id='apollo' AND candidate_count>0",
+          "UPDATE provider_operations SET attempt_count=?,observed_consumption=?,state=CASE WHEN ?=1 THEN 'failed' ELSE state END,failure_reason=CASE WHEN ?=1 THEN 'provider-credit-model-exceeded' ELSE failure_reason END WHERE id=? AND provider_id='apollo' AND candidate_count>0",
         )
-        .run(attemptCount, observedConsumption, operationId);
+        .run(
+          attemptCount,
+          observedConsumption,
+          hasProviderViolation ? 1 : 0,
+          hasProviderViolation ? 1 : 0,
+          operationId,
+        );
       const date = new Date(parent.occurred_at_utc).toLocaleDateString("en-CA", {
         timeZone: "America/New_York",
       });
@@ -605,6 +650,7 @@ export class SqliteApolloPersonReservationStore
         attemptCount,
         knownConsumptionLowerBound,
         hasUnknownConsumption,
+        hasProviderViolation,
         observedConsumption,
       };
     });
@@ -680,9 +726,10 @@ export class SqliteApolloPersonReservationStore
       )
       .run(
         input.batchId ?? metadata.ownerOperationId,
-        operationState(metadata.lifecycle),
+        metadata.providerViolation ? "failed" : operationState(metadata.lifecycle),
         input.attemptDelta ?? 0,
-        `scoped-person-reservation:${metadata.lifecycle}`,
+        metadata.providerViolation ??
+          `scoped-person-reservation:${metadata.lifecycle}`,
         metadata.updatedAt,
         JSON.stringify(metadata),
         row.id,
@@ -716,6 +763,7 @@ export class SqliteApolloPersonReservationStore
         metadata.attemptedForOwner &&
         metadata.observedConsumption !== null &&
         metadata.observedConsumption !== undefined,
+      providerViolation: metadata.providerViolation ?? null,
       observedConsumption: operation?.observed_consumption ?? null,
       reusable: metadata.lifecycle === "released-no-consumption",
       requiresReconciliation:

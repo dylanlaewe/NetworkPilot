@@ -123,7 +123,10 @@ function searchPerson(value: ReturnType<typeof person>) {
 class FixtureTransport implements ApolloHttpTransport {
   calls: Parameters<ApolloHttpTransport["request"]>[0][] = [];
   private searchCount = 0;
-  constructor(private readonly candidate: ReturnType<typeof person>) {}
+  constructor(
+    private readonly candidate: ReturnType<typeof person>,
+    private readonly creditsConsumed = 1,
+  ) {}
   async request(
     input: Parameters<ApolloHttpTransport["request"]>[0],
   ): Promise<ApolloHttpResponse> {
@@ -138,7 +141,7 @@ class FixtureTransport implements ApolloHttpTransport {
       body: JSON.stringify({
         person: this.candidate,
         match_confidence: "high",
-        credits_consumed: 1,
+        credits_consumed: this.creditsConsumed,
       }),
     };
   }
@@ -503,6 +506,157 @@ describe("offline scoped Apollo orchestration", () => {
         estimatedExposure: 1,
         observedConsumption: 1,
       });
+    } finally {
+      canonical.close();
+    }
+  });
+
+  it("durably journals a two-credit People Match violation before local rollback", async () => {
+    const { canonical, topology } = setup();
+    const value = person(
+      "credit-overage-001",
+      "Senior Data Engineer",
+      "senior",
+      "Credit Overage Technology Employer",
+    );
+    const transport = new FixtureTransport(value, 2);
+    const reservations = new SqliteApolloPersonReservationStore(canonical);
+    const provider = new ScopedApolloProvider({
+      config,
+      transport,
+      now: () => at,
+      sleep: async () => undefined,
+      datasetClassification: "authorized-provider",
+      localDate: () => "2026-09-28",
+      personReservations: reservations,
+      existingProviderIds: () => new Set(),
+    });
+    try {
+      await expect(
+        refreshScopedCandidateReserve({
+          requestId: "credit-overage-reviewer-regression",
+          scope: { bucket: "peers" },
+          requested: 1,
+          usableBefore: 0,
+          policy,
+          store: new SqliteScopedDiscoveryStore(canonical, { topology }),
+          provider,
+          allowProvider: true,
+          now: () => at,
+        }),
+      ).rejects.toThrow("provider-credit-model-exceeded");
+
+      const parent = canonical.native
+        .prepare(
+          "SELECT id,state,attempt_count,estimated_max_exposure,observed_consumption,failure_reason FROM provider_operations WHERE candidate_count>0",
+        )
+        .get() as {
+        id: string;
+        state: string;
+        attempt_count: number;
+        estimated_max_exposure: number;
+        observed_consumption: number | null;
+        failure_reason: string | null;
+      };
+      expect(parent).toMatchObject({
+        state: "failed",
+        attempt_count: 1,
+        estimated_max_exposure: 1,
+        observed_consumption: 2,
+        failure_reason: "provider-credit-model-exceeded",
+      });
+      expect(
+        reservations.inspectApolloPersonReservation({
+          personId: value.id,
+          operationId: parent.id,
+        }),
+      ).toMatchObject({
+        lifecycle: "attempted-result-usable",
+        personObservedConsumption: 2,
+        consumptionKnown: true,
+        providerViolation: "provider-credit-model-exceeded",
+        resultRetained: true,
+        reusable: false,
+        requiresReconciliation: true,
+      });
+      expect(canonical.getApolloProviderStatus("2026-09-28")).toMatchObject({
+        estimatedExposure: 2,
+        observedConsumption: 2,
+        knownObservedConsumption: 2,
+        hasUnknownConsumption: false,
+      });
+      expect(canonical.listImportedCandidates()).toEqual([]);
+      expect(
+        transport.calls.filter((call) => call.path.includes("people/match")),
+      ).toHaveLength(1);
+      expect(
+        reservations.claim({
+          personId: value.id,
+          operationId: "ordinary-retry-after-overage",
+          at: new Date(at.getTime() + 30_000),
+        }),
+      ).toBe(false);
+
+      canonical.native.exec(
+        "CREATE TRIGGER fail_overage_import BEFORE INSERT ON imported_candidates WHEN NEW.provider_record_id='credit-overage-001' BEGIN SELECT RAISE(ABORT, 'fixture-overage-import-failure'); END",
+      );
+      const resume = {
+        commandId: "resume-credit-overage-001",
+        personId: value.id,
+        operationId: parent.id,
+        outcome: "resume-retained-result" as const,
+        actor: "fixture-operator",
+        mechanism: "retained-normalized-result",
+        evidence: "Provider returned a valid person with two consumed credits",
+        reason: "Resume local import without another provider request",
+        at: new Date(at.getTime() + 60_000),
+      };
+      expect(() =>
+        reconcileApolloPersonReservation({
+          repository: reservations,
+          command: resume,
+        }),
+      ).toThrow("fixture-overage-import-failure");
+      expect(canonical.listImportedCandidates()).toEqual([]);
+      expect(
+        reservations.inspectApolloPersonReservation({
+          personId: value.id,
+          operationId: parent.id,
+        }),
+      ).toMatchObject({
+        lifecycle: "attempted-result-usable",
+        personObservedConsumption: 2,
+        providerViolation: "provider-credit-model-exceeded",
+        resultRetained: true,
+      });
+      expect(
+        canonical.native
+          .prepare(
+            "SELECT state,attempt_count,estimated_max_exposure,observed_consumption FROM provider_operations WHERE id=?",
+          )
+          .get(parent.id),
+      ).toEqual({
+        state: "failed",
+        attempt_count: 1,
+        estimated_max_exposure: 1,
+        observed_consumption: 2,
+      });
+
+      canonical.native.exec("DROP TRIGGER fail_overage_import");
+      expect(
+        reconcileApolloPersonReservation({
+          repository: reservations,
+          command: resume,
+        }).after,
+      ).toMatchObject({
+        lifecycle: "completed-imported",
+        personObservedConsumption: 2,
+        providerViolation: "provider-credit-model-exceeded",
+      });
+      expect(canonical.listImportedCandidates()).toHaveLength(1);
+      expect(
+        transport.calls.filter((call) => call.path.includes("people/match")),
+      ).toHaveLength(1);
     } finally {
       canonical.close();
     }

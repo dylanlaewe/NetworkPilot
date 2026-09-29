@@ -739,11 +739,56 @@ describe("canonical Apollo person reservations", () => {
     }
   });
 
+  it("never downgrades known provider overage to a no-consumption release", () => {
+    const { first, second } = repositories();
+    const operationId = "known-overage-release-conflict";
+    const personId = "known-overage-person";
+    authorize(first, operationId);
+    const store = new SqliteApolloPersonReservationStore(first);
+    try {
+      store.claim({ personId, operationId, at });
+      store.markAttempted({ personId, operationId, at });
+      store.retainAttempted({
+        personId,
+        operationId,
+        at,
+        outcome: "uncertain",
+        observedConsumption: 2,
+        providerViolation: "provider-credit-model-exceeded",
+      });
+      expect(() =>
+        reconcileApolloPersonReservation({
+          repository: store,
+          command: command({
+            commandId: "invalid-zero-overage-release",
+            personId,
+            operationId,
+            outcome: "no-consumption-safe-release",
+          }),
+        }),
+      ).toThrow("apollo-person-reconciliation-consumption-conflict");
+      expect(
+        store.inspectApolloPersonReservation({ personId, operationId }),
+      ).toMatchObject({
+        lifecycle: "reconciliation-required",
+        personObservedConsumption: 2,
+        providerViolation: "provider-credit-model-exceeded",
+        reusable: false,
+      });
+    } finally {
+      first.close();
+      second.close();
+    }
+  });
+
   it.each([
-    ["two-consumed", 1, 1, 2, 2, false],
-    ["consumed-zero", 1, 0, 1, 1, false],
-    ["two-zero", 0, 0, 0, 0, false],
-    ["consumed-unknown", 1, null, null, 1, true],
+    ["two-consumed", 1, 1, 2, 2, false, false],
+    ["consumed-zero", 1, 0, 1, 1, false, false],
+    ["two-zero", 0, 0, 0, 0, false, false],
+    ["consumed-unknown", 1, null, null, 1, true, false],
+    ["overage-plus-one", 2, 1, 3, 3, false, true],
+    ["overage-plus-zero", 2, 0, 2, 2, false, true],
+    ["overage-plus-unknown", 2, null, null, 2, true, true],
   ] as const)(
     "derives parent accounting for %s child outcomes",
     (
@@ -753,6 +798,7 @@ describe("canonical Apollo person reservations", () => {
       expectedObserved,
       expectedKnown,
       unknown,
+      violation,
     ) => {
       const repositoriesForCase = repositories();
       const { first, second } = repositoriesForCase;
@@ -783,13 +829,17 @@ describe("canonical Apollo person reservations", () => {
           reconcile(`${_case}-person-b`, secondConsumption);
         const parent = first.native
           .prepare(
-            "SELECT attempt_count,estimated_max_exposure,observed_consumption FROM provider_operations WHERE id=?",
+            "SELECT state,attempt_count,estimated_max_exposure,observed_consumption,failure_reason FROM provider_operations WHERE id=?",
           )
           .get(operationId);
         expect(parent).toEqual({
+          state: violation ? "failed" : "authorized",
           attempt_count: 2,
           estimated_max_exposure: 2,
           observed_consumption: expectedObserved,
+          failure_reason: violation
+            ? "provider-credit-model-exceeded"
+            : null,
         });
         expect(first.getApolloProviderStatus("2026-09-28")).toMatchObject({
           observedConsumption: expectedObserved,
@@ -804,6 +854,9 @@ describe("canonical Apollo person reservations", () => {
         ).toMatchObject({
           personObservedConsumption: firstConsumption,
           consumptionKnown: true,
+          providerViolation: violation
+            ? "provider-credit-model-exceeded"
+            : null,
         });
         expect(
           store.inspectApolloPersonReservation({

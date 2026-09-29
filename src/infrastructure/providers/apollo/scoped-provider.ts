@@ -1,7 +1,7 @@
 import type { ScopedDiscoveryProvider } from "@/application/candidate-refresh/scoped";
 import { ScopedDiscoveryProviderFailure } from "@/application/candidate-refresh/scoped";
 import type { CandidateSourceRecord } from "@/domain/candidates";
-import { ApolloAdapter } from "./adapter";
+import { ApolloAdapter, ApolloProviderError } from "./adapter";
 import { assertApolloEnabled } from "./config";
 import { planScopedApolloQueries } from "./scoped-query-plan";
 import type {
@@ -154,6 +154,7 @@ export interface ApolloPersonReservationStore {
     outcome: "usable" | "uncertain";
     record?: CandidateSourceRecord;
     observedConsumption: number | null;
+    providerViolation?: "provider-credit-model-exceeded";
   }): void;
   releaseUnattempted(input: {
     personId: string;
@@ -316,11 +317,24 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
         } catch (error) {
           if (attempted) {
             try {
+              const modelViolation =
+                error instanceof ApolloProviderError &&
+                error.category === "provider-credit-model-exceeded";
+              const retainedRecord = modelViolation
+                ? error.details?.retainedRecord
+                : undefined;
               this.dependencies.personReservations.retainAttempted({
                 ...reservation,
                 at: this.dependencies.now(),
-                outcome: "uncertain",
-                observedConsumption: null,
+                outcome: retainedRecord ? "usable" : "uncertain",
+                ...(retainedRecord ? { record: retainedRecord } : {}),
+                observedConsumption:
+                  error instanceof ApolloProviderError
+                    ? (error.details?.observedConsumption ?? null)
+                    : null,
+                ...(modelViolation
+                  ? { providerViolation: error.category }
+                  : {}),
               });
             } catch {
               // attempt_count=1 remains a permanent conservative lock even

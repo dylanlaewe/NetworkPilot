@@ -32,6 +32,7 @@ export interface ApolloPersonReservationInspection {
   importedCandidateId: string | null;
   personObservedConsumption: number | null;
   consumptionKnown: boolean;
+  providerViolation: string | null;
   observedConsumption: number | null;
   reusable: boolean;
   requiresReconciliation: boolean;

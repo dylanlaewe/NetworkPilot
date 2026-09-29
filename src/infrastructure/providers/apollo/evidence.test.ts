@@ -276,28 +276,41 @@ describe("Apollo provider-neutral evidence mapping", () => {
   });
 
   it.each([
-    ["northwindstaffing.com", "agency"],
-    ["northwindstaffinggroup.com", "agency"],
-    ["northwind-recruiting.com", "agency"],
-    ["northwindrecruitinggroup.com", "agency"],
-    ["northwind-recruiters.com", "agency"],
-    ["northwind-executive-search.com", "agency"],
-    ["northwindexecutivesearchgroup.com", "agency"],
-    ["northwindplacementgroup.com", "agency"],
-    ["northwindtalentsolutionsgroup.com", "agency"],
-    ["northwindemploymentagencygroup.com", "agency"],
-    ["WWW.NORTHWINDSTAFFINGGROUP.COM", "agency"],
-    ["careers.northwindstaffinggroup.com", "agency"],
-    ["jobs.careers.northwindstaffing.com", "agency"],
-    ["staffington.com", "internal"],
-    ["recruitingdale.com", "internal"],
-    ["ordinarysoftware.com", "internal"],
-    ["staff-ing-like.com", "internal"],
-    ["northwindsoftware.com", "internal"],
-    ["recruiting-tools.jobs.northwindsoftware.com", "internal"],
+    ["northwindstaffing.com", "agency-contradiction", "agency"],
+    ["northwindstaffinggroup.com", "agency-contradiction", "agency"],
+    ["northwind-recruiting.com", "agency-contradiction", "agency"],
+    ["northwindrecruitinggroup.com", "agency-contradiction", "agency"],
+    ["northwind-recruiters.com", "agency-contradiction", "agency"],
+    ["northwind-executive-search.com", "agency-contradiction", "agency"],
+    ["northwindexecutivesearchgroup.com", "agency-contradiction", "agency"],
+    ["northwindplacementgroup.com", "agency-contradiction", "agency"],
+    ["northwindtalentsolutionsgroup.com", "agency-contradiction", "agency"],
+    ["northwindemploymentagencygroup.com", "agency-contradiction", "agency"],
+    ["WWW.NORTHWINDSTAFFINGGROUP.COM", "agency-contradiction", "agency"],
+    ["careers.northwindstaffinggroup.com", "agency-contradiction", "agency"],
+    ["jobs.careers.northwindstaffing.com", "agency-contradiction", "agency"],
+    ["jobs.NORTHWINDSTAFFINGGROUP.CO.UK", "agency-contradiction", "agency"],
+    ["staffingnorthwind.com", "ambiguous", "ambiguous"],
+    ["recruitingnorthwind.com", "ambiguous", "ambiguous"],
+    ["executivesearchnorthwind.com", "ambiguous", "ambiguous"],
+    ["rponorthwind.com", "ambiguous", "ambiguous"],
+    ["northwindrpo.com", "ambiguous", "ambiguous"],
+    ["northwindsearchfirm.com", "ambiguous", "ambiguous"],
+    ["searchfirmnorthwind.com", "ambiguous", "ambiguous"],
+    ["staffington.com", "ambiguous", "ambiguous"],
+    ["displacement.com", "ambiguous", "ambiguous"],
+    ["replacement.com", "ambiguous", "ambiguous"],
+    ["misplacement.com", "ambiguous", "ambiguous"],
+    ["recruitingdale.com", "ambiguous", "ambiguous"],
+    ["staff-ing-like.com", "ambiguous", "ambiguous"],
+    ["ordinarysoftware.com", "neutral", "internal"],
+    ["northwindcloud.com", "neutral", "internal"],
+    ["acme-industries.com", "neutral", "internal"],
+    ["northwindsoftware.com", "neutral", "internal"],
+    ["recruiting-tools.jobs.northwindsoftware.com", "neutral", "internal"],
   ] as const)(
-    "applies registrable-domain contradiction policy to %s",
-    (primaryDomain, expected) => {
+    "applies registrable-domain tri-state policy to %s",
+    (primaryDomain, expectedDomain, expectedRecruiter) => {
       const mapped = mapApolloProviderEvidence(
         person({
           title: "Technical Recruiter",
@@ -310,18 +323,32 @@ describe("Apollo provider-neutral evidence mapping", () => {
         }),
         { observedAt },
       );
-      expect(mapped.recruiterEmployerStatus).toBe(expected);
+      expect(mapped.recruiterDomainEvidence).toBe(expectedDomain);
+      expect(mapped.recruiterEmployerStatus).toBe(expectedRecruiter);
       const internal = mapped.evidence.find(
         (item) => item.kind === "internal-recruiting",
       );
       expect(internal).toMatchObject({
-        value: expected,
-        verified: expected === "internal",
+        value: expectedRecruiter,
+        verified: expectedRecruiter === "internal",
       });
-      if (expected === "agency")
+      if (expectedDomain !== "neutral")
         expect(internal?.sourceReferences).toContain(
           "apollo.person.organization.primary_domain",
         );
+      if (expectedDomain === "ambiguous")
+        expect(
+          classifyRecipientBucket({
+            title: "Technical Recruiter",
+            outreachTrack: "recruiter",
+            recruiterAccepted: true,
+            evidence: mapped.evidence,
+          }),
+        ).toMatchObject({
+          bucket: "recruiters",
+          reviewState: "review-required",
+          confidence: "low",
+        });
     },
   );
 
@@ -382,6 +409,7 @@ describe("Apollo provider-neutral evidence mapping", () => {
       { observedAt },
     );
     expect(mapped.recruiterEmployerStatus).toBe("internal");
+    expect(mapped.recruiterDomainEvidence).toBe("neutral");
     expect(mapped.sourceFields.employerDomain).toBeNull();
   });
 
@@ -398,6 +426,7 @@ describe("Apollo provider-neutral evidence mapping", () => {
       { observedAt },
     );
     expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
+    expect(mapped.recruiterDomainEvidence).toBe("neutral");
     expect(mapped.sourceFields.employerDomain).toBeNull();
     expect(
       mapped.evidence.some((item) => item.kind === "company-identity"),

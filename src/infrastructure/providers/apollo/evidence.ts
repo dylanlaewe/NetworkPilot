@@ -36,6 +36,7 @@ const AGENCY_DOMAIN_TERMS = [
 const AGENCY_DOMAIN_TOKEN_PAIRS = [
   ["executive", "search"],
   ["employment", "agency"],
+  ["search", "firm"],
   ["talent", "solutions"],
   ["recruiting", "solutions"],
   ["staffing", "solutions"],
@@ -49,7 +50,6 @@ const AGENCY_DOMAIN_COMPOUNDS = [
   "staffingsolutions",
 ] as const;
 const AGENCY_DOMAIN_SERVICE_SUFFIXES = [
-  "",
   "group",
   "services",
   "solutions",
@@ -57,6 +57,22 @@ const AGENCY_DOMAIN_SERVICE_SUFFIXES = [
   "firm",
   "search",
   "partners",
+] as const;
+const AGENCY_DOMAIN_STANDALONE_ENDINGS = [
+  "staffing",
+  "recruiting",
+  "recruitment",
+  "recruiter",
+  "recruiters",
+  "executivesearch",
+  "talentsolutions",
+  "employmentagency",
+  "recruitingsolutions",
+  "staffingsolutions",
+] as const;
+const AMBIGUOUS_AGENCY_DOMAIN_FRAGMENTS = [
+  ...AGENCY_DOMAIN_COMPOUNDS,
+  "searchfirm",
 ] as const;
 
 const optionalRecord = (value: unknown): JsonRecord | undefined =>
@@ -119,8 +135,22 @@ function registrableDomainLabel(hostname: string): string {
   return labels.at(usesCountrySecondLevel ? -3 : -2)!;
 }
 
-function agencyDomainContradiction(hostname: string | undefined): boolean {
-  if (!hostname) return false;
+export type ApolloRecruiterDomainEvidence =
+  | "agency-contradiction"
+  | "ambiguous"
+  | "neutral";
+
+/**
+ * Conservatively classifies only the registrable hostname label. Separated
+ * agency terms and a small set of modeled service endings are contradictions;
+ * unresolved compact fragments block verified-internal qualification without
+ * being promoted to agency evidence.
+ */
+export function classifyApolloRecruiterDomain(
+  value: unknown,
+): ApolloRecruiterDomainEvidence {
+  const hostname = normalizeApolloEmployerDomain(value);
+  if (!hostname) return "neutral";
   const label = registrableDomainLabel(hostname);
   const tokens = label.split("-").filter(Boolean);
   if (
@@ -131,7 +161,7 @@ function agencyDomainContradiction(hostname: string | undefined): boolean {
         ) || token === "rpo",
     )
   )
-    return true;
+    return "agency-contradiction";
   if (
     AGENCY_DOMAIN_TOKEN_PAIRS.some(([left, right]) =>
       tokens.some(
@@ -139,21 +169,31 @@ function agencyDomainContradiction(hostname: string | undefined): boolean {
       ),
     )
   )
-    return true;
+    return "agency-contradiction";
   const compact = tokens.join("");
-  // Concatenated labels use a deliberately small suffix grammar. A recognized
-  // agency concept may end a label or be followed by one known service suffix;
-  // arbitrary trailing letters (for example, "staffington") are not evidence.
-  const endings = AGENCY_DOMAIN_COMPOUNDS.flatMap((concept) =>
+  // Concatenated labels use a deliberately small suffix grammar. Placement is
+  // high-confidence only as a separated token or with a modeled service
+  // suffix, avoiding words such as displacement and replacement.
+  const serviceEndings = AGENCY_DOMAIN_COMPOUNDS.flatMap((concept) =>
     AGENCY_DOMAIN_SERVICE_SUFFIXES.map((suffix) => `${concept}${suffix}`),
   );
-  return (
-    endings.some((ending) => compact.endsWith(ending)) ||
-    compact === "rpo" ||
-    AGENCY_DOMAIN_SERVICE_SUFFIXES.some(
-      (suffix) => suffix && compact.endsWith(`rpo${suffix}`),
-    )
-  );
+  if (
+    AGENCY_DOMAIN_STANDALONE_ENDINGS.some((ending) =>
+      compact.endsWith(ending),
+    ) ||
+    serviceEndings.some((ending) => compact.endsWith(ending)) ||
+    compact === "rpo"
+  )
+    return "agency-contradiction";
+  if (
+    AMBIGUOUS_AGENCY_DOMAIN_FRAGMENTS.some((fragment) =>
+      compact.includes(fragment),
+    ) ||
+    compact.startsWith("rpo") ||
+    compact.endsWith("rpo")
+  )
+    return "ambiguous";
+  return "neutral";
 }
 
 export interface ApolloEvidenceMapping {
@@ -179,6 +219,7 @@ export interface ApolloEvidenceMapping {
     responsibility: "apollo.person.seniority" | null;
   };
   recruiterEmployerStatus: "internal" | "agency" | "ambiguous" | "not-recruiter";
+  recruiterDomainEvidence: ApolloRecruiterDomainEvidence;
 }
 
 /**
@@ -208,6 +249,9 @@ export function mapApolloProviderEvidence(
   const employerId = optionalString(organization.id);
   const validEmployerDomain = normalizeApolloEmployerDomain(
     organization.primary_domain,
+  );
+  const recruiterDomainEvidence = classifyApolloRecruiterDomain(
+    validEmployerDomain,
   );
   const primaryIndustry = optionalString(organization.industry);
   const industryEntries = [
@@ -295,7 +339,7 @@ export function mapApolloProviderEvidence(
     const operatingIndustries = industryEntries.filter((entry) =>
       OPERATING_COMPANY_INDUSTRY.test(entry.value),
     );
-    const agencyDomain = agencyDomainContradiction(validEmployerDomain);
+    const agencyDomain = recruiterDomainEvidence === "agency-contradiction";
     const agency =
       agencyEmployer || agencyIndustries.length > 0 || agencyDomain;
     const employerIdentitySource = employerId
@@ -306,6 +350,7 @@ export function mapApolloProviderEvidence(
     const ambiguous =
       !employerName ||
       !employerIdentitySource ||
+      recruiterDomainEvidence === "ambiguous" ||
       AMBIGUOUS_RECRUITER_TITLE.test(title) ||
       operatingIndustries.length === 0;
     recruiterEmployerStatus = agency
@@ -331,6 +376,9 @@ export function mapApolloProviderEvidence(
           ? internalReferences
           : [
               ...(employerIdentitySource ? [employerIdentitySource] : []),
+              ...(recruiterDomainEvidence === "ambiguous"
+                ? ["apollo.person.organization.primary_domain" as const]
+                : []),
               ...industryEntries.map((entry) => entry.sourceReference),
             ];
     add(
@@ -394,5 +442,6 @@ export function mapApolloProviderEvidence(
       responsibility,
     },
     recruiterEmployerStatus,
+    recruiterDomainEvidence,
   };
 }

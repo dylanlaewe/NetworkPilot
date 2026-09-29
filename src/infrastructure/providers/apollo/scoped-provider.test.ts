@@ -84,7 +84,14 @@ class Transport implements ApolloHttpTransport {
 class Reservations implements ApolloPersonReservationStore {
   readonly states = new Map<
     string,
-    { owner: string; attempted: boolean; outcome?: "usable" | "uncertain" }
+    {
+      owner: string;
+      attempted: boolean;
+      outcome?: "usable" | "uncertain";
+      observedConsumption?: number | null;
+      providerViolation?: string;
+      resultRetained?: boolean;
+    }
   >();
 
   claim(input: { personId: string; operationId: string }): boolean {
@@ -107,11 +114,17 @@ class Reservations implements ApolloPersonReservationStore {
     personId: string;
     operationId: string;
     outcome: "usable" | "uncertain";
+    record?: unknown;
+    observedConsumption: number | null;
+    providerViolation?: "provider-credit-model-exceeded";
   }): void {
     const state = this.states.get(input.personId);
     if (!state || state.owner !== input.operationId || !state.attempted)
       throw new Error("fixture-reservation-completion-unavailable");
     state.outcome = input.outcome;
+    state.observedConsumption = input.observedConsumption;
+    state.providerViolation = input.providerViolation;
+    state.resultRetained = Boolean(input.record);
   }
 
   releaseUnattempted(input: {
@@ -536,9 +549,25 @@ describe("concrete scoped Apollo provider", () => {
         }),
       ],
     );
-    await expect(discover(provider(transport), "peers")).rejects.toMatchObject({
+    const reservations = new Reservations();
+    await expect(
+      discover(provider(transport, { reservations }), "peers"),
+    ).rejects.toMatchObject({
       accounting: { attempts: 1, observedCredits: 2 },
     });
+    expect(reservations.states.get(candidate.id)).toMatchObject({
+      attempted: true,
+      outcome: "usable",
+      observedConsumption: 2,
+      providerViolation: "provider-credit-model-exceeded",
+      resultRetained: true,
+    });
+    expect(
+      reservations.claim({
+        personId: candidate.id,
+        operationId: "ordinary-retry-operation",
+      }),
+    ).toBe(false);
   });
 
   it("isolates malformed search records without enrichment", async () => {
