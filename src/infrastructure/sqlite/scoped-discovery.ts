@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import type { SqliteSimulationRepository } from "./database";
 import type { ScopedDiscoveryStore } from "@/application/candidate-refresh/scoped";
 import type { CandidateRefreshResult } from "@/application/candidate-refresh";
-import { importCandidateBatch } from "@/application/ingestion";
 import { bucketReserve } from "./bucket-reserve";
 import { assertFiveBucketEnabled, matchesBucketScope } from "@/domain/recipient-buckets";
 import type { TargetCompany } from "@/domain/targeting";
@@ -16,6 +15,7 @@ import {
 } from "./datastore-topology";
 import { reconcileApolloDailyObservedConsumption } from "./apollo-accounting";
 import { SqliteApolloPersonReservationStore } from "./apollo-person-reservations";
+import { completeScopedCandidateRecords } from "./scoped-candidate-completion";
 
 export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
   private readonly topology: NetworkPilotDatastoreTopology;
@@ -135,23 +135,23 @@ export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
   }
   complete(input: Parameters<ScopedDiscoveryStore["complete"]>[0]): CandidateRefreshResult {
     return this.repository.transaction(() => {
-      const beforeIds = new Set(this.repository.listImportedCandidates().map(c => c.id));
-      if (input.records.length) {
-        const provider = input.records[0].sourceProviderId, dataset = input.records[0].datasetClassification;
-        if (input.records.some(r => r.sourceProviderId !== provider || r.datasetClassification !== dataset)) throw new Error("scoped-refresh-source-conflict");
-        importCandidateBatch(this.repository, this.options.companies ?? this.repository.listTargetCompanies(), { batchId: input.operationId, adapterId: provider, adapterVersion: "scoped-discovery-v1", datasetClassification: dataset, sourceFingerprint: input.operationId, records: input.records, strategyCompanyDomains: this.options.companyDomains, ...(dataset === "authorized-provider" ? { authorizedProviderAccess: { enabled: true, providerId: provider } } : {}) }, input.at);
-      }
+      const completion = completeScopedCandidateRecords({
+        repository: this.repository,
+        operationId: input.operationId,
+        scope: input.scope,
+        records: input.records,
+        adapterVersion: "scoped-discovery-v1",
+        sourceFingerprint: input.operationId,
+        at: input.at,
+        companies: this.options.companies,
+        companyDomains: this.options.companyDomains,
+      });
       const personReservations = new SqliteApolloPersonReservationStore(
         this.repository,
       );
-      for (const record of input.records) {
+      for (const [index, record] of input.records.entries()) {
         if (record.sourceProviderId !== "apollo") continue;
-        const imported = this.repository.findImportedCandidate(
-          "apollo",
-          record.providerRecordId,
-        );
-        if (!imported)
-          throw new Error("scoped-refresh-imported-candidate-missing");
+        const imported = completion.imported[index]!;
         personReservations.markImported({
           personId: record.providerRecordId,
           operationId: input.operationId,
@@ -159,26 +159,41 @@ export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
           at: input.at,
         });
       }
-      const added = this.repository.listImportedCandidates().filter(c => !beforeIds.has(c.id));
-      for (const candidate of added) if (!matchesBucketScope(candidate.recipientBucket, input.scope)) {
-        candidate.gateFailures = [...new Set([...candidate.gateFailures, "discovery-scope-mismatch"])];
-        if (candidate.state === "eligible") candidate.state = "review-required";
-        this.repository.native.prepare("UPDATE imported_candidates SET normalized_snapshot_json=?,lifecycle_state=? WHERE id=?").run(JSON.stringify(candidate), candidate.state, candidate.id);
-      }
+      const added = completion.added;
       const reserve = bucketReserve(this.repository, input.scope, input.at);
       const qualified = added.filter(c => reserve.eligible.some(e => e.id === c.id) && matchesBucketScope(c.recipientBucket, input.scope));
       const result: CandidateRefreshResult = { id: input.operationId, scope: input.scope, requested: input.requested, added: qualified.length, searchedCandidates: input.searchedCandidates, enrichedCandidates: input.records.length, rejectedCandidates: input.rejectedCandidates + added.length - qualified.length, remainingActionableCapacity: reserve.actionableCapacity, shortfallCode: qualified.length < input.requested ? "scoped-supply-shortfall" : null, createdAt: input.at.toISOString(), usableBefore: input.usableBefore, target: input.usableBefore + input.requested, deficit: input.requested, providerCap: input.maximum, maximumProviderUsage: input.maximum, providerRequired: true, searchCalls: input.searchCalls, enrichmentCreditsUsed: input.attempts, candidatesAdded: added.length, qualifiedCandidatesAdded: qualified.length, professionalCandidatesAdded: qualified.filter(c => c.outreachTrack !== "recruiter").length, recruiterCandidatesAdded: qualified.filter(c => c.outreachTrack === "recruiter").length, companiesAdded: new Set(qualified.map(c => c.strategyCompanyMatch!.companyId)).size, usableAfter: reserve.actionableCapacity };
       this.repository.native.prepare("INSERT INTO candidate_refresh_events(id,created_at_utc,usable_before,target_reserve,provider_cap,search_calls,enrichment_credits_used,candidates_added,qualified_candidates_added,usable_after,professional_candidates_added,recruiter_candidates_added,companies_added,bucket_scope_json,result_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(result.id, result.createdAt, result.usableBefore, result.target, result.providerCap, result.searchCalls, result.enrichmentCreditsUsed, result.candidatesAdded, result.qualifiedCandidatesAdded, result.usableAfter, result.professionalCandidatesAdded, result.recruiterCandidatesAdded, result.companiesAdded, JSON.stringify(input.scope), JSON.stringify(result));
-      this.repository.native
-        .prepare(
-          "UPDATE provider_operations SET attempt_count=MAX(attempt_count,?) WHERE id=? AND state='authorized'",
-        )
-        .run(input.attempts, input.operationId);
-      this.repository.completeApolloOperation(input.operationId, input.observedCredits);
+      const childAccounting = personReservations.recomputeParentAccounting(
+        input.operationId,
+        input.at,
+      );
+      if (
+        childAccounting.childCount > 0 &&
+        childAccounting.attemptCount !== input.attempts
+      )
+        throw new Error("scoped-refresh-person-attempt-accounting-conflict");
+      if (
+        childAccounting.childCount > 0 &&
+        input.observedCredits !== null &&
+        childAccounting.observedConsumption !== input.observedCredits
+      )
+        throw new Error("scoped-refresh-person-consumption-accounting-conflict");
+      const observed =
+        childAccounting.childCount > 0
+          ? childAccounting.observedConsumption
+          : input.observedCredits;
+      if (childAccounting.childCount === 0)
+        this.repository.native
+          .prepare(
+            "UPDATE provider_operations SET attempt_count=MAX(attempt_count,?) WHERE id=? AND state='authorized'",
+          )
+          .run(input.attempts, input.operationId);
+      this.repository.completeApolloOperation(input.operationId, observed);
       this.recordObservedConsumption(
         input.operationId,
         input.at,
-        input.observedCredits,
+        observed,
       );
       return result;
     });
@@ -201,6 +216,19 @@ export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
             accounting.observedCredits >= 0
               ? accounting.observedCredits
               : null;
+        const childAccounting = new SqliteApolloPersonReservationStore(
+          this.repository,
+        ).recomputeParentAccounting(operationId, accounting.at);
+        if (childAccounting.childCount > 0) {
+          if (childAccounting.attemptCount !== attempts)
+            throw new Error("scoped-refresh-person-attempt-accounting-conflict");
+          if (
+            observed !== null &&
+            childAccounting.observedConsumption !== observed
+          )
+            throw new Error("scoped-refresh-person-consumption-accounting-conflict");
+          return;
+        }
         this.repository.native
           .prepare(
             "UPDATE provider_operations SET attempt_count=MAX(attempt_count,?),observed_consumption=CASE WHEN ? IS NULL THEN observed_consumption WHEN observed_consumption IS NULL THEN ? ELSE MAX(observed_consumption,?) END WHERE id=? AND state='failed'",

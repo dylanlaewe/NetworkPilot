@@ -277,9 +277,22 @@ describe("Apollo provider-neutral evidence mapping", () => {
 
   it.each([
     ["northwindstaffing.com", "agency"],
+    ["northwindstaffinggroup.com", "agency"],
     ["northwind-recruiting.com", "agency"],
+    ["northwindrecruitinggroup.com", "agency"],
+    ["northwind-recruiters.com", "agency"],
     ["northwind-executive-search.com", "agency"],
+    ["northwindexecutivesearchgroup.com", "agency"],
+    ["northwindplacementgroup.com", "agency"],
+    ["northwindtalentsolutionsgroup.com", "agency"],
+    ["northwindemploymentagencygroup.com", "agency"],
+    ["WWW.NORTHWINDSTAFFINGGROUP.COM", "agency"],
+    ["careers.northwindstaffinggroup.com", "agency"],
     ["jobs.careers.northwindstaffing.com", "agency"],
+    ["staffington.com", "internal"],
+    ["recruitingdale.com", "internal"],
+    ["ordinarysoftware.com", "internal"],
+    ["staff-ing-like.com", "internal"],
     ["northwindsoftware.com", "internal"],
     ["recruiting-tools.jobs.northwindsoftware.com", "internal"],
   ] as const)(

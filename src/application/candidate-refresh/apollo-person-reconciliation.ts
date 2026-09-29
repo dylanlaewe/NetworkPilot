@@ -18,6 +18,7 @@ export interface ApolloPersonReservationAuditEvent {
   reason: string;
   previousState: ApolloPersonReservationLifecycle | null;
   resultingState: ApolloPersonReservationLifecycle;
+  observedConsumption?: number;
   occurredAt: string;
 }
 
@@ -29,6 +30,8 @@ export interface ApolloPersonReservationInspection {
   resultRetained: boolean;
   retainedResultFingerprint: string | null;
   importedCandidateId: string | null;
+  personObservedConsumption: number | null;
+  consumptionKnown: boolean;
   observedConsumption: number | null;
   reusable: boolean;
   requiresReconciliation: boolean;

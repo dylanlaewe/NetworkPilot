@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CandidateSourceRecord } from "@/domain/candidates";
 import type { TargetCompany } from "@/domain/targeting";
-import { importCandidateBatch } from "@/application/ingestion";
+import { parseBucketScope } from "@/domain/recipient-buckets";
 import {
   APOLLO_PERSON_RESERVATION_VERSION,
   type ApolloPersonReconciliationCommand,
@@ -14,6 +14,7 @@ import {
 import type { ApolloPersonReservationStore } from "@/infrastructure/providers/apollo/scoped-provider";
 import { reconcileApolloDailyObservedConsumption } from "./apollo-accounting";
 import type { SqliteSimulationRepository } from "./database";
+import { completeScopedCandidateRecords } from "./scoped-candidate-completion";
 
 const DEFAULT_STALE_AFTER_MS = 15 * 60 * 1000;
 
@@ -22,6 +23,8 @@ type ReservationMetadata = {
   personId: string;
   ownerOperationId: string;
   lifecycle: ApolloPersonReservationLifecycle;
+  attemptedForOwner: boolean;
+  observedConsumption?: number | null;
   retainedRecord?: CandidateSourceRecord;
   retainedResultFingerprint?: string;
   importedCandidateId?: string;
@@ -39,6 +42,14 @@ type ReservationRow = {
   occurred_at_utc: string;
   bucket_scope_json: string | null;
 };
+
+export interface ApolloParentOperationAccounting {
+  childCount: number;
+  attemptCount: number;
+  knownConsumptionLowerBound: number;
+  hasUnknownConsumption: boolean;
+  observedConsumption: number | null;
+}
 
 export const apolloPersonReservationId = (personId: string): string =>
   `apollo-person:${createHash("sha256").update(personId).digest("hex")}`;
@@ -117,6 +128,7 @@ export class SqliteApolloPersonReservationStore
         personId: input.personId,
         ownerOperationId: input.operationId,
         lifecycle,
+        attemptedForOwner: false,
         updatedAt: input.at.toISOString(),
         audit: [
           systemAudit({
@@ -154,6 +166,8 @@ export class SqliteApolloPersonReservationStore
         ...existing,
         ownerOperationId: input.operationId,
         lifecycle,
+        attemptedForOwner: false,
+        observedConsumption: undefined,
         retainedRecord: undefined,
         retainedResultFingerprint: undefined,
         importedCandidateId: undefined,
@@ -190,6 +204,8 @@ export class SqliteApolloPersonReservationStore
       const next: ReservationMetadata = {
         ...metadata,
         lifecycle,
+        attemptedForOwner: true,
+        observedConsumption: null,
         updatedAt: input.at.toISOString(),
         audit: [
           ...metadata.audit,
@@ -202,6 +218,7 @@ export class SqliteApolloPersonReservationStore
         ],
       };
       this.persist(row, next, { attemptDelta: 1 });
+      this.recomputeParentAccounting(input.operationId, input.at);
     });
   }
 
@@ -211,6 +228,7 @@ export class SqliteApolloPersonReservationStore
     at: Date;
     outcome: "usable" | "uncertain";
     record?: CandidateSourceRecord;
+    observedConsumption: number | null;
   }): void {
     this.repository.transaction(() => {
       const row = this.requiredOwnedRow(input);
@@ -224,6 +242,12 @@ export class SqliteApolloPersonReservationStore
           input.record.providerRecordId !== input.personId)
       )
         throw new Error("apollo-person-reservation-result-invalid");
+      if (
+        input.observedConsumption !== null &&
+        (!Number.isInteger(input.observedConsumption) ||
+          input.observedConsumption < 0)
+      )
+        throw new Error("apollo-person-reservation-consumption-invalid");
       const lifecycle: ApolloPersonReservationLifecycle =
         input.outcome === "usable"
           ? "attempted-result-usable"
@@ -231,6 +255,7 @@ export class SqliteApolloPersonReservationStore
       const next: ReservationMetadata = {
         ...metadata,
         lifecycle,
+        observedConsumption: input.observedConsumption,
         ...(input.outcome === "usable"
           ? {
               retainedRecord: structuredClone(input.record!),
@@ -252,6 +277,7 @@ export class SqliteApolloPersonReservationStore
         ],
       };
       this.persist(row, next);
+      this.recomputeParentAccounting(input.operationId, input.at);
     });
   }
 
@@ -284,6 +310,12 @@ export class SqliteApolloPersonReservationStore
         ],
       };
       this.persist(row, next);
+      const parent = this.repository.native
+        .prepare(
+          "SELECT 1 present FROM provider_operations WHERE id=? AND provider_id='apollo' AND candidate_count>0",
+        )
+        .get(input.operationId);
+      if (parent) this.recomputeParentAccounting(input.operationId, input.at);
     });
   }
 
@@ -293,28 +325,38 @@ export class SqliteApolloPersonReservationStore
     importedCandidateId: string;
     at: Date;
   }): void {
-    const row = this.requiredOwnedRow(input);
-    const metadata = this.metadata(row, input.personId);
-    if (metadata.lifecycle !== "attempted-result-usable")
-      throw new Error("apollo-person-reservation-import-state-invalid");
-    const lifecycle: ApolloPersonReservationLifecycle = "completed-imported";
-    const next: ReservationMetadata = {
-      ...metadata,
-      lifecycle,
-      retainedRecord: undefined,
-      importedCandidateId: input.importedCandidateId,
-      updatedAt: input.at.toISOString(),
-      audit: [
-        ...metadata.audit,
-        systemAudit({
-          ...input,
-          previousState: metadata.lifecycle,
-          resultingState: lifecycle,
-          reason: "canonical-candidate-import-confirmed",
-        }),
-      ],
-    };
-    this.persist(row, next);
+    this.repository.transaction(() => {
+      const row = this.requiredOwnedRow(input);
+      const metadata = this.metadata(row, input.personId);
+      if (
+        metadata.lifecycle === "completed-imported" &&
+        metadata.importedCandidateId === input.importedCandidateId
+      ) {
+        this.recomputeParentAccounting(input.operationId, input.at);
+        return;
+      }
+      if (metadata.lifecycle !== "attempted-result-usable")
+        throw new Error("apollo-person-reservation-import-state-invalid");
+      const lifecycle: ApolloPersonReservationLifecycle = "completed-imported";
+      const next: ReservationMetadata = {
+        ...metadata,
+        lifecycle,
+        retainedRecord: undefined,
+        importedCandidateId: input.importedCandidateId,
+        updatedAt: input.at.toISOString(),
+        audit: [
+          ...metadata.audit,
+          systemAudit({
+            ...input,
+            previousState: metadata.lifecycle,
+            resultingState: lifecycle,
+            reason: "canonical-candidate-import-confirmed",
+          }),
+        ],
+      };
+      this.persist(row, next);
+      this.recomputeParentAccounting(input.operationId, input.at);
+    });
   }
 
   inspectApolloPersonReservation(input: {
@@ -333,7 +375,8 @@ export class SqliteApolloPersonReservationStore
     command: ApolloPersonReconciliationCommand,
   ): ApolloPersonReconciliationResult {
     return this.repository.transaction(() => {
-      const row = this.requiredOwnedRow(command);
+      const row = this.readRow(command.personId);
+      if (!row) throw new Error("apollo-person-reservation-missing");
       const metadata = this.metadata(row, command.personId);
       const commandFingerprint = fingerprint({
         commandId: command.commandId,
@@ -358,10 +401,13 @@ export class SqliteApolloPersonReservationStore
         const existing = this.inspection(row, metadata);
         return { status: "existing", before: existing, after: existing };
       }
+      if (metadata.ownerOperationId !== command.operationId)
+        throw new Error("apollo-person-reservation-operation-mismatch");
 
       const before = this.inspection(row, metadata);
       let resultingState: ApolloPersonReservationLifecycle;
       let importedCandidateId = metadata.importedCandidateId;
+      let observedConsumption = metadata.observedConsumption;
       if (command.outcome === "resume-retained-result") {
         if (
           metadata.lifecycle !== "attempted-result-usable" ||
@@ -376,7 +422,7 @@ export class SqliteApolloPersonReservationStore
       } else if (command.outcome === "no-consumption-safe-release") {
         if (metadata.lifecycle !== "reconciliation-required")
           throw new Error("apollo-person-reconciliation-release-unavailable");
-        this.recordOuterConsumption(metadata.ownerOperationId, 0, command.at);
+        observedConsumption = 0;
         resultingState = "released-no-consumption";
       } else {
         if (
@@ -384,11 +430,13 @@ export class SqliteApolloPersonReservationStore
           metadata.lifecycle !== "attempted-result-usable"
         )
           throw new Error("apollo-person-reconciliation-consumed-unavailable");
-        this.recordOuterConsumption(
-          metadata.ownerOperationId,
-          command.observedConsumption,
-          command.at,
-        );
+        if (
+          metadata.observedConsumption !== null &&
+          metadata.observedConsumption !== undefined &&
+          metadata.observedConsumption !== command.observedConsumption
+        )
+          throw new Error("apollo-person-reconciliation-consumption-conflict");
+        observedConsumption = command.observedConsumption;
         resultingState = "consumed-no-import";
       }
 
@@ -401,17 +449,22 @@ export class SqliteApolloPersonReservationStore
         reason: command.reason.trim(),
         previousState: metadata.lifecycle,
         resultingState,
+        ...(observedConsumption !== null && observedConsumption !== undefined
+          ? { observedConsumption }
+          : {}),
         occurredAt: command.at.toISOString(),
       };
       const next: ReservationMetadata = {
         ...metadata,
         lifecycle: resultingState,
+        observedConsumption,
         retainedRecord: undefined,
         importedCandidateId,
         updatedAt: command.at.toISOString(),
         audit: [...metadata.audit, event],
       };
       this.persist(row, next);
+      this.recomputeParentAccounting(metadata.ownerOperationId, command.at);
       return {
         status: "applied",
         before,
@@ -429,37 +482,22 @@ export class SqliteApolloPersonReservationStore
   ): string {
     if (record.providerRecordId !== command.personId)
       throw new Error("apollo-person-reconciliation-result-identity-invalid");
-    const existing = this.repository.findImportedCandidate(
-      "apollo",
-      command.personId,
-    );
-    if (existing) return existing.id;
     const stable = fingerprint({
       personId: command.personId,
       sourceFingerprint: record.sourceFingerprint,
     });
-    importCandidateBatch(
-      this.repository,
-      this.options.companies ?? this.repository.listTargetCompanies(),
-      {
-        batchId: `apollo-reconcile:${stable.slice(0, 32)}`,
-        adapterId: "apollo",
-        adapterVersion: "scoped-reconciliation-v1",
-        datasetClassification: record.datasetClassification,
-        sourceFingerprint: `apollo-reconcile:${stable}`,
-        records: [record],
-        strategyCompanyDomains: this.options.companyDomains,
-        ...(record.datasetClassification === "authorized-provider"
-          ? {
-              authorizedProviderAccess: {
-                enabled: true as const,
-                providerId: "apollo",
-              },
-            }
-          : {}),
-      },
-      command.at,
-    );
+    const scope = this.parentScope(command.operationId);
+    completeScopedCandidateRecords({
+      repository: this.repository,
+      operationId: `apollo-reconcile:${stable.slice(0, 32)}`,
+      scope,
+      records: [record],
+      adapterVersion: "scoped-reconciliation-v1",
+      sourceFingerprint: `apollo-reconcile:${stable}`,
+      at: command.at,
+      companies: this.options.companies,
+      companyDomains: this.options.companyDomains,
+    });
     const imported = this.repository.findImportedCandidate(
       "apollo",
       command.personId,
@@ -469,36 +507,107 @@ export class SqliteApolloPersonReservationStore
     return imported.id;
   }
 
-  private recordOuterConsumption(
-    operationId: string,
-    observedConsumption: number,
-    at: Date,
-  ): void {
+  private parentScope(operationId: string) {
     const operation = this.repository.native
       .prepare(
-        "SELECT observed_consumption,occurred_at_utc FROM provider_operations WHERE id=? AND provider_id='apollo' AND candidate_count>0",
+        "SELECT bucket_scope_json FROM provider_operations WHERE id=? AND provider_id='apollo' AND candidate_count>0",
       )
-      .get(operationId) as
-      | { observed_consumption: number | null; occurred_at_utc: string }
-      | undefined;
-    if (!operation)
-      throw new Error("apollo-person-reconciliation-operation-missing");
-    if (
-      observedConsumption === 0 &&
-      operation.observed_consumption !== null &&
-      operation.observed_consumption > 0
-    )
-      throw new Error("apollo-person-reconciliation-consumption-conflict");
-    this.repository.native
-      .prepare(
-        "UPDATE provider_operations SET observed_consumption=CASE WHEN observed_consumption IS NULL THEN ? ELSE MAX(observed_consumption,?) END WHERE id=?",
-      )
-      .run(observedConsumption, observedConsumption, operationId);
-    const date = new Date(operation.occurred_at_utc).toLocaleDateString(
-      "en-CA",
-      { timeZone: "America/New_York" },
-    );
-    reconcileApolloDailyObservedConsumption(this.repository.native, date, at);
+      .get(operationId) as { bucket_scope_json: string | null } | undefined;
+    if (!operation?.bucket_scope_json)
+      throw new Error("apollo-person-reconciliation-scope-missing");
+    try {
+      const value = JSON.parse(operation.bucket_scope_json) as {
+        bucket?: unknown;
+        earlyCareerOnly?: unknown;
+      };
+      const scope = parseBucketScope(value);
+      if (!scope) throw new Error("scope-missing");
+      return scope;
+    } catch {
+      throw new Error("apollo-person-reconciliation-scope-invalid");
+    }
+  }
+
+  /** Recomputes, rather than increments, one parent from current child truth. */
+  recomputeParentAccounting(
+    operationId: string,
+    at: Date,
+  ): ApolloParentOperationAccounting {
+    return this.repository.transaction(() => {
+      const parent = this.repository.native
+        .prepare(
+          "SELECT occurred_at_utc FROM provider_operations WHERE id=? AND provider_id='apollo' AND candidate_count>0",
+        )
+        .get(operationId) as { occurred_at_utc: string } | undefined;
+      if (!parent)
+        throw new Error("apollo-person-reconciliation-operation-missing");
+      const children = this.repository.native
+        .prepare(
+          "SELECT batch_id,attempt_count,bucket_scope_json FROM provider_operations WHERE provider_id='apollo' AND operation='enrichment' AND candidate_count=0 AND estimated_max_exposure=0 AND batch_id=?",
+        )
+        .all(operationId) as Array<{
+        batch_id: string;
+        attempt_count: number;
+        bucket_scope_json: string | null;
+      }>;
+      if (children.length === 0)
+        return {
+          childCount: 0,
+          attemptCount: 0,
+          knownConsumptionLowerBound: 0,
+          hasUnknownConsumption: false,
+          observedConsumption: null,
+        };
+      let attemptCount = 0;
+      let knownConsumptionLowerBound = 0;
+      let hasUnknownConsumption = false;
+      for (const child of children) {
+        let attempted = child.attempt_count > 0;
+        let observed: number | null | undefined;
+        if (child.bucket_scope_json) {
+          try {
+            const parsed = JSON.parse(
+              child.bucket_scope_json,
+            ) as Partial<ReservationMetadata>;
+            if (
+              parsed.version === APOLLO_PERSON_RESERVATION_VERSION &&
+              parsed.ownerOperationId === operationId
+            ) {
+              attempted = parsed.attemptedForOwner ?? attempted;
+              observed = Object.hasOwn(parsed, "observedConsumption")
+                ? parsed.observedConsumption
+                : undefined;
+            }
+          } catch {
+            // A legacy attempted child remains unknown and conservatively held.
+          }
+        }
+        if (!attempted) continue;
+        attemptCount += 1;
+        if (observed === null || observed === undefined)
+          hasUnknownConsumption = true;
+        else knownConsumptionLowerBound += observed;
+      }
+      const observedConsumption = hasUnknownConsumption
+        ? null
+        : knownConsumptionLowerBound;
+      this.repository.native
+        .prepare(
+          "UPDATE provider_operations SET attempt_count=?,observed_consumption=? WHERE id=? AND provider_id='apollo' AND candidate_count>0",
+        )
+        .run(attemptCount, observedConsumption, operationId);
+      const date = new Date(parent.occurred_at_utc).toLocaleDateString("en-CA", {
+        timeZone: "America/New_York",
+      });
+      reconcileApolloDailyObservedConsumption(this.repository.native, date, at);
+      return {
+        childCount: children.length,
+        attemptCount,
+        knownConsumptionLowerBound,
+        hasUnknownConsumption,
+        observedConsumption,
+      };
+    });
   }
 
   private readRow(personId: string): ReservationRow | undefined {
@@ -530,7 +639,16 @@ export class SqliteApolloPersonReservationStore
           parsed.personId === personId &&
           Array.isArray(parsed.audit)
         )
-          return parsed;
+          return {
+            ...parsed,
+            attemptedForOwner:
+              parsed.attemptedForOwner ?? row.attempt_count > 0,
+            ...(Object.hasOwn(parsed, "observedConsumption")
+              ? {}
+              : row.attempt_count > 0
+                ? { observedConsumption: null }
+                : {}),
+          };
       } catch {
         // Legacy rows below remain locked and require explicit reconciliation.
       }
@@ -544,6 +662,8 @@ export class SqliteApolloPersonReservationStore
       personId,
       ownerOperationId: row.batch_id,
       lifecycle,
+      attemptedForOwner: row.attempt_count > 0,
+      ...(row.attempt_count > 0 ? { observedConsumption: null } : {}),
       updatedAt: row.occurred_at_utc,
       audit: [],
     };
@@ -591,6 +711,11 @@ export class SqliteApolloPersonReservationStore
       resultRetained: Boolean(metadata.retainedRecord),
       retainedResultFingerprint: metadata.retainedResultFingerprint ?? null,
       importedCandidateId: metadata.importedCandidateId ?? null,
+      personObservedConsumption: metadata.observedConsumption ?? null,
+      consumptionKnown:
+        metadata.attemptedForOwner &&
+        metadata.observedConsumption !== null &&
+        metadata.observedConsumption !== undefined,
       observedConsumption: operation?.observed_consumption ?? null,
       reusable: metadata.lifecycle === "released-no-consumption",
       requiresReconciliation:

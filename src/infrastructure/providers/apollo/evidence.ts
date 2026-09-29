@@ -30,12 +30,33 @@ const AGENCY_DOMAIN_TERMS = [
   "recruiting",
   "recruitment",
   "recruiter",
+  "recruiters",
   "placement",
 ] as const;
+const AGENCY_DOMAIN_TOKEN_PAIRS = [
+  ["executive", "search"],
+  ["employment", "agency"],
+  ["talent", "solutions"],
+  ["recruiting", "solutions"],
+  ["staffing", "solutions"],
+] as const;
 const AGENCY_DOMAIN_COMPOUNDS = [
+  ...AGENCY_DOMAIN_TERMS,
   "executivesearch",
   "talentsolutions",
   "employmentagency",
+  "recruitingsolutions",
+  "staffingsolutions",
+] as const;
+const AGENCY_DOMAIN_SERVICE_SUFFIXES = [
+  "",
+  "group",
+  "services",
+  "solutions",
+  "agency",
+  "firm",
+  "search",
+  "partners",
 ] as const;
 
 const optionalRecord = (value: unknown): JsonRecord | undefined =>
@@ -111,21 +132,28 @@ function agencyDomainContradiction(hostname: string | undefined): boolean {
     )
   )
     return true;
-  const compact = tokens.join("");
-  const distinctive = [
-    ...AGENCY_DOMAIN_TERMS,
-    ...AGENCY_DOMAIN_COMPOUNDS,
-  ];
   if (
-    distinctive.some(
-      (term) =>
-        compact === term ||
-        (compact.length >= term.length + 3 &&
-          (compact.startsWith(term) || compact.endsWith(term))),
+    AGENCY_DOMAIN_TOKEN_PAIRS.some(([left, right]) =>
+      tokens.some(
+        (token, index) => token === left && tokens[index + 1] === right,
+      ),
     )
   )
     return true;
-  return compact === "rpo" || (compact.length >= 6 && compact.endsWith("rpo"));
+  const compact = tokens.join("");
+  // Concatenated labels use a deliberately small suffix grammar. A recognized
+  // agency concept may end a label or be followed by one known service suffix;
+  // arbitrary trailing letters (for example, "staffington") are not evidence.
+  const endings = AGENCY_DOMAIN_COMPOUNDS.flatMap((concept) =>
+    AGENCY_DOMAIN_SERVICE_SUFFIXES.map((suffix) => `${concept}${suffix}`),
+  );
+  return (
+    endings.some((ending) => compact.endsWith(ending)) ||
+    compact === "rpo" ||
+    AGENCY_DOMAIN_SERVICE_SUFFIXES.some(
+      (suffix) => suffix && compact.endsWith(`rpo${suffix}`),
+    )
+  );
 }
 
 export interface ApolloEvidenceMapping {

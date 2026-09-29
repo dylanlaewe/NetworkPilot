@@ -18,6 +18,7 @@ class ScopedOperationBudget implements ApolloBudgetRepository {
   private observedKnown = true;
   private readonly completedOperations = new Set<string>();
   private pendingAttempt: (() => void) | null = null;
+  private lastCompletionConsumption: number | null | undefined;
 
   constructor(private readonly maximum: number) {}
 
@@ -63,8 +64,17 @@ class ScopedOperationBudget implements ApolloBudgetRepository {
   ): void {
     this.completions += 1;
     this.completedOperations.add(operationId);
+    this.lastCompletionConsumption = observedConsumption;
     if (observedConsumption === null) this.observedKnown = false;
     else this.observed += observedConsumption;
+  }
+
+  takeLastCompletionConsumption(): number | null {
+    if (this.lastCompletionConsumption === undefined)
+      throw new Error("scoped-apollo-completion-consumption-unavailable");
+    const observed = this.lastCompletionConsumption;
+    this.lastCompletionConsumption = undefined;
+    return observed;
   }
 
   failApolloOperation(operationId: string): void {
@@ -143,6 +153,7 @@ export interface ApolloPersonReservationStore {
     at: Date;
     outcome: "usable" | "uncertain";
     record?: CandidateSourceRecord;
+    observedConsumption: number | null;
   }): void;
   releaseUnattempted(input: {
     personId: string;
@@ -299,6 +310,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
             at: this.dependencies.now(),
             outcome: "usable",
             record: enriched[0],
+            observedConsumption: budget.takeLastCompletionConsumption(),
           });
           records.push(enriched[0]);
         } catch (error) {
@@ -308,6 +320,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
                 ...reservation,
                 at: this.dependencies.now(),
                 outcome: "uncertain",
+                observedConsumption: null,
               });
             } catch {
               // attempt_count=1 remains a permanent conservative lock even
