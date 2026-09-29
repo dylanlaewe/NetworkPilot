@@ -42,7 +42,7 @@ function person(
     organization: {
       id: `org-${id}`,
       name: `Employer ${id}`,
-      primary_domain: `${id}.example`,
+      primary_domain: "fixture-operating-company.example",
       industry: "technology",
       ...organization,
     },
@@ -84,7 +84,7 @@ class Transport implements ApolloHttpTransport {
 class Reservations implements ApolloPersonReservationStore {
   readonly states = new Map<
     string,
-    { owner: string; attempted: boolean; outcome?: "completed" | "uncertain" }
+    { owner: string; attempted: boolean; outcome?: "usable" | "uncertain" }
   >();
 
   claim(input: { personId: string; operationId: string }): boolean {
@@ -106,7 +106,7 @@ class Reservations implements ApolloPersonReservationStore {
   retainAttempted(input: {
     personId: string;
     operationId: string;
-    outcome: "completed" | "uncertain";
+    outcome: "usable" | "uncertain";
   }): void {
     const state = this.states.get(input.personId);
     if (!state || state.owner !== input.operationId || !state.attempted)
@@ -432,7 +432,7 @@ describe("concrete scoped Apollo provider", () => {
     ).toHaveLength(1);
     expect(reservations.states.get(shared.id)).toMatchObject({
       attempted: true,
-      outcome: "completed",
+      outcome: "usable",
     });
   });
 

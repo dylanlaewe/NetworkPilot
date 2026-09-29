@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { classifyRecipientBucket } from "@/domain/recipient-buckets";
-import { mapApolloPerson } from "./adapter";
+import {
+  mapApolloPerson,
+  mapApolloPersonNameProvenance,
+} from "./adapter";
 import { mapApolloProviderEvidence } from "./evidence";
 import { APOLLO_PEOPLE } from "./fixtures";
 
@@ -112,6 +115,44 @@ describe("Apollo provider-neutral evidence mapping", () => {
       seniority: null,
       responsibility: null,
     });
+  });
+
+  it.each([
+    [
+      { first_name: "First" },
+      ["apollo.person.first_name"],
+    ],
+    [
+      { last_name: "Last" },
+      ["apollo.person.last_name"],
+    ],
+    [
+      { first_name: "First", last_name: "Last" },
+      ["apollo.person.first_name", "apollo.person.last_name"],
+    ],
+  ])("records only exact person-name source fields", (value, sourceFields) => {
+    expect(mapApolloPersonNameProvenance(value, observedAt)).toMatchObject({
+      sourceField: sourceFields[0],
+      sourceFields,
+    });
+  });
+
+  it("removes the nonexistent aggregate person.name provenance", () => {
+    const record = mapApolloPerson(person(), {
+      stage: "enrichment",
+      retrievedAt: observedAt,
+      datasetClassification: "provider-shaped-fixture",
+    });
+    expect(record.fieldProvenance.person).toMatchObject({
+      sourceField: "apollo.person.first_name",
+      sourceFields: [
+        "apollo.person.first_name",
+        "apollo.person.last_name",
+      ],
+    });
+    expect(record.fieldProvenance.person?.sourceFields).not.toContain(
+      "apollo.person.name",
+    );
   });
 
   it.each(["Senior Technical Recruiter", "Talent Acquisition Partner"])(
@@ -232,6 +273,122 @@ describe("Apollo provider-neutral evidence mapping", () => {
     expect(
       mapped.evidence.find((item) => item.kind === "internal-recruiting"),
     ).toMatchObject({ value: "agency", verified: false });
+  });
+
+  it.each([
+    ["northwindstaffing.com", "agency"],
+    ["northwind-recruiting.com", "agency"],
+    ["northwind-executive-search.com", "agency"],
+    ["jobs.careers.northwindstaffing.com", "agency"],
+    ["northwindsoftware.com", "internal"],
+    ["recruiting-tools.jobs.northwindsoftware.com", "internal"],
+  ] as const)(
+    "applies registrable-domain contradiction policy to %s",
+    (primaryDomain, expected) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title: "Technical Recruiter",
+          organization: {
+            id: "org-domain-case",
+            name: "Northwind Talent Software",
+            primary_domain: primaryDomain,
+            industry: "Technology",
+          },
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterEmployerStatus).toBe(expected);
+      const internal = mapped.evidence.find(
+        (item) => item.kind === "internal-recruiting",
+      );
+      expect(internal).toMatchObject({
+        value: expected,
+        verified: expected === "internal",
+      });
+      if (expected === "agency")
+        expect(internal?.sourceReferences).toContain(
+          "apollo.person.organization.primary_domain",
+        );
+    },
+  );
+
+  it("lets a staffing-domain contradiction override an operating industry", () => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-domain-conflict",
+          name: "Northwind Partners",
+          primary_domain: "northwindstaffing.com",
+          industry: "Technology",
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("agency");
+    expect(
+      classifyRecipientBucket({
+        title: "Technical Recruiter",
+        outreachTrack: "recruiter",
+        recruiterAccepted: true,
+        evidence: mapped.evidence,
+      }),
+    ).toMatchObject({
+      bucket: "recruiters",
+      reviewState: "review-required",
+      confidence: "low",
+    });
+  });
+
+  it("lets a staffing-industry contradiction override an ordinary domain", () => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-industry-conflict",
+          name: "Northwind Partners",
+          primary_domain: "northwindsoftware.com",
+          industry: "Staffing and Recruiting",
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("agency");
+  });
+
+  it("does not require a domain with employer ID and operating industry", () => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-no-domain",
+          name: "Northwind Software",
+          industry: "Software",
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("internal");
+    expect(mapped.sourceFields.employerDomain).toBeNull();
+  });
+
+  it("does not use a malformed domain as identity or contradiction", () => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          name: "Northwind Software",
+          primary_domain: "not a valid staffing domain",
+          industry: "Software",
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
+    expect(mapped.sourceFields.employerDomain).toBeNull();
+    expect(
+      mapped.evidence.some((item) => item.kind === "company-identity"),
+    ).toBe(false);
   });
 
   it.each([

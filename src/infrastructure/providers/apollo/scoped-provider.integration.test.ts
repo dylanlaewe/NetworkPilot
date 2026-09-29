@@ -8,7 +8,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { refreshScopedCandidateReserve } from "@/application/candidate-refresh/scoped";
+import { reconcileApolloPersonReservation } from "@/application/candidate-refresh";
+import {
+  refreshScopedCandidateReserve,
+  type ScopedDiscoveryStore,
+} from "@/application/candidate-refresh/scoped";
 import type { RecipientBucket } from "@/domain/recipient-buckets";
 import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
 import { SqliteApolloPersonReservationStore } from "@/infrastructure/sqlite/apollo-person-reservations";
@@ -103,7 +107,7 @@ function person(
     organization: {
       id: `org-${id}`,
       name: employer,
-      primary_domain: `${id}.example`,
+      primary_domain: "fixture-operating-company.example",
       industry: "technology",
     },
     employment_history: [{ start_date: "2015-01-01", current: true }],
@@ -403,6 +407,104 @@ describe("offline scoped Apollo orchestration", () => {
     } finally {
       canonical.close();
       secondCanonical.close();
+    }
+  });
+
+  it("resumes retained enrichment after local completion failure without another People Match", async () => {
+    const { canonical, topology } = setup();
+    const value = person(
+      "local-failure-001",
+      "Senior Data Engineer",
+      "senior",
+      "Local Failure Technology Employer",
+    );
+    const transport = new FixtureTransport(value);
+    const reservations = new SqliteApolloPersonReservationStore(canonical);
+    const provider = new ScopedApolloProvider({
+      config,
+      transport,
+      now: () => at,
+      sleep: async () => undefined,
+      datasetClassification: "authorized-provider",
+      localDate: () => "2026-09-28",
+      personReservations: reservations,
+      existingProviderIds: () => new Set(),
+    });
+    const canonicalStore = new SqliteScopedDiscoveryStore(canonical, {
+      topology,
+    });
+    const failingStore: ScopedDiscoveryStore = {
+      preflight: (input) => canonicalStore.preflight(input),
+      claim: (input) => canonicalStore.claim(input),
+      complete: () => {
+        throw new Error("fixture-local-completion-failure");
+      },
+      fail: (operationId, reason, accounting) =>
+        canonicalStore.fail(operationId, reason, accounting),
+    };
+    try {
+      await expect(
+        refreshScopedCandidateReserve({
+          requestId: "local-completion-failure-request",
+          scope: { bucket: "peers" },
+          requested: 1,
+          usableBefore: 0,
+          policy,
+          store: failingStore,
+          provider,
+          allowProvider: true,
+          now: () => at,
+        }),
+      ).rejects.toThrow("fixture-local-completion-failure");
+      expect(
+        transport.calls.filter((call) => call.path.includes("people/match")),
+      ).toHaveLength(1);
+      expect(canonical.listImportedCandidates()).toEqual([]);
+      const operation = canonical.native
+        .prepare(
+          "SELECT id FROM provider_operations WHERE candidate_count>0",
+        )
+        .get() as { id: string };
+      expect(
+        reservations.inspectApolloPersonReservation({
+          personId: value.id,
+          operationId: operation.id,
+        }),
+      ).toMatchObject({
+        lifecycle: "attempted-result-usable",
+        resultRetained: true,
+        observedConsumption: 1,
+      });
+      const reconciled = reconcileApolloPersonReservation({
+        repository: reservations,
+        command: {
+          commandId: "resume-local-failure-001",
+          personId: value.id,
+          operationId: operation.id,
+          outcome: "resume-retained-result",
+          actor: "fixture-operator",
+          mechanism: "retained-normalized-result",
+          evidence: "Canonical import transaction failed after enrichment",
+          reason: "Resume local import without contacting Apollo",
+          at: new Date(at.getTime() + 60_000),
+        },
+      });
+      expect(reconciled.after).toMatchObject({
+        lifecycle: "completed-imported",
+        resultRetained: false,
+        importedCandidateId: expect.any(String),
+      });
+      expect(canonical.listImportedCandidates()).toHaveLength(1);
+      expect(
+        transport.calls.filter((call) => call.path.includes("people/match")),
+      ).toHaveLength(1);
+      expect(canonical.getApolloProviderStatus("2026-09-28")).toMatchObject({
+        attempted: 1,
+        estimatedExposure: 1,
+        observedConsumption: 1,
+      });
+    } finally {
+      canonical.close();
     }
   });
 

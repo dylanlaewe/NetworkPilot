@@ -141,11 +141,13 @@ export interface ApolloPersonReservationStore {
     personId: string;
     operationId: string;
     at: Date;
-    outcome: "completed" | "uncertain";
+    outcome: "usable" | "uncertain";
+    record?: CandidateSourceRecord;
   }): void;
   releaseUnattempted(input: {
     personId: string;
     operationId: string;
+    at: Date;
   }): void;
 }
 
@@ -295,7 +297,8 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
           this.dependencies.personReservations.retainAttempted({
             ...reservation,
             at: this.dependencies.now(),
-            outcome: "completed",
+            outcome: "usable",
+            record: enriched[0],
           });
           records.push(enriched[0]);
         } catch (error) {
@@ -311,7 +314,10 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
               // if final reservation annotation cannot be persisted.
             }
           } else {
-            this.dependencies.personReservations.releaseUnattempted(reservation);
+            this.dependencies.personReservations.releaseUnattempted({
+              ...reservation,
+              at: this.dependencies.now(),
+            });
           }
           throw error;
         } finally {

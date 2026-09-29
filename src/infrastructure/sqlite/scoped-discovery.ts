@@ -15,6 +15,7 @@ import {
   type NetworkPilotDatastoreTopology,
 } from "./datastore-topology";
 import { reconcileApolloDailyObservedConsumption } from "./apollo-accounting";
+import { SqliteApolloPersonReservationStore } from "./apollo-person-reservations";
 
 export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
   private readonly topology: NetworkPilotDatastoreTopology;
@@ -139,6 +140,24 @@ export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
         const provider = input.records[0].sourceProviderId, dataset = input.records[0].datasetClassification;
         if (input.records.some(r => r.sourceProviderId !== provider || r.datasetClassification !== dataset)) throw new Error("scoped-refresh-source-conflict");
         importCandidateBatch(this.repository, this.options.companies ?? this.repository.listTargetCompanies(), { batchId: input.operationId, adapterId: provider, adapterVersion: "scoped-discovery-v1", datasetClassification: dataset, sourceFingerprint: input.operationId, records: input.records, strategyCompanyDomains: this.options.companyDomains, ...(dataset === "authorized-provider" ? { authorizedProviderAccess: { enabled: true, providerId: provider } } : {}) }, input.at);
+      }
+      const personReservations = new SqliteApolloPersonReservationStore(
+        this.repository,
+      );
+      for (const record of input.records) {
+        if (record.sourceProviderId !== "apollo") continue;
+        const imported = this.repository.findImportedCandidate(
+          "apollo",
+          record.providerRecordId,
+        );
+        if (!imported)
+          throw new Error("scoped-refresh-imported-candidate-missing");
+        personReservations.markImported({
+          personId: record.providerRecordId,
+          operationId: input.operationId,
+          importedCandidateId: imported.id,
+          at: input.at,
+        });
       }
       const added = this.repository.listImportedCandidates().filter(c => !beforeIds.has(c.id));
       for (const candidate of added) if (!matchesBucketScope(candidate.recipientBucket, input.scope)) {

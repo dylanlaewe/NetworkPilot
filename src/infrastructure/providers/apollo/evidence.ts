@@ -16,6 +16,27 @@ const AMBIGUOUS_RECRUITER_TITLE =
   /\b(consultant|agency|staffing|executive (?:search|recruiter)|headhunter)\b/i;
 const LEADERSHIP_TITLE =
   /\b(manager|management|director|head|lead|chief|president|vp|vice president|supervisor)\b/i;
+const COMMON_SECOND_LEVEL_DOMAINS = new Set([
+  "ac",
+  "co",
+  "com",
+  "edu",
+  "gov",
+  "net",
+  "org",
+]);
+const AGENCY_DOMAIN_TERMS = [
+  "staffing",
+  "recruiting",
+  "recruitment",
+  "recruiter",
+  "placement",
+] as const;
+const AGENCY_DOMAIN_COMPOUNDS = [
+  "executivesearch",
+  "talentsolutions",
+  "employmentagency",
+] as const;
 
 const optionalRecord = (value: unknown): JsonRecord | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -32,6 +53,80 @@ const stringArray = (value: unknown): string[] =>
         )
         .map((item) => item.trim())
     : [];
+
+export function normalizeApolloEmployerDomain(
+  value: unknown,
+): string | undefined {
+  const raw = optionalString(value)?.toLowerCase();
+  if (!raw || raw.length > 253 || /\s/.test(raw)) return undefined;
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.port
+    )
+      return undefined;
+    const hostname = url.hostname.replace(/^www\./, "").replace(/\.$/, "");
+    const labels = hostname.split(".");
+    if (
+      labels.length < 2 ||
+      labels.some(
+        (label) =>
+          !label ||
+          label.length > 63 ||
+          !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+      ) ||
+      labels.every((label) => /^\d+$/.test(label))
+    )
+      return undefined;
+    return hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function registrableDomainLabel(hostname: string): string {
+  const labels = hostname.split(".");
+  const final = labels.at(-1)!;
+  const second = labels.at(-2)!;
+  const usesCountrySecondLevel =
+    final.length === 2 &&
+    COMMON_SECOND_LEVEL_DOMAINS.has(second) &&
+    labels.length >= 3;
+  return labels.at(usesCountrySecondLevel ? -3 : -2)!;
+}
+
+function agencyDomainContradiction(hostname: string | undefined): boolean {
+  if (!hostname) return false;
+  const label = registrableDomainLabel(hostname);
+  const tokens = label.split("-").filter(Boolean);
+  if (
+    tokens.some(
+      (token) =>
+        AGENCY_DOMAIN_TERMS.includes(
+          token as (typeof AGENCY_DOMAIN_TERMS)[number],
+        ) || token === "rpo",
+    )
+  )
+    return true;
+  const compact = tokens.join("");
+  const distinctive = [
+    ...AGENCY_DOMAIN_TERMS,
+    ...AGENCY_DOMAIN_COMPOUNDS,
+  ];
+  if (
+    distinctive.some(
+      (term) =>
+        compact === term ||
+        (compact.length >= term.length + 3 &&
+          (compact.startsWith(term) || compact.endsWith(term))),
+    )
+  )
+    return true;
+  return compact === "rpo" || (compact.length >= 6 && compact.endsWith("rpo"));
+}
 
 export interface ApolloEvidenceMapping {
   evidence: RecipientBucketEvidence[];
@@ -83,9 +178,9 @@ export function mapApolloProviderEvidence(
       ? "apollo.person.organization_name"
       : null;
   const employerId = optionalString(organization.id);
-  const employerDomain = optionalString(organization.primary_domain);
-  const validEmployerDomain =
-    employerDomain && employerDomain.includes(".") ? employerDomain : undefined;
+  const validEmployerDomain = normalizeApolloEmployerDomain(
+    organization.primary_domain,
+  );
   const primaryIndustry = optionalString(organization.industry);
   const industryEntries = [
     ...(primaryIndustry
@@ -172,7 +267,9 @@ export function mapApolloProviderEvidence(
     const operatingIndustries = industryEntries.filter((entry) =>
       OPERATING_COMPANY_INDUSTRY.test(entry.value),
     );
-    const agency = agencyEmployer || agencyIndustries.length > 0;
+    const agencyDomain = agencyDomainContradiction(validEmployerDomain);
+    const agency =
+      agencyEmployer || agencyIndustries.length > 0 || agencyDomain;
     const employerIdentitySource = employerId
       ? "apollo.person.organization.id"
       : validEmployerDomain
@@ -191,6 +288,9 @@ export function mapApolloProviderEvidence(
     const agencyReferences = [
       ...agencyIndustries.map((entry) => entry.sourceReference),
       ...(agencyEmployer && employerNameSource ? [employerNameSource] : []),
+      ...(agencyDomain
+        ? ["apollo.person.organization.primary_domain" as const]
+        : []),
     ];
     const internalReferences = [
       ...operatingIndustries.map((entry) => entry.sourceReference),

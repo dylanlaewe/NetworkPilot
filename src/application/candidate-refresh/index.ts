@@ -1,4 +1,5 @@
 import type {RefreshDiagnostics} from "./diagnostics";
+export * from "./apollo-person-reconciliation";
 export const DEFAULT_RESERVE_TARGET=40;
 export const DEFAULT_REFRESH_PROVIDER_CAP=20;
 export interface CandidateRefreshPlan {usableBefore:number;target:number;deficit:number;providerCap:number;maximumProviderUsage:number;providerRequired:boolean;}

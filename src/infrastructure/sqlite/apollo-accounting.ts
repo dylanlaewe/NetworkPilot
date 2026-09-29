@@ -46,7 +46,7 @@ export function readPersistedApolloDailyAccounting(
     operations = (
       database
         .prepare(
-          `SELECT estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo'`,
+          `SELECT estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo' AND candidate_count>0`,
         )
         .all() as OperationAccountingRow[]
     ).filter((operation) => localDate(operation.occurred_at_utc) === date),
