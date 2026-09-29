@@ -3,11 +3,13 @@ import type {
   BucketEvidenceKind,
   RecipientBucketEvidence,
 } from "@/domain/recipient-buckets";
+import {
+  AGENCY_CONCEPT_INVENTORY,
+  hasAgencyConcept,
+} from "@/domain/recruiters/agency-vocabulary";
 
 type JsonRecord = Record<string, unknown>;
 
-const AGENCY_SIGNALS =
-  /\b(staffing(?: and recruiting)?|recruit(?:ment|ing)(?: services| agency)?|executive[- ]search|search firm|headhunt(?:er|ing)?|placement(?: services)?|talent[- ]solutions|rpo|employment agency|human resources(?: services)?)\b/i;
 const OPERATING_COMPANY_INDUSTRY =
   /\b(technology|software|internet|computer|information technology|financial services|banking|insurance|healthcare|hospital|pharmaceutical|biotech|manufacturing|retail|consumer goods|telecommunications|energy|utilities|aerospace|defense|automotive|transportation|logistics|government|education|higher education|real estate|media|semiconductor)\b/i;
 const RECRUITING_FUNCTION =
@@ -25,56 +27,6 @@ const COMMON_SECOND_LEVEL_DOMAINS = new Set([
   "net",
   "org",
 ]);
-const AGENCY_DOMAIN_TERMS = [
-  "staffing",
-  "recruiting",
-  "recruitment",
-  "recruiter",
-  "recruiters",
-  "placement",
-] as const;
-const AGENCY_DOMAIN_TOKEN_PAIRS = [
-  ["executive", "search"],
-  ["employment", "agency"],
-  ["search", "firm"],
-  ["talent", "solutions"],
-  ["recruiting", "solutions"],
-  ["staffing", "solutions"],
-] as const;
-const AGENCY_DOMAIN_COMPOUNDS = [
-  ...AGENCY_DOMAIN_TERMS,
-  "executivesearch",
-  "talentsolutions",
-  "employmentagency",
-  "recruitingsolutions",
-  "staffingsolutions",
-] as const;
-const AGENCY_DOMAIN_SERVICE_SUFFIXES = [
-  "group",
-  "services",
-  "solutions",
-  "agency",
-  "firm",
-  "search",
-  "partners",
-] as const;
-const AGENCY_DOMAIN_STANDALONE_ENDINGS = [
-  "staffing",
-  "recruiting",
-  "recruitment",
-  "recruiter",
-  "recruiters",
-  "executivesearch",
-  "talentsolutions",
-  "employmentagency",
-  "recruitingsolutions",
-  "staffingsolutions",
-] as const;
-const AMBIGUOUS_AGENCY_DOMAIN_FRAGMENTS = [
-  ...AGENCY_DOMAIN_COMPOUNDS,
-  "searchfirm",
-] as const;
-
 const optionalRecord = (value: unknown): JsonRecord | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
@@ -153,46 +105,36 @@ export function classifyApolloRecruiterDomain(
   if (!hostname) return "neutral";
   const label = registrableDomainLabel(hostname);
   const tokens = label.split("-").filter(Boolean);
-  if (
-    tokens.some(
-      (token) =>
-        AGENCY_DOMAIN_TERMS.includes(
-          token as (typeof AGENCY_DOMAIN_TERMS)[number],
-        ) || token === "rpo",
-    )
-  )
-    return "agency-contradiction";
-  if (
-    AGENCY_DOMAIN_TOKEN_PAIRS.some(([left, right]) =>
-      tokens.some(
-        (token, index) => token === left && tokens[index + 1] === right,
-      ),
-    )
-  )
-    return "agency-contradiction";
   const compact = tokens.join("");
-  // Concatenated labels use a deliberately small suffix grammar. Placement is
-  // high-confidence only as a separated token or with a modeled service
-  // suffix, avoiding words such as displacement and replacement.
-  const serviceEndings = AGENCY_DOMAIN_COMPOUNDS.flatMap((concept) =>
-    AGENCY_DOMAIN_SERVICE_SUFFIXES.map((suffix) => `${concept}${suffix}`),
-  );
-  if (
-    AGENCY_DOMAIN_STANDALONE_ENDINGS.some((ending) =>
-      compact.endsWith(ending),
-    ) ||
-    serviceEndings.some((ending) => compact.endsWith(ending)) ||
-    compact === "rpo"
-  )
-    return "agency-contradiction";
-  if (
-    AMBIGUOUS_AGENCY_DOMAIN_FRAGMENTS.some((fragment) =>
-      compact.includes(fragment),
-    ) ||
-    compact.startsWith("rpo") ||
-    compact.endsWith("rpo")
-  )
-    return "ambiguous";
+  for (const concept of AGENCY_CONCEPT_INVENTORY) {
+    const policy = concept.domainPolicy;
+    if (policy.support === "intentionally-unsupported") continue;
+    if (
+      policy.separatedTokens?.some((term) => tokens.includes(term)) ||
+      policy.separatedPhrases?.some((phrase) =>
+        tokens.some((token, index) =>
+          phrase.every((term, offset) => tokens[index + offset] === term),
+        ),
+      ) ||
+      policy.approvedCompoundEndings?.some((ending) =>
+        compact.endsWith(ending),
+      )
+    )
+      return "agency-contradiction";
+  }
+  for (const concept of AGENCY_CONCEPT_INVENTORY) {
+    const policy = concept.domainPolicy;
+    if (policy.support === "intentionally-unsupported") continue;
+    if (
+      policy.ambiguousFragments?.some((fragment) =>
+        compact.includes(fragment),
+      ) ||
+      policy.ambiguousBoundaryTerms?.some(
+        (term) => compact.startsWith(term) || compact.endsWith(term),
+      )
+    )
+      return "ambiguous";
+  }
   return "neutral";
 }
 
@@ -332,9 +274,9 @@ export function mapApolloProviderEvidence(
   let recruiterEmployerStatus: ApolloEvidenceMapping["recruiterEmployerStatus"] =
     "not-recruiter";
   if (recruiting) {
-    const agencyEmployer = AGENCY_SIGNALS.test(employerName ?? "");
+    const agencyEmployer = hasAgencyConcept(employerName ?? "");
     const agencyIndustries = industryEntries.filter((entry) =>
-      AGENCY_SIGNALS.test(entry.value),
+      hasAgencyConcept(entry.value),
     );
     const operatingIndustries = industryEntries.filter((entry) =>
       OPERATING_COMPANY_INDUSTRY.test(entry.value),

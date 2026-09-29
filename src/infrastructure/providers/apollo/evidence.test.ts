@@ -283,6 +283,12 @@ describe("Apollo provider-neutral evidence mapping", () => {
     ["northwind-recruiters.com", "agency-contradiction", "agency"],
     ["northwind-executive-search.com", "agency-contradiction", "agency"],
     ["northwindexecutivesearchgroup.com", "agency-contradiction", "agency"],
+    ["northwind-headhunting.com", "agency-contradiction", "agency"],
+    ["northwindheadhunting.com", "agency-contradiction", "agency"],
+    ["northwind-headhunters.com", "agency-contradiction", "agency"],
+    ["northwindrposolutions.com", "agency-contradiction", "agency"],
+    ["northwind-rpo-solutions.com", "agency-contradiction", "agency"],
+    ["northwindrposervices.com", "agency-contradiction", "agency"],
     ["northwindplacementgroup.com", "agency-contradiction", "agency"],
     ["northwindtalentsolutionsgroup.com", "agency-contradiction", "agency"],
     ["northwindemploymentagencygroup.com", "agency-contradiction", "agency"],
@@ -306,6 +312,7 @@ describe("Apollo provider-neutral evidence mapping", () => {
     ["ordinarysoftware.com", "neutral", "internal"],
     ["northwindcloud.com", "neutral", "internal"],
     ["acme-industries.com", "neutral", "internal"],
+    ["corporation.com", "neutral", "internal"],
     ["northwindsoftware.com", "neutral", "internal"],
     ["recruiting-tools.jobs.northwindsoftware.com", "neutral", "internal"],
   ] as const)(
@@ -349,6 +356,96 @@ describe("Apollo provider-neutral evidence mapping", () => {
           reviewState: "review-required",
           confidence: "low",
         });
+    },
+  );
+
+  it.each([
+    "staffington.com",
+    "staffingdale.com",
+    "recruitingdale.com",
+    "recruiterly.com",
+    "replacement.com",
+    "displacement.com",
+    "misplacement.com",
+    "rponorthwind.com",
+    "northwindrpo.com",
+  ])("does not overmatch generated lexical neighbor %s", (primaryDomain) => {
+    const mapped = mapApolloProviderEvidence(
+      person({
+        title: "Technical Recruiter",
+        organization: {
+          id: "org-negative-control",
+          name: "Northwind Technology",
+          primary_domain: primaryDomain,
+          industry: "Technology",
+        },
+      }),
+      { observedAt },
+    );
+    expect(mapped.recruiterDomainEvidence).toBe("ambiguous");
+    expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
+    expect(
+      mapped.evidence.find((item) => item.kind === "internal-recruiting"),
+    ).toMatchObject({ verified: false });
+  });
+
+  it.each([
+    "northwindstaffing.com",
+    "northwindstaffinggroup.com",
+    "northwind-recruiting.com",
+    "northwindrecruitinggroup.com",
+    "northwind-recruiters.com",
+    "northwindexecutivesearchgroup.com",
+    "northwind-headhunting.com",
+    "northwindheadhunting.com",
+    "northwind-headhunters.com",
+    "northwindrposolutions.com",
+    "northwind-rpo-solutions.com",
+    "northwindplacementgroup.com",
+    "northwindtalentsolutionsgroup.com",
+    "northwindemploymentagencygroup.com",
+    "northwindsearchfirm.com",
+    "searchfirmnorthwind.com",
+    "staffingnorthwind.com",
+    "recruitingnorthwind.com",
+    "rponorthwind.com",
+    "northwindrpo.com",
+    "staffington.com",
+    "recruitingdale.com",
+    "replacement.com",
+    "displacement.com",
+    "misplacement.com",
+  ])(
+    "blocks automatic verified-internal qualification for domain signal %s",
+    (primaryDomain) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title: "Technical Recruiter",
+          organization: {
+            id: "org-domain-invariant",
+            name: "Northwind Technology",
+            primary_domain: primaryDomain,
+            industry: "Software",
+          },
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterDomainEvidence).not.toBe("neutral");
+      expect(mapped.recruiterEmployerStatus).not.toBe("internal");
+      expect(
+        mapped.evidence.find((item) => item.kind === "internal-recruiting"),
+      ).toMatchObject({ verified: false });
+      expect(
+        classifyRecipientBucket({
+          title: "Technical Recruiter",
+          outreachTrack: "recruiter",
+          recruiterAccepted: true,
+          evidence: mapped.evidence,
+        }),
+      ).toMatchObject({
+        bucket: "recruiters",
+        reviewState: "review-required",
+      });
     },
   );
 
