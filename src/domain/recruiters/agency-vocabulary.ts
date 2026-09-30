@@ -344,22 +344,45 @@ export function classifyRecruiterEmployerDomain(
   const label = registrableDomainLabel(hostname);
   const tokens = label.split("-").filter(Boolean);
   const compact = tokens.join("");
-
-  for (const concept of AGENCY_CONCEPT_INVENTORY) {
+  const lexicalTerms = AGENCY_CONCEPT_INVENTORY.flatMap((concept) => {
     const policy = concept.domainPolicy;
-    if (policy.support === "intentionally-unsupported") continue;
-    if (
-      policy.separatedTokens?.some((term) => tokens.includes(term)) ||
-      policy.separatedPhrases?.some((phrase) =>
-        tokens.some((token, index) =>
-          phrase.every((term, offset) => tokens[index + offset] === term),
-        ),
-      ) ||
-      policy.approvedCompoundEndings?.some((ending) =>
-        compact.endsWith(ending),
+    if (policy.support === "intentionally-unsupported") return [];
+    return [
+      ...(policy.separatedTokens ?? []),
+      ...(policy.separatedPhrases?.map((phrase) => phrase.join("")) ?? []),
+      ...(policy.approvedCompoundEndings ?? []),
+      ...(policy.ambiguousFragments ?? []),
+      ...(policy.ambiguousBoundaryTerms ?? []),
+    ];
+  });
+  const isPrefixedLexicalNeighbor = [
+    "non",
+    "re",
+    "un",
+    "under",
+    "dis",
+    "mis",
+  ].some((prefix) =>
+    lexicalTerms.some((term) => compact === `${prefix}${term}`),
+  );
+
+  if (!isPrefixedLexicalNeighbor) {
+    for (const concept of AGENCY_CONCEPT_INVENTORY) {
+      const policy = concept.domainPolicy;
+      if (policy.support === "intentionally-unsupported") continue;
+      if (
+        policy.separatedTokens?.some((term) => tokens.includes(term)) ||
+        policy.separatedPhrases?.some((phrase) =>
+          tokens.some((token, index) =>
+            phrase.every((term, offset) => tokens[index + offset] === term),
+          ),
+        ) ||
+        policy.approvedCompoundEndings?.some((ending) =>
+          compact.endsWith(ending),
+        )
       )
-    )
-      return "agency-contradiction";
+        return "agency-contradiction";
+    }
   }
 
   for (const concept of AGENCY_CONCEPT_INVENTORY) {

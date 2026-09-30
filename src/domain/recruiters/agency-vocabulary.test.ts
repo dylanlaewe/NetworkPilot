@@ -87,8 +87,8 @@ describe("recruiter employer-domain safety", () => {
     "nonhumanresources.com",
     "understaffing.com",
     "nonrecruiter.com",
-  ])("keeps unresolved lexical neighbor %s non-neutral", (domain) => {
-    expect(classifyRecruiterEmployerDomain(domain)).not.toBe("neutral");
+  ])("keeps unresolved lexical neighbor %s ambiguous", (domain) => {
+    expect(classifyRecruiterEmployerDomain(domain)).toBe("ambiguous");
   });
 
   it.each([
