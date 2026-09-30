@@ -289,19 +289,33 @@ describe("Apollo provider-neutral evidence mapping", () => {
     ["northwindrposolutions.com", "agency-contradiction", "agency"],
     ["northwind-rpo-solutions.com", "agency-contradiction", "agency"],
     ["northwindrposervices.com", "agency-contradiction", "agency"],
+    ["northwindrpogroup.com", "agency-contradiction", "agency"],
+    ["northwindrpopartners.com", "agency-contradiction", "agency"],
+    ["northwindrpofirm.com", "agency-contradiction", "agency"],
+    ["northwindrpoagency.com", "agency-contradiction", "agency"],
     ["northwindplacementgroup.com", "agency-contradiction", "agency"],
     ["northwindtalentsolutionsgroup.com", "agency-contradiction", "agency"],
     ["northwindemploymentagencygroup.com", "agency-contradiction", "agency"],
+    ["northwindemploymentagencies.com", "agency-contradiction", "agency"],
     ["WWW.NORTHWINDSTAFFINGGROUP.COM", "agency-contradiction", "agency"],
     ["careers.northwindstaffinggroup.com", "agency-contradiction", "agency"],
     ["jobs.careers.northwindstaffing.com", "agency-contradiction", "agency"],
     ["jobs.NORTHWINDSTAFFINGGROUP.CO.UK", "agency-contradiction", "agency"],
+    ["http://northwindstaffing.com", "agency-contradiction", "agency"],
+    ["https://northwindstaffing.com", "agency-contradiction", "agency"],
+    [
+      "https://www.northwindstaffing.com/jobs?team=engineering",
+      "agency-contradiction",
+      "agency",
+    ],
     ["staffingnorthwind.com", "ambiguous", "ambiguous"],
     ["recruitingnorthwind.com", "ambiguous", "ambiguous"],
     ["executivesearchnorthwind.com", "ambiguous", "ambiguous"],
     ["rponorthwind.com", "ambiguous", "ambiguous"],
     ["northwindrpo.com", "ambiguous", "ambiguous"],
-    ["northwindsearchfirm.com", "ambiguous", "ambiguous"],
+    ["northwindstaffers.com", "ambiguous", "ambiguous"],
+    ["northwindrecruit.com", "ambiguous", "ambiguous"],
+    ["northwindsearchfirm.com", "agency-contradiction", "agency"],
     ["searchfirmnorthwind.com", "ambiguous", "ambiguous"],
     ["staffington.com", "ambiguous", "ambiguous"],
     ["displacement.com", "ambiguous", "ambiguous"],
@@ -313,6 +327,8 @@ describe("Apollo provider-neutral evidence mapping", () => {
     ["northwindcloud.com", "neutral", "internal"],
     ["acme-industries.com", "neutral", "internal"],
     ["corporation.com", "neutral", "internal"],
+    ["metropolitan.com", "neutral", "internal"],
+    ["carpool.com", "neutral", "internal"],
     ["northwindsoftware.com", "neutral", "internal"],
     ["recruiting-tools.jobs.northwindsoftware.com", "neutral", "internal"],
   ] as const)(
@@ -401,20 +417,31 @@ describe("Apollo provider-neutral evidence mapping", () => {
     "northwind-headhunters.com",
     "northwindrposolutions.com",
     "northwind-rpo-solutions.com",
+    "northwindrpogroup.com",
+    "northwindrpopartners.com",
+    "northwindrpofirm.com",
+    "northwindrpoagency.com",
     "northwindplacementgroup.com",
     "northwindtalentsolutionsgroup.com",
     "northwindemploymentagencygroup.com",
+    "northwindemploymentagencies.com",
     "northwindsearchfirm.com",
     "searchfirmnorthwind.com",
     "staffingnorthwind.com",
     "recruitingnorthwind.com",
     "rponorthwind.com",
     "northwindrpo.com",
+    "northwindstaffers.com",
+    "northwindrecruit.com",
     "staffington.com",
     "recruitingdale.com",
     "replacement.com",
     "displacement.com",
     "misplacement.com",
+    "unemploymentagency.com",
+    "nonhumanresources.com",
+    "understaffing.com",
+    "nonrecruiter.com",
   ])(
     "blocks automatic verified-internal qualification for domain signal %s",
     (primaryDomain) => {
@@ -435,6 +462,40 @@ describe("Apollo provider-neutral evidence mapping", () => {
       expect(
         mapped.evidence.find((item) => item.kind === "internal-recruiting"),
       ).toMatchObject({ verified: false });
+      expect(
+        classifyRecipientBucket({
+          title: "Technical Recruiter",
+          outreachTrack: "recruiter",
+          recruiterAccepted: true,
+          evidence: mapped.evidence,
+        }),
+      ).toMatchObject({
+        bucket: "recruiters",
+        reviewState: "review-required",
+      });
+    },
+  );
+
+  it.each([
+    ["agency-contradiction", "northwindstaffing.com"],
+    ["ambiguous", "northwindrecruit.com"],
+  ] as const)(
+    "makes automatic qualification impossible for %s domain evidence",
+    (expectedDomainEvidence, primaryDomain) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title: "Technical Recruiter",
+          organization: {
+            id: "org-maximally-favorable",
+            name: "Northwind Technology",
+            primary_domain: primaryDomain,
+            industry: "Software",
+          },
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterDomainEvidence).toBe(expectedDomainEvidence);
+      expect(mapped.recruiterEmployerStatus).not.toBe("internal");
       expect(
         classifyRecipientBucket({
           title: "Technical Recruiter",
@@ -506,29 +567,32 @@ describe("Apollo provider-neutral evidence mapping", () => {
       { observedAt },
     );
     expect(mapped.recruiterEmployerStatus).toBe("internal");
-    expect(mapped.recruiterDomainEvidence).toBe("neutral");
+    expect(mapped.recruiterDomainEvidence).toBe("no-domain-evidence");
     expect(mapped.sourceFields.employerDomain).toBeNull();
   });
 
-  it("does not use a malformed domain as identity or contradiction", () => {
-    const mapped = mapApolloProviderEvidence(
-      person({
-        title: "Technical Recruiter",
-        organization: {
-          name: "Northwind Software",
-          primary_domain: "not a valid staffing domain",
-          industry: "Software",
-        },
-      }),
-      { observedAt },
-    );
-    expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
-    expect(mapped.recruiterDomainEvidence).toBe("neutral");
-    expect(mapped.sourceFields.employerDomain).toBeNull();
-    expect(
-      mapped.evidence.some((item) => item.kind === "company-identity"),
-    ).toBe(false);
-  });
+  it.each(["northwind_staffing.com", "not a valid staffing domain", "garbage"])(
+    "fails supplied malformed domain %s closed without using it as identity",
+    (primaryDomain) => {
+      const mapped = mapApolloProviderEvidence(
+        person({
+          title: "Technical Recruiter",
+          organization: {
+            name: "Northwind Software",
+            primary_domain: primaryDomain,
+            industry: "Software",
+          },
+        }),
+        { observedAt },
+      );
+      expect(mapped.recruiterEmployerStatus).toBe("ambiguous");
+      expect(mapped.recruiterDomainEvidence).toBe("ambiguous");
+      expect(mapped.sourceFields.employerDomain).toBeNull();
+      expect(
+        mapped.evidence.some((item) => item.kind === "company-identity"),
+      ).toBe(false);
+    },
+  );
 
   it.each([
     ["Executive Recruiter", "Technology"],

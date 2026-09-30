@@ -1,5 +1,10 @@
 export type AgencyDomainOutcome = "agency-contradiction" | "ambiguous";
 
+export type RecruiterEmployerDomainEvidence =
+  | AgencyDomainOutcome
+  | "neutral"
+  | "no-domain-evidence";
+
 export type AgencyDomainPolicy =
   | {
       support: "modeled";
@@ -31,10 +36,16 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
   {
     id: "staffing",
     namePolicy: "modeled",
-    namePhrases: ["staffing", "staffing and recruiting", "staffing solutions"],
+    namePhrases: [
+      "staffing",
+      "staffing and recruiting",
+      "staffing solutions",
+      "staffer",
+      "staffers",
+    ],
     domainPolicy: {
       support: "modeled",
-      separatedTokens: ["staffing"],
+      separatedTokens: ["staffing", "staffer", "staffers"],
       approvedCompoundEndings: [
         "staffing",
         "staffinggroup",
@@ -45,7 +56,7 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
         "staffingsearch",
         "staffingpartners",
       ],
-      ambiguousFragments: ["staffing"],
+      ambiguousFragments: ["staff"],
     },
   },
   {
@@ -65,7 +76,7 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
         "recruitingsearch",
         "recruitingpartners",
       ],
-      ambiguousFragments: ["recruiting"],
+      ambiguousFragments: ["recruit"],
     },
   },
   {
@@ -154,6 +165,12 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
     domainPolicy: {
       support: "modeled",
       separatedPhrases: [["search", "firm"]],
+      approvedCompoundEndings: [
+        "searchfirm",
+        "searchfirmgroup",
+        "searchfirmservices",
+        "searchfirmpartners",
+      ],
       ambiguousFragments: ["searchfirm"],
     },
   },
@@ -183,7 +200,14 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
     domainPolicy: {
       support: "modeled",
       separatedTokens: ["rpo"],
-      approvedCompoundEndings: ["rposolutions", "rposervices"],
+      approvedCompoundEndings: [
+        "rposolutions",
+        "rposervices",
+        "rpogroup",
+        "rpopartners",
+        "rpofirm",
+        "rpoagency",
+      ],
       ambiguousBoundaryTerms: ["rpo"],
     },
   },
@@ -207,7 +231,7 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
   {
     id: "employment-agency",
     namePolicy: "modeled",
-    namePhrases: ["employment agency"],
+    namePhrases: ["employment agency", "employment agencies"],
     domainPolicy: {
       support: "modeled",
       separatedPhrases: [["employment", "agency"]],
@@ -216,8 +240,12 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
         "employmentagencygroup",
         "employmentagencyservices",
         "employmentagencypartners",
+        "employmentagencies",
+        "employmentagenciesgroup",
+        "employmentagenciesservices",
+        "employmentagenciespartners",
       ],
-      ambiguousFragments: ["employmentagency"],
+      ambiguousFragments: ["employmentagenc"],
     },
   },
   {
@@ -236,6 +264,119 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
     },
   },
 ];
+
+const COMMON_SECOND_LEVEL_DOMAINS = new Set([
+  "ac",
+  "co",
+  "com",
+  "edu",
+  "gov",
+  "net",
+  "org",
+]);
+
+const optionalDomainString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+/**
+ * Accepts a bare hostname or an ordinary HTTP(S) URL. A supplied value is
+ * returned only when its hostname is safe to interpret as a DNS-like domain;
+ * callers retain absence versus parse failure through the classifier below.
+ */
+export function normalizeRecruiterEmployerDomain(
+  value: unknown,
+): string | undefined {
+  const raw = optionalDomainString(value)?.toLowerCase();
+  if (!raw || raw.length > 2_048 || /\s/.test(raw)) return undefined;
+  try {
+    const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw);
+    const url = new URL(hasScheme ? raw : `https://${raw}`);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.port
+    )
+      return undefined;
+    const hostname = url.hostname.replace(/^www\./, "").replace(/\.$/, "");
+    if (hostname.length > 253) return undefined;
+    const labels = hostname.split(".");
+    if (
+      labels.length < 2 ||
+      labels.some(
+        (label) =>
+          !label ||
+          label.length > 63 ||
+          !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+      ) ||
+      labels.every((label) => /^\d+$/.test(label))
+    )
+      return undefined;
+    return hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function registrableDomainLabel(hostname: string): string {
+  const labels = hostname.split(".");
+  const final = labels.at(-1)!;
+  const second = labels.at(-2)!;
+  const usesCountrySecondLevel =
+    final.length === 2 &&
+    COMMON_SECOND_LEVEL_DOMAINS.has(second) &&
+    labels.length >= 3;
+  return labels.at(usesCountrySecondLevel ? -3 : -2)!;
+}
+
+/**
+ * Domain evidence is asymmetric: explicit service structures contradict an
+ * internal-employer claim, unresolved agency-like material is ambiguous, and
+ * neutral is reserved for safely parsed labels with neither signal. A missing
+ * value is absence of evidence; a supplied malformed value fails closed.
+ */
+export function classifyRecruiterEmployerDomain(
+  value: unknown,
+): RecruiterEmployerDomainEvidence {
+  if (!optionalDomainString(value)) return "no-domain-evidence";
+  const hostname = normalizeRecruiterEmployerDomain(value);
+  if (!hostname) return "ambiguous";
+  const label = registrableDomainLabel(hostname);
+  const tokens = label.split("-").filter(Boolean);
+  const compact = tokens.join("");
+
+  for (const concept of AGENCY_CONCEPT_INVENTORY) {
+    const policy = concept.domainPolicy;
+    if (policy.support === "intentionally-unsupported") continue;
+    if (
+      policy.separatedTokens?.some((term) => tokens.includes(term)) ||
+      policy.separatedPhrases?.some((phrase) =>
+        tokens.some((token, index) =>
+          phrase.every((term, offset) => tokens[index + offset] === term),
+        ),
+      ) ||
+      policy.approvedCompoundEndings?.some((ending) =>
+        compact.endsWith(ending),
+      )
+    )
+      return "agency-contradiction";
+  }
+
+  for (const concept of AGENCY_CONCEPT_INVENTORY) {
+    const policy = concept.domainPolicy;
+    if (policy.support === "intentionally-unsupported") continue;
+    if (
+      policy.ambiguousFragments?.some((fragment) =>
+        compact.includes(fragment),
+      ) ||
+      policy.ambiguousBoundaryTerms?.some(
+        (term) => compact.startsWith(term) || compact.endsWith(term),
+      )
+    )
+      return "ambiguous";
+  }
+  return "neutral";
+}
 
 const normalizedWords = (value: string): string[] =>
   value

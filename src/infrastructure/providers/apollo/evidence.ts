@@ -4,8 +4,10 @@ import type {
   RecipientBucketEvidence,
 } from "@/domain/recipient-buckets";
 import {
-  AGENCY_CONCEPT_INVENTORY,
+  classifyRecruiterEmployerDomain,
   hasAgencyConcept,
+  normalizeRecruiterEmployerDomain,
+  type RecruiterEmployerDomainEvidence,
 } from "@/domain/recruiters/agency-vocabulary";
 
 type JsonRecord = Record<string, unknown>;
@@ -18,15 +20,6 @@ const AMBIGUOUS_RECRUITER_TITLE =
   /\b(consultant|agency|staffing|executive (?:search|recruiter)|headhunter)\b/i;
 const LEADERSHIP_TITLE =
   /\b(manager|management|director|head|lead|chief|president|vp|vice president|supervisor)\b/i;
-const COMMON_SECOND_LEVEL_DOMAINS = new Set([
-  "ac",
-  "co",
-  "com",
-  "edu",
-  "gov",
-  "net",
-  "org",
-]);
 const optionalRecord = (value: unknown): JsonRecord | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
@@ -43,100 +36,10 @@ const stringArray = (value: unknown): string[] =>
         .map((item) => item.trim())
     : [];
 
-export function normalizeApolloEmployerDomain(
-  value: unknown,
-): string | undefined {
-  const raw = optionalString(value)?.toLowerCase();
-  if (!raw || raw.length > 253 || /\s/.test(raw)) return undefined;
-  try {
-    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.port
-    )
-      return undefined;
-    const hostname = url.hostname.replace(/^www\./, "").replace(/\.$/, "");
-    const labels = hostname.split(".");
-    if (
-      labels.length < 2 ||
-      labels.some(
-        (label) =>
-          !label ||
-          label.length > 63 ||
-          !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
-      ) ||
-      labels.every((label) => /^\d+$/.test(label))
-    )
-      return undefined;
-    return hostname;
-  } catch {
-    return undefined;
-  }
-}
-
-function registrableDomainLabel(hostname: string): string {
-  const labels = hostname.split(".");
-  const final = labels.at(-1)!;
-  const second = labels.at(-2)!;
-  const usesCountrySecondLevel =
-    final.length === 2 &&
-    COMMON_SECOND_LEVEL_DOMAINS.has(second) &&
-    labels.length >= 3;
-  return labels.at(usesCountrySecondLevel ? -3 : -2)!;
-}
-
-export type ApolloRecruiterDomainEvidence =
-  | "agency-contradiction"
-  | "ambiguous"
-  | "neutral";
-
-/**
- * Conservatively classifies only the registrable hostname label. Separated
- * agency terms and a small set of modeled service endings are contradictions;
- * unresolved compact fragments block verified-internal qualification without
- * being promoted to agency evidence.
- */
-export function classifyApolloRecruiterDomain(
-  value: unknown,
-): ApolloRecruiterDomainEvidence {
-  const hostname = normalizeApolloEmployerDomain(value);
-  if (!hostname) return "neutral";
-  const label = registrableDomainLabel(hostname);
-  const tokens = label.split("-").filter(Boolean);
-  const compact = tokens.join("");
-  for (const concept of AGENCY_CONCEPT_INVENTORY) {
-    const policy = concept.domainPolicy;
-    if (policy.support === "intentionally-unsupported") continue;
-    if (
-      policy.separatedTokens?.some((term) => tokens.includes(term)) ||
-      policy.separatedPhrases?.some((phrase) =>
-        tokens.some((token, index) =>
-          phrase.every((term, offset) => tokens[index + offset] === term),
-        ),
-      ) ||
-      policy.approvedCompoundEndings?.some((ending) =>
-        compact.endsWith(ending),
-      )
-    )
-      return "agency-contradiction";
-  }
-  for (const concept of AGENCY_CONCEPT_INVENTORY) {
-    const policy = concept.domainPolicy;
-    if (policy.support === "intentionally-unsupported") continue;
-    if (
-      policy.ambiguousFragments?.some((fragment) =>
-        compact.includes(fragment),
-      ) ||
-      policy.ambiguousBoundaryTerms?.some(
-        (term) => compact.startsWith(term) || compact.endsWith(term),
-      )
-    )
-      return "ambiguous";
-  }
-  return "neutral";
-}
+export const normalizeApolloEmployerDomain = normalizeRecruiterEmployerDomain;
+export const classifyApolloRecruiterDomain =
+  classifyRecruiterEmployerDomain;
+export type ApolloRecruiterDomainEvidence = RecruiterEmployerDomainEvidence;
 
 export interface ApolloEvidenceMapping {
   evidence: RecipientBucketEvidence[];
@@ -193,7 +96,7 @@ export function mapApolloProviderEvidence(
     organization.primary_domain,
   );
   const recruiterDomainEvidence = classifyApolloRecruiterDomain(
-    validEmployerDomain,
+    organization.primary_domain,
   );
   const primaryIndustry = optionalString(organization.industry);
   const industryEntries = [
