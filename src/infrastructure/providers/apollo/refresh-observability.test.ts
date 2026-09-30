@@ -47,7 +47,7 @@ describe("one-run refresh evidence with mocked Apollo transport",()=>{
   it("retains raw search employer aggregates including rejected people and persists the complete report",async()=>{
     const {repository,provider}=setup();try{
       const result=await refreshCandidateReserve({usableBefore:18,repository:new SqliteCandidateRefreshRepository(repository.native),provider,allowProvider:true,now:()=>new Date("2026-09-21T14:00:00Z")});
-      expect(result.diagnostics).toMatchObject({searchCalls:4,rawCandidates:36,normalizedCandidates:32,uniqueCandidates:33,rawUniqueEmployers:33,rawPreferredEmployers:1,rawDiscoveredEmployers:32,shortlistSize:20,enrichmentAttempts:20,verifiedEmails:20,qualifiedRecruiters:5,qualifiedProfessionals:15,qualifiedDiscovered:20,candidatesAdded:20,observedCreditsUsed:20,estimatedCreditsUsed:20});
+      expect(result.diagnostics).toMatchObject({searchCalls:4,rawCandidates:36,normalizedCandidates:32,uniqueCandidates:33,rawUniqueEmployers:33,rawPreferredEmployers:1,rawDiscoveredEmployers:32,shortlistSize:20,enrichmentAttempts:20,verifiedEmails:20,qualifiedRecruiters:0,qualifiedProfessionals:15,qualifiedDiscovered:15,candidatesAdded:20,observedCreditsUsed:20,estimatedCreditsUsed:20});
       expect(result.diagnostics!.searchPages.map(p=>p.page)).toEqual([1,2,3,2]);expect(result.diagnostics!.productCandidatesAdded).toBeGreaterThan(0);
       expect(result.diagnostics!.rejectionReasons["apollo-required-field-missing:person.first_name"]).toBe(4);
       const saved=repository.native.prepare("SELECT diagnostics_json FROM candidate_refresh_events").get() as {diagnostics_json:string};expect(JSON.parse(saved.diagnostics_json)).toEqual(result.diagnostics);

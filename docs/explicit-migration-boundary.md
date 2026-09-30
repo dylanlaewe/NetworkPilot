@@ -5,7 +5,7 @@ NetworkPilot never upgrades a database while serving a page, loading health, run
 The required runtime version is feature-aware:
 
 - five-bucket mode off: `0020_resume_library.sql`
-- five-bucket mode on: `0021_recipient_buckets.sql`
+- five-bucket mode on: `0022_company_trust.sql`
 
 If the required version is absent, runtime fails with `DatabaseMigrationRequiredError`. The expected error carries the exact database path, and the UI renders an explicit targeted command such as `NETWORKPILOT_DATABASE_PATH='data/apollo-operational-scale-enrichment.sqlite' npm run db:migrate`. The operator must review that target before running it. The migration command also prints its resolved target before applying anything. The System page converts the expected condition into a visible `Migration required` state; it never repairs the schema.
 

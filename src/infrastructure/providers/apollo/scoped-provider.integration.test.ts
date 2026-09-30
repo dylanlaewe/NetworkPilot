@@ -148,7 +148,7 @@ class FixtureTransport implements ApolloHttpTransport {
 }
 
 describe("offline scoped Apollo orchestration", () => {
-  it("runs all buckets through canonical 0021 and recruiter source 0011", async () => {
+  it("runs all buckets through canonical 0022 and recruiter source 0011", async () => {
     const { canonical, topology } = setup();
     const fixtures: Array<{
       bucket: RecipientBucket;
@@ -164,8 +164,8 @@ describe("offline scoped Apollo orchestration", () => {
           "senior",
           "Recruiter Technology Employer",
         ),
-        qualified: 1,
-        state: "eligible",
+        qualified: 0,
+        state: "review-required",
       },
       {
         bucket: "peers",
@@ -255,7 +255,9 @@ describe("offline scoped Apollo orchestration", () => {
         fixture.person.id,
       );
       expect(saved).toMatchObject({ state: fixture.state });
-      if (fixture.qualified === 0)
+      if (fixture.bucket==="recruiters")
+        expect(saved?.recipientBucket).toMatchObject({bucket:"recruiters",reviewState:"review-required",explanationCodes:["company-trust-unverified"]});
+      else if (fixture.qualified === 0)
         expect(saved?.recipientBucket).toMatchObject({
           bucket: null,
           reviewState: "review-required",

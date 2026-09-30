@@ -14,6 +14,8 @@ import { addResume, attachmentSnapshot } from "@/application/resumes";
 import { initialResumeSelection } from "@/application/resumes/recruiter-default";
 import { approveForGmailDraft, createApprovedGmailDraft, sendApprovedGmailDraft } from "@/application/email-drafts";
 import { renderBucketCopy } from "./bucket-copy";
+import {reviewCompanyTrust} from "@/application/company-trust";
+import {discoveredCompanyIdentity} from "@/domain/company-trust";
 
 const repos: SqliteSimulationRepository[] = [];
 beforeEach(() => vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "true"));
@@ -21,7 +23,10 @@ afterEach(() => { repos.splice(0).forEach(r => r.close()); vi.unstubAllEnvs(); }
 function setup(bucket: RecipientBucket) {
   const repository = new SqliteSimulationRepository(":memory:"); repos.push(repository); migrateTestDatabase(repository);
   const fixture = bucketFixture(bucket, 1, bucket === "peers");
+  if(bucket==="recruiters")fixture.company.id=discoveredCompanyIdentity({employerDomain:fixture.source.currentOrganization.domain})!;
+  repository.native.prepare("INSERT OR IGNORE INTO target_companies(id,canonical_name,industry_id,company_tier,enabled,recognition_score,career_upside_score,technical_interest_score,geographic_relevance_json,rationale,provenance,last_reviewed_date,operator_notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").run(fixture.company.id,fixture.company.canonicalName,fixture.company.industryId,fixture.company.tier,Number(fixture.company.enabled),fixture.company.recognitionScore,fixture.company.careerUpsideScore,fixture.company.technicalInterestScore,JSON.stringify(fixture.company.geographicRelevance),fixture.company.rationale,fixture.company.provenance,fixture.company.lastReviewedDate,fixture.company.operatorNotes);
   importCandidateBatch(repository, [fixture.company], { batchId: "fictional-copy-batch", adapterId: "bucket-fixture", adapterVersion: "fixture-v1", datasetClassification: "provider-shaped-fixture", sourceFingerprint: "fictional-copy-fingerprint", records: [fixture.source], strategyCompanyDomains: { [fixture.company.id]: fixture.source.currentOrganization.domain! } }, FIXTURE_AT);
+  if(bucket==="recruiters")reviewCompanyTrust(repository,{commandId:"copy-company-trust",companyId:fixture.company.id,expectedVersion:0,resultingTrustState:"trusted-operating",reason:"Fixture operating employer",reviewerActor:"local-operator",sourceReference:"fixture://copy-company",at:FIXTURE_AT});
   const candidate = repository.listImportedCandidates()[0];
   return { repository, candidate, review: renderQueueReview(candidate, 0, FIXTURE_AT)! };
 }

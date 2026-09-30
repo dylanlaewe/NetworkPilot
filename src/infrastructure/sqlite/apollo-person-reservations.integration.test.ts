@@ -547,7 +547,7 @@ describe("canonical Apollo person reservations", () => {
   });
 
   it.each([
-    ["recruiters", "recruiters", "eligible", false],
+    ["recruiters", "recruiters", "rejected", true],
     ["recruiters", "peers", "review-required", true],
     ["peers", "managers", "review-required", true],
     ["executives", "ceos", "review-required", true],

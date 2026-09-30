@@ -75,7 +75,7 @@ describe("persisted offline queue under exhausted Apollo budget",()=>{
     const history=readDraftGenerations(repository.native);expect(runNextDraftBatchFromReserve(10,now).addition).toMatchObject({addedCount:0,activeBefore:11,activeAfter:11});expect(readDraftGenerations(repository.native)).toEqual(history);
   });
   it("generates, skips, replaces twice, excludes, and adds 5/10/1/20 while preserving queue order and snapshots",()=>{
-    const before=history(),first=runNextDraftBatchFromReserve(5,now);expect(first.draftReviews).toHaveLength(5);expect(first.recruiterCount).toBe(2);
+    const before=history(),first=runNextDraftBatchFromReserve(5,now);expect(first.draftReviews).toHaveLength(5);expect(first.recruiterCount).toBe(0);
     const skipped=[reviews()[1]!.candidateId];recordDraftDisposition({candidateId:skipped[0]!,permanent:false,now});
     expect(reviews()).toHaveLength(4);runNextDraftBatchFromReserve(1,now);expect(reviews()).toHaveLength(5);
     skipped.push(reviews()[1]!.candidateId,reviews()[2]!.candidateId);
@@ -88,7 +88,7 @@ describe("persisted offline queue under exhausted Apollo budget",()=>{
     expect(queue.slice(0,retained.length).map(r=>({id:r.candidateId,body:r.body,snapshot:r.snapshotId}))).toEqual(retained);
     expect(queue.some(r=>skipped.includes(r.candidateId)||r.candidateId===excluded)).toBe(false);
     expect(history()).toBe(before);expect(repository.listOutreachEvents()).toEqual([]);
-    expect(queue.filter(r=>r.outreachTrack==="recruiter")).toHaveLength(16);
+    expect(queue.filter(r=>r.outreachTrack==="recruiter")).toHaveLength(0);
     const preferred=new Set(repository.listImportedCandidates().filter(c=>c.strategyCompanyMatch?.method!=="discovered-provider").map(c=>c.id));
     expect(queue.filter(r=>preferred.has(r.candidateId)).length).toBeLessThanOrEqual(16);
     const nextDay=new Date("2026-09-22T14:00:00Z");runNextDraftBatchFromReserve(5,()=>nextDay);
@@ -101,8 +101,8 @@ describe("persisted offline queue under exhausted Apollo budget",()=>{
   });
   it("keeps prior-day active drafts and counts only unused reserve",()=>{
     const batch=runNextDraftBatchFromReserve(5,now),after=loadDailyCommandCenter(at);
-    expect(after.pipeline.available).toBe(85);expect(after.reserve.filter(c=>c.stage==="in-draft-queue")).toHaveLength(5);
-    const nextDay=new Date("2026-09-22T14:00:00Z");expect(loadQueueReviews(repository,nextDay)).toHaveLength(5);expect(loadDailyCommandCenter(nextDay).pipeline.available).toBe(85);
+    expect(after.pipeline.available).toBe(55);expect(after.reserve.filter(c=>c.stage==="in-draft-queue")).toHaveLength(5);
+    const nextDay=new Date("2026-09-22T14:00:00Z");expect(loadQueueReviews(repository,nextDay)).toHaveLength(5);expect(loadDailyCommandCenter(nextDay).pipeline.available).toBe(55);
     const added=runNextDraftBatchFromReserve(5,()=>nextDay);expect(added.candidateIds.some(id=>batch.candidateIds.includes(id))).toBe(false);
   });
   it("makes skip idempotent and permanent exclusion non-downgradable",()=>{

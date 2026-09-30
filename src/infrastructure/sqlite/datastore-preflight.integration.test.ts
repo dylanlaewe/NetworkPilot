@@ -117,7 +117,7 @@ async function run(
 }
 
 describe("role-aware five-bucket datastore preflight", () => {
-  it("completes all five buckets with canonical 0021 and recruiter source 0011", async () => {
+  it("completes all five buckets with canonical 0022 and recruiter source 0011", async () => {
     const { canonical, sourcePath, topology } = setup();
     const buckets = [
       "recruiters",
@@ -155,8 +155,8 @@ describe("role-aware five-bucket datastore preflight", () => {
       expect(result).toMatchObject({
         scope: { bucket },
         candidatesAdded: 1,
-        qualifiedCandidatesAdded: 1,
-        remainingActionableCapacity: 1,
+        qualifiedCandidatesAdded: bucket==="recruiters"?0:1,
+        remainingActionableCapacity: bucket==="recruiters"?0:1,
       });
       expect(provider.preflight).toHaveBeenCalledOnce();
       expect(provider.discover).toHaveBeenCalledOnce();
@@ -519,10 +519,10 @@ describe("offline classification safety through scoped orchestration", () => {
     expect(contradicted.result.qualifiedCandidatesAdded).toBe(0);
   });
 
-  it("distinguishes internal recruiters and preserves early-career peer policy", async () => {
-    const internal = await classify("recruiters", 30);
-    expect(internal.saved).toMatchObject({ state: "eligible", recipientBucket: { bucket: "recruiters", reviewState: "accepted" } });
-    expect(internal.saved.recruiterClassification).toMatchObject({ internalStatus: "internal", accepted: true });
+  it("keeps provider-only recruiters unverified and preserves early-career peer policy", async () => {
+    const internal = await classify("recruiters", 30,(fixture)=>{fixture.source.currentTitle="Technical Recruiter";});
+    expect(internal.saved).toMatchObject({ state: "review-required", employerTrust:{state:"unverified"},recipientBucket: { bucket: "recruiters", reviewState: "review-required" },gateFailures:expect.arrayContaining(["company-trust-unverified"]) });
+    expect(internal.saved.recruiterClassification).toMatchObject({ internalStatus: "ambiguous", accepted: false });
     const agency = await classify("recruiters", 31, (fixture) => {
       fixture.source.responsibilityEvidence = fixture.source.responsibilityEvidence?.filter((item) => item.kind !== "internal-recruiting");
     });

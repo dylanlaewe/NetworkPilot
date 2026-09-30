@@ -97,7 +97,7 @@ export class SqliteScopedDiscoveryStore implements ScopedDiscoveryStore {
         };
       if (
         normalized.includes("migration required") ||
-        detail.includes("0021_recipient_buckets") ||
+        detail.includes("0022_company_trust") ||
         detail.includes("operational-schema-unavailable")
       )
         return {
