@@ -70,19 +70,33 @@ describe("recruiter employer-domain safety", () => {
     "northwindrpopartners.com",
     "northwindrpofirm.com",
     "northwindrpoagency.com",
+    "northwindrposearch.com",
+    "northwindrpooutsourcing.com",
+    "northwindrpoproviders.com",
+    "northwindrpoexperts.com",
     "northwindemploymentagencies.com",
     "northwindstaffers.com",
     "northwindrecruit.com",
+    "northwindtalentsolution.com",
   ])("closes newly discovered fail-open case %s", (domain) => {
     expect(classifyRecruiterEmployerDomain(domain)).not.toBe("neutral");
   });
 
   it.each([
+    "stafford.com",
+    "staffordsoftware.com",
+    "staffordshire.co.uk",
+    "staffwise.com",
     "staffington.com",
+    "researchfirm.com",
+    "researchfirmware.com",
     "recruitingdale.com",
     "replacement.com",
+    "replacementservices.com",
     "displacement.com",
+    "displacementgroup.com",
     "misplacement.com",
+    "misplacementpartners.com",
     "unemploymentagency.com",
     "nonhumanresources.com",
     "understaffing.com",
@@ -104,7 +118,9 @@ describe("recruiter employer-domain safety", () => {
 
   it.each([
     ["http://northwindstaffing.com", "northwindstaffing.com"],
+    ["http://northwindstaffing.com:80", "northwindstaffing.com"],
     ["https://northwindstaffing.com", "northwindstaffing.com"],
+    ["https://northwindstaffing.com:443", "northwindstaffing.com"],
     ["WWW.NORTHWINDSTAFFING.COM", "northwindstaffing.com"],
     ["careers.northwindstaffing.com", "careers.northwindstaffing.com"],
     [
@@ -123,6 +139,8 @@ describe("recruiter employer-domain safety", () => {
     "not a valid domain",
     "garbage",
     "ftp://northwindstaffing.com",
+    "https://northwindstaffing.com:99999",
+    "https://-northwind.com",
   ])("fails supplied malformed value %s closed", (value) => {
     expect(normalizeRecruiterEmployerDomain(value)).toBeUndefined();
     expect(classifyRecruiterEmployerDomain(value)).toBe("ambiguous");
@@ -136,6 +154,15 @@ describe("recruiter employer-domain safety", () => {
       );
     },
   );
+
+  it.each([
+    ["northwindѕtaffing.com", "xn--northwindtaffing-0vn.com"],
+    ["xn--northwindtaffing-0vn.com", "xn--northwindtaffing-0vn.com"],
+    ["münchen.example", "xn--mnchen-3ya.example"],
+  ])("keeps IDN or punycode domain %s ambiguous", (value, hostname) => {
+    expect(normalizeRecruiterEmployerDomain(value)).toBe(hostname);
+    expect(classifyRecruiterEmployerDomain(value)).toBe("ambiguous");
+  });
 
   it("keeps bounded generated long-root cases from becoming neutral", () => {
     const roots = AGENCY_CONCEPT_INVENTORY.flatMap((concept) =>
@@ -163,6 +190,13 @@ describe("recruiter employer-domain safety", () => {
     "rponorthwind.com",
     "northwindrpo.com",
     "northwindrpogroup.com",
+    "northwindrpopartners.com",
+    "northwindrpofirm.com",
+    "northwindrpoagency.com",
+    "northwindrposearch.com",
+    "northwindrpooutsourcing.com",
+    "northwindrpoproviders.com",
+    "northwindrpoexperts.com",
     "northwind-rpo-solutions.com",
   ])("uses bounded structural RPO rules for %s", (domain) => {
     expect(classifyRecruiterEmployerDomain(domain)).not.toBe("neutral");

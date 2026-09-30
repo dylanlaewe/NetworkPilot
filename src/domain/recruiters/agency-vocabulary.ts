@@ -207,6 +207,10 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
         "rpopartners",
         "rpofirm",
         "rpoagency",
+        "rposearch",
+        "rpooutsourcing",
+        "rpoproviders",
+        "rpoexperts",
       ],
       ambiguousBoundaryTerms: ["rpo"],
     },
@@ -225,7 +229,7 @@ export const AGENCY_CONCEPT_INVENTORY: readonly AgencyConcept[] = [
         "talentsolutionsfirm",
         "talentsolutionspartners",
       ],
-      ambiguousFragments: ["talentsolutions"],
+      ambiguousFragments: ["talentsolution", "talentsolutions"],
     },
   },
   {
@@ -344,6 +348,9 @@ export function classifyRecruiterEmployerDomain(
   const label = registrableDomainLabel(hostname);
   const tokens = label.split("-").filter(Boolean);
   const compact = tokens.join("");
+  const requiresIdnInterpretation = hostname
+    .split(".")
+    .some((domainLabel) => domainLabel.startsWith("xn--"));
   const lexicalTerms = AGENCY_CONCEPT_INVENTORY.flatMap((concept) => {
     const policy = concept.domainPolicy;
     if (policy.support === "intentionally-unsupported") return [];
@@ -384,6 +391,8 @@ export function classifyRecruiterEmployerDomain(
         return "agency-contradiction";
     }
   }
+
+  if (requiresIdnInterpretation) return "ambiguous";
 
   for (const concept of AGENCY_CONCEPT_INVENTORY) {
     const policy = concept.domainPolicy;

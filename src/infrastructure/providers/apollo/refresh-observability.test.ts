@@ -21,7 +21,7 @@ function setup(fail=false,searchPaths:readonly string[]=[]){
   const transport:ApolloHttpTransport={request:vi.fn(async input=>{
     if(input.path.includes("api_search")){
       searches++;const rows=Array.from({length:8},(_,i)=>{const n=(searches-1)*8+i,id=`fixture-refresh-${n}`,recruiter=searches===4,title=recruiter?"Product Recruiter":i===0?"Product Analyst":"Data Engineer";
-        const person={...APOLLO_PEOPLE.senior,id,title,first_name:"Fictional",last_name:"Person",last_name_obfuscated:"P.",email:`${id}@example.invalid`,organization:{name:`Fixture Discovered Systems ${n}`,primary_domain:`fixture-${n}.example.invalid`,id:`fixture-org-${n}`,industry:recruiter?"":"Software"}};
+        const person={...APOLLO_PEOPLE.senior,id,title,first_name:"Fictional",last_name:"Person",last_name_obfuscated:"P.",email:`${id}@example.invalid`,organization:{name:`Fixture Discovered Systems ${n}`,primary_domain:`fixture-${n}.example.invalid`,id:`fixture-org-${n}`,industry:"Software"}};
         people.set(id,person);return {...person,email:undefined};});
       // This malformed person is rejected by normalization, but its employer must still be counted.
       return {status:200,headers:{},body:JSON.stringify({people:[...rows,{id:"rejected-repeat",organization:{name:"Microsoft"}}],total_entries:100})};
