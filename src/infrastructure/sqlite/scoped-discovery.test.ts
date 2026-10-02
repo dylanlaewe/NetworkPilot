@@ -37,7 +37,7 @@ describe("scoped discovery through existing persisted provider accounting", () =
     const discover = vi.fn<ScopedDiscoveryProvider["discover"]>(async input => ({ records: [input.scope.bucket === "recruiters" ? recruiter.source : peer.source], searchedCandidates: 3, rejectedCandidates: 2, enrichmentAttempts: 1, searchCalls: 1, observedCredits: 1 }));
     const provider = { preflight: vi.fn(), discover };
     const first = await run("fictional-request-one", { bucket: "recruiters" }, provider);
-    expect(first).toMatchObject({ requested: 5, searchedCandidates: 3, enrichedCandidates: 1, qualifiedCandidatesAdded: 1, added: 1, rejectedCandidates: 2, shortfallCode: "scoped-supply-shortfall", remainingActionableCapacity: 1 });
+    expect(first).toMatchObject({ requested: 5, searchedCandidates: 3, enrichedCandidates: 1, qualifiedCandidatesAdded: 0, added: 0, rejectedCandidates: 3, shortfallCode: "scoped-supply-shortfall", remainingActionableCapacity: 0 });
     expect(discover.mock.calls[0][0]).toMatchObject({ scope: { bucket: "recruiters" }, maximum: 5 });
     const second = await run("fictional-request-two", { bucket: "peers", earlyCareerOnly: true }, provider);
     expect(second.providerCap).toBe(2);

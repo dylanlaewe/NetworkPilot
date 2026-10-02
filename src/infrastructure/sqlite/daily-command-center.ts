@@ -1,5 +1,5 @@
 import {
-  readQueueCandidates,
+  readCurrentQueueCandidates,
   readDraftGenerations,
   draftIsDismissed,
   renderQueueReview,
@@ -7,7 +7,6 @@ import {
 } from "./draft-queue";
 import { bucketProjection } from "@/domain/recipient-buckets";
 import { localCampaignDate } from "@/application/daily-refresh";
-import Database from "better-sqlite3";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -26,6 +25,7 @@ import { prepareControlledRealCampaign } from "@/application/providers/prepare-c
 import { assertRuntimeSchema } from "./schema-contract";
 import { externalApolloSpend } from "@/infrastructure/providers/apollo/external-spend";
 import { readPersistedApolloDailyAccounting } from "./apollo-accounting";
+import { SqliteSimulationRepository } from "./database";
 
 const FIXTURE_FIRST_NAMES = [
   "Mara",
@@ -127,7 +127,8 @@ export function loadDailyCommandCenter(
     selected = { path: fallback };
   }
   const drafts = listManualDraftOperatorEntries(selected.path),
-    db = new Database(selected.path, { readonly: true, fileMustExist: true });
+    repository = new SqliteSimulationRepository(selected.path, { readonly: true, fileMustExist: true }),
+    db = repository.native;
   try {
     assertRuntimeSchema(db);
     const now = at.getTime(),
@@ -168,7 +169,7 @@ export function loadDailyCommandCenter(
           .all() as { candidate_id: string }[]
       ).map((r) => r.candidate_id),
     );
-    const rows = readQueueCandidates(db).map((c) => ({
+    const rows = readCurrentQueueCandidates(repository).map((c) => ({
         normalized_snapshot_json: JSON.stringify(c),
         lifecycle_state: c.state,
       })),
@@ -322,6 +323,6 @@ export function loadDailyCommandCenter(
       cooldownCompanies: cooldown.size,
     });
   } finally {
-    db.close();
+    repository.close();
   }
 }

@@ -21,7 +21,7 @@ function setup(fail=false,searchPaths:readonly string[]=[]){
   const transport:ApolloHttpTransport={request:vi.fn(async input=>{
     if(input.path.includes("api_search")){
       searches++;const rows=Array.from({length:8},(_,i)=>{const n=(searches-1)*8+i,id=`fixture-refresh-${n}`,recruiter=searches===4,title=recruiter?"Product Recruiter":i===0?"Product Analyst":"Data Engineer";
-        const person={...APOLLO_PEOPLE.senior,id,title,first_name:"Fictional",last_name:"Person",last_name_obfuscated:"P.",email:`${id}@example.invalid`,organization:{name:`Fixture Discovered Systems ${n}`,primary_domain:`fixture-${n}.example.invalid`,id:`fixture-org-${n}`,industry:recruiter?"":"Software"}};
+        const person={...APOLLO_PEOPLE.senior,id,title,first_name:"Fictional",last_name:"Person",last_name_obfuscated:"P.",email:`${id}@example.invalid`,organization:{name:`Fixture Discovered Systems ${n}`,primary_domain:`fixture-${n}.example.invalid`,id:`fixture-org-${n}`,industry:"Software"}};
         people.set(id,person);return {...person,email:undefined};});
       // This malformed person is rejected by normalization, but its employer must still be counted.
       return {status:200,headers:{},body:JSON.stringify({people:[...rows,{id:"rejected-repeat",organization:{name:"Microsoft"}}],total_entries:100})};
@@ -47,7 +47,7 @@ describe("one-run refresh evidence with mocked Apollo transport",()=>{
   it("retains raw search employer aggregates including rejected people and persists the complete report",async()=>{
     const {repository,provider}=setup();try{
       const result=await refreshCandidateReserve({usableBefore:18,repository:new SqliteCandidateRefreshRepository(repository.native),provider,allowProvider:true,now:()=>new Date("2026-09-21T14:00:00Z")});
-      expect(result.diagnostics).toMatchObject({searchCalls:4,rawCandidates:36,normalizedCandidates:32,uniqueCandidates:33,rawUniqueEmployers:33,rawPreferredEmployers:1,rawDiscoveredEmployers:32,shortlistSize:20,enrichmentAttempts:20,verifiedEmails:20,qualifiedRecruiters:5,qualifiedProfessionals:15,qualifiedDiscovered:20,candidatesAdded:20,observedCreditsUsed:20,estimatedCreditsUsed:20});
+      expect(result.diagnostics).toMatchObject({searchCalls:4,rawCandidates:36,normalizedCandidates:32,uniqueCandidates:33,rawUniqueEmployers:33,rawPreferredEmployers:1,rawDiscoveredEmployers:32,shortlistSize:20,enrichmentAttempts:20,verifiedEmails:20,qualifiedRecruiters:0,qualifiedProfessionals:15,qualifiedDiscovered:15,candidatesAdded:20,observedCreditsUsed:20,estimatedCreditsUsed:20});
       expect(result.diagnostics!.searchPages.map(p=>p.page)).toEqual([1,2,3,2]);expect(result.diagnostics!.productCandidatesAdded).toBeGreaterThan(0);
       expect(result.diagnostics!.rejectionReasons["apollo-required-field-missing:person.first_name"]).toBe(4);
       const saved=repository.native.prepare("SELECT diagnostics_json FROM candidate_refresh_events").get() as {diagnostics_json:string};expect(JSON.parse(saved.diagnostics_json)).toEqual(result.diagnostics);

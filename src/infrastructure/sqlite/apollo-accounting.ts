@@ -6,11 +6,19 @@ type DailyBudgetRow = {
 };
 
 type OperationAccountingRow = {
+  id: string;
   estimated_max_exposure: number;
   observed_consumption: number | null;
   attempt_count: number;
   bucket_scope_json: string | null;
   occurred_at_utc: string;
+};
+
+type PersonAccountingMetadata = {
+  version?: string;
+  ownerOperationId?: string;
+  attemptedForOwner?: boolean;
+  observedConsumption?: number | null;
 };
 
 function localDate(iso: string): string {
@@ -32,6 +40,8 @@ export function readPersistedApolloDailyAccounting(
   reservedExposure: number;
   effectiveExposure: number;
   observedConsumption: number | null;
+  knownObservedConsumption: number;
+  hasUnknownConsumption: boolean;
 } {
   const budget = database
       .prepare(
@@ -46,19 +56,62 @@ export function readPersistedApolloDailyAccounting(
     operations = (
       database
         .prepare(
-          `SELECT estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo'`,
+          `SELECT id,estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo' AND candidate_count>0`,
         )
         .all() as OperationAccountingRow[]
     ).filter((operation) => localDate(operation.occurred_at_utc) === date),
-    observed = operations.filter(
-      (operation) => operation.observed_consumption !== null,
-    ),
-    observedConsumption = observed.length
-      ? observed.reduce(
-          (sum, operation) => sum + operation.observed_consumption!,
-          0,
+    personLowerBounds = new Map<string, number>();
+  if (hasBucketScope) {
+    const rows = database
+      .prepare(
+        "SELECT bucket_scope_json FROM provider_operations WHERE provider_id='apollo' AND candidate_count=0 AND estimated_max_exposure=0 AND bucket_scope_json IS NOT NULL",
+      )
+      .all() as Array<{ bucket_scope_json: string }>;
+    for (const row of rows) {
+      try {
+        const metadata = JSON.parse(
+          row.bucket_scope_json,
+        ) as PersonAccountingMetadata;
+        if (
+          metadata.version !== "apollo-person-reservation-v1" ||
+          !metadata.ownerOperationId ||
+          metadata.attemptedForOwner !== true ||
+          typeof metadata.observedConsumption !== "number" ||
+          !Number.isFinite(metadata.observedConsumption) ||
+          metadata.observedConsumption < 0
         )
-      : null,
+          continue;
+        personLowerBounds.set(
+          metadata.ownerOperationId,
+          (personLowerBounds.get(metadata.ownerOperationId) ?? 0) +
+            metadata.observedConsumption,
+        );
+      } catch {
+        // Invalid/legacy child metadata contributes no asserted lower bound.
+      }
+    }
+  }
+  const knownObservedConsumption = operations.reduce(
+      (sum, operation) =>
+        sum +
+        (operation.observed_consumption ??
+          personLowerBounds.get(operation.id) ??
+          0),
+      0,
+    ),
+    hasUnknownConsumption = operations.some(
+      (operation) =>
+        operation.attempt_count > 0 && operation.observed_consumption === null,
+    ),
+    hasConsumptionEvidence = operations.some(
+      (operation) =>
+        operation.attempt_count > 0 || operation.observed_consumption !== null,
+    ),
+    observedConsumption = hasUnknownConsumption
+      ? null
+      : hasConsumptionEvidence
+        ? knownObservedConsumption
+        : null,
     overage = operations.reduce((sum, operation) => {
       // Scoped sourcing uses a one-credit-per-enrichment model. When exact
       // provider consumption is unavailable, truthful attempts are therefore
@@ -78,6 +131,8 @@ export function readPersistedApolloDailyAccounting(
     reservedExposure,
     effectiveExposure: reservedExposure + overage,
     observedConsumption,
+    knownObservedConsumption,
+    hasUnknownConsumption,
   };
 }
 

@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { assertRuntimeSchema, appliedMigrationVersions } from "./schema-contract";
+import { assertRuntimeSchema, appliedMigrationVersions, FIVE_BUCKET_RUNTIME_SCHEMA } from "./schema-contract";
 import {
   DEFAULT_MANUAL_OUTREACH_DATABASE,
   MANUAL_OUTREACH_DATABASE_ENV,
@@ -66,7 +66,7 @@ export function resolveDatastoreTopology(
       ),
       role: "canonical-operational",
       capabilities: CANONICAL_CAPABILITIES,
-      requiredSchema: "0021_recipient_buckets.sql",
+      requiredSchema: FIVE_BUCKET_RUNTIME_SCHEMA,
     },
     system: {
       id: "application-system",

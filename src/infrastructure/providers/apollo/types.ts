@@ -1,6 +1,6 @@
 import type { CandidateSourceRecord } from "@/domain/candidates";
 export const APOLLO_ADAPTER_VERSION="apollo-adapter-v1" as const;
-export const APOLLO_MAPPING_VERSION="apollo-mapping-v1" as const;
+export const APOLLO_MAPPING_VERSION="apollo-mapping-v2" as const;
 export const APOLLO_IMPORT_VERSION="provider-import-v1" as const;
 export type ApolloSeniority="manager"|"director"|"senior";
 export interface ApolloSearchOptions {batchId:string;companyDomains?:string[];organizationIds?:string[];specificTitles?:string[];seniorities?:ApolloSeniority[];personLocations?:string[];organizationLocations?:string[];emailStatuses?:string[];includeSimilarTitles?:boolean;controlledDiagnosticAuthorization?:"milestone-6.1b"|"milestone-6.3"|"milestone-12";page?:number;perPage?:number;}

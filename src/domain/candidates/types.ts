@@ -52,7 +52,7 @@ export interface SimulationCandidateSourceRecord {
 }
 export type DatasetClassification="fictional"|"provider-shaped-fixture"|"authorized-provider";
 export type CandidateLifecycleState="imported"|"normalized"|"review-required"|"eligible"|"rejected"|"suppressed"|"planned";
-export interface FieldProvenance { sourceField:string; observedAt:string; confidence:"high"|"medium"|"low"; }
+export interface FieldProvenance { sourceField:string; sourceFields?:string[]; observedAt:string; confidence:"high"|"medium"|"low"; }
 export interface EmploymentPeriod {startDate?:string;endDate?:string;current?:boolean;}
 export type ExperienceEvidence={kind:"exact";years:number;sourceField:string}|{kind:"range";minimum:number;maximum:number;sourceField:string}|{kind:"approximate";years:number;sourceField:string}|{kind:"employment-history";periods:EmploymentPeriod[];referenceDate:string;sourceField:string}|{kind:"unknown";sourceField:string};
 export interface CandidateSourceRecord {
