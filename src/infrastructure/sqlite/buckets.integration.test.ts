@@ -59,7 +59,10 @@ function add(
   return r.findImportedCandidate("bucket-fixture", `person-${ordinal}`)!;
 }
 function trustCandidateCompany(r:SqliteSimulationRepository,candidate:ReturnType<typeof add>,commandId:string){
-  return reviewCompanyTrust(r,{commandId,companyId:candidate.strategyCompanyMatch!.companyId,expectedVersion:r.findCompanyTrustRecord(candidate.strategyCompanyMatch!.companyId)?.version??0,resultingTrustState:"trusted-operating",reason:"Fixture operating-employer review",reviewerActor:"local-operator",sourceReference:"fixture://company-review",at:FIXTURE_AT});
+  return reviewCompanyTrust(r,{commandId,companyId:candidate.strategyCompanyMatch!.companyId,identity:{employerDomain:candidate.source.currentOrganization.domain,providerNamespace:candidate.source.sourceProviderId,providerEmployerId:candidate.source.currentOrganization.providerId},expectedVersion:r.findCompanyTrustRecord(candidate.strategyCompanyMatch!.companyId)?.version??0,resultingTrustState:"trusted-operating",reason:"Fixture operating-employer review",reviewerActor:"local-operator",sourceReference:"fixture://company-review",at:FIXTURE_AT});
+}
+function setCandidateCompanyTrust(r:SqliteSimulationRepository,candidate:ReturnType<typeof add>,state:"trusted-operating"|"disallowed-recruiting-service",commandId:string){
+  return reviewCompanyTrust(r,{commandId,companyId:candidate.strategyCompanyMatch!.companyId,identity:{employerDomain:candidate.source.currentOrganization.domain,providerNamespace:candidate.source.sourceProviderId,providerEmployerId:candidate.source.currentOrganization.providerId},expectedVersion:r.findCompanyTrustRecord(candidate.strategyCompanyMatch!.companyId)?.version??0,resultingTrustState:state,reason:`Fixture ${state} review`,reviewerActor:"local-operator",sourceReference:"fixture://company-review",at:new Date(FIXTURE_AT.getTime()+(r.findCompanyTrustRecord(candidate.strategyCompanyMatch!.companyId)?.version??0)*1000)});
 }
 beforeEach(() => vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "true"));
 afterEach(() => {
@@ -446,6 +449,32 @@ describe("bucket persistence and reserve integration", () => {
       state: "eligible",
       recipientBucket: { bucket: "recruiters", reviewState: "accepted" },
     });
+  });
+  it("reprojects recruiter reserve and Add Drafts across trust corrections without reimport", () => {
+    const r=repo(),candidate=add(r,"recruiters",1),storedBefore=(r.native.prepare("SELECT normalized_snapshot_json value FROM imported_candidates WHERE id=?").get(candidate.id) as {value:string}).value;
+    expect(bucketReserve(r,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false})).toMatchObject({eligible:[],actionableCapacity:0});
+    setCandidateCompanyTrust(r,candidate,"trusted-operating","reserve-trust-one");
+    const trusted=bucketReserve(r,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false});
+    expect(trusted.eligible.map(item=>item.id)).toEqual([candidate.id]);
+    expect(trusted.actionableCapacity).toBe(1);
+    setCandidateCompanyTrust(r,candidate,"disallowed-recruiting-service","reserve-disallow-one");
+    expect(bucketReserve(r,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false})).toMatchObject({eligible:[],actionableCapacity:0});
+    expect(r.listImportedCandidates()).toHaveLength(1);
+    expect((r.native.prepare("SELECT normalized_snapshot_json value FROM imported_candidates WHERE id=?").get(candidate.id) as {value:string}).value).toBe(storedBefore);
+    setCandidateCompanyTrust(r,candidate,"trusted-operating","reserve-correction-one");
+    const added=addBucketDraftsFromRepository(r,1,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false});
+    expect(added.candidateIds).toEqual([candidate.id]);
+  });
+  it("uses newly trusted current supply for Replace selection", () => {
+    const r=repo(),active=add(r,"recruiters",1),replacement=add(r,"recruiters",2);
+    setCandidateCompanyTrust(r,active,"trusted-operating","replace-active-trust");
+    const initial=addBucketDraftsFromRepository(r,1,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false});
+    expect(initial.candidateIds).toEqual([active.id]);
+    expect(bucketReserve(r,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false}).eligible).toHaveLength(0);
+    setCandidateCompanyTrust(r,replacement,"trusted-operating","replace-reserve-trust");
+    expect(bucketReserve(r,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false}).eligible.map(item=>item.id)).toEqual([replacement.id]);
+    const replaced=addBucketDraftsFromRepository(r,1,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false,replacementId:active.id});
+    expect(replaced.replacement).toMatchObject({previousCandidateId:active.id,replacementCandidateId:replacement.id});
   });
   it("replaces in place and leaves a draft present when same-bucket supply is exhausted", () => {
     const r = repo();

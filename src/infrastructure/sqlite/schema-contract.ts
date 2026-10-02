@@ -35,11 +35,12 @@ export function requiredRuntimeSchema(env: Readonly<Record<string, string | unde
 }
 
 function tableExists(database:Database.Database,name:string):boolean{return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));}
+function schemaObjectExists(database:Database.Database,name:string):boolean{return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name=?").get(name));}
 function columnExists(database:Database.Database,table:string,column:string):boolean{return (database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name:string}>).some((item)=>item.name===column);}
 function schemaShapeAvailable(database:Database.Database,required:string):boolean{
   if(!tableExists(database,"resume_library"))return false;
   if(required===LEGACY_RUNTIME_SCHEMA)return true;
-  return tableExists(database,"recruiter_resume_preference")&&columnExists(database,"imported_candidates","recipient_bucket_json")&&columnExists(database,"candidate_review_audit","bucket_correction_json")&&columnExists(database,"daily_refresh_runs","bucket_scope_json")&&columnExists(database,"candidate_refresh_events","bucket_scope_json")&&columnExists(database,"candidate_refresh_events","result_json")&&columnExists(database,"provider_operations","bucket_scope_json")&&tableExists(database,"company_trust_current")&&tableExists(database,"company_trust_audit");
+  return tableExists(database,"recruiter_resume_preference")&&columnExists(database,"imported_candidates","recipient_bucket_json")&&columnExists(database,"candidate_review_audit","bucket_correction_json")&&columnExists(database,"daily_refresh_runs","bucket_scope_json")&&columnExists(database,"candidate_refresh_events","bucket_scope_json")&&columnExists(database,"candidate_refresh_events","result_json")&&columnExists(database,"provider_operations","bucket_scope_json")&&schemaObjectExists(database,"company_trust_current")&&tableExists(database,"company_trust_audit");
 }
 
 /** Observes the ledger and required table/column shape. It never mutates schema. */

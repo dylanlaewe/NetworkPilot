@@ -7,7 +7,8 @@ describe("recruiter discovered-company domain safety",()=>{
   it("does not apply recruiter-only lexical policy to a professional company discovery",()=>expect(classifyDiscoveredCompany({name:"Replacement Software",domain:"replacement.com",industrySignal:"Software",recruiterTitleRelevant:false})).toMatchObject({eligible:true,kind:"discovered"}));
   it("allows a neutral recruiter domain with operating-employer evidence",()=>expect(classifyDiscoveredCompany({name:"Northwind Technology",domain:"northwindcloud.com",industrySignal:"Software",recruiterTitleRelevant:true})).toMatchObject({eligible:true,kind:"discovered"}));
   it("distinguishes missing domain from malformed domain when provider identity exists",()=>{
-    expect(classifyInternalRecruiterCompany({name:"Northwind Technology",providerEmployerId:"org-northwind",recruiterTitleRelevant:true})).toMatchObject({eligible:true,kind:"discovered"});
-    expect(classifyInternalRecruiterCompany({name:"Northwind Technology",domain:"northwind_staffing.com",providerEmployerId:"org-northwind",recruiterTitleRelevant:true})).toMatchObject({eligible:false,reason:"recruiter-company-domain-ambiguous"});
+    expect(classifyInternalRecruiterCompany({name:"Northwind Technology",providerNamespace:"apollo",providerEmployerId:"org-northwind",recruiterTitleRelevant:true})).toMatchObject({eligible:true,kind:"discovered"});
+    expect(classifyInternalRecruiterCompany({name:"Northwind Technology",providerEmployerId:"org-northwind",recruiterTitleRelevant:true})).toMatchObject({eligible:false,reason:"recruiter-company-identity-unverifiable"});
+    expect(classifyInternalRecruiterCompany({name:"Northwind Technology",domain:"northwind_staffing.com",providerNamespace:"apollo",providerEmployerId:"org-northwind",recruiterTitleRelevant:true})).toMatchObject({eligible:false,reason:"recruiter-company-domain-ambiguous"});
   });
 });

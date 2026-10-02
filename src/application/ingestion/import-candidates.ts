@@ -2,7 +2,7 @@ import {classifyRecipientFunction,classifySpecificRole,interpretExperience,mapFu
 import {classifyRecruiter} from "@/domain/recruiters";
 import {fiveBucketEnabled,classifyRecipientBucket,bucketAwareGateFailures,verifiedBucketEvidence} from "@/domain/recipient-buckets";
 import {classifyDiscoveredCompany,classifyInternalRecruiterCompany,type TargetCompany} from "@/domain/targeting";
-import {resolveCompanyTrust} from "@/domain/company-trust";
+import {discoveredCompanyIdentity,resolveCompanyTrust} from "@/domain/company-trust";
 import {qualifyRecruiterWithCompanyTrust} from "./recruiter-company-trust";
 import type {ImportBatch,ImportBatchInput,ImportedCandidateSnapshot,IngestionRepository} from "./types";
 
@@ -30,11 +30,14 @@ export function importCandidateBatch(repository:IngestionRepository,companies:re
     const byName=companies.find((c)=>canonical(c.canonicalName)===name),byDomain=domain?companies.find((c)=>canonical(input.strategyCompanyDomains?.[c.id]??"")===domain):undefined;
     const identityConflict=Boolean(byName&&byDomain&&byName.id!==byDomain.id),knownCompany=alias??(identityConflict?undefined:domain?byDomain:byName);
     const recruiterProbe=classifyRecruiter({...recruiterEvidence,title:source.currentTitle,employerName:source.currentOrganization.name,internalCompanyMatch:true,minimumExperience:experience.minimumSupportedYears,maximumExperience:experience.maximumSupportedYears});
-    const discovery=input.datasetClassification==="authorized-provider"&&!knownCompany&&!identityConflict?classifyDiscoveredCompany({name:source.currentOrganization.name,...domain?{domain}:{},industrySignal:source.industrySignals[0],recruiterTitleRelevant:recruiterProbe.track==="recruiter"}):null;
-    const recruiterDiscovery=input.datasetClassification==="authorized-provider"&&!knownCompany&&!identityConflict&&!discovery?.eligible&&recruiterProbe.track==="recruiter"?classifyInternalRecruiterCompany({name:source.currentOrganization.name,...domain?{domain}:{},providerEmployerId:source.currentOrganization.providerId,recruiterTitleRelevant:!recruiterProbe.explanationCodes.includes("recruiter-title-excluded")}):null;
-    const effectiveDiscovery=discovery?.eligible?discovery:recruiterDiscovery??discovery,company=knownCompany??effectiveDiscovery?.company??undefined;
+    const discovery=input.datasetClassification==="authorized-provider"&&!knownCompany&&!identityConflict?classifyDiscoveredCompany({name:source.currentOrganization.name,...domain?{domain}:{},providerNamespace:source.sourceProviderId,providerEmployerId:source.currentOrganization.providerId,industrySignal:source.industrySignals[0],recruiterTitleRelevant:recruiterProbe.track==="recruiter"}):null;
+    const recruiterDiscovery=input.datasetClassification==="authorized-provider"&&!knownCompany&&!identityConflict&&!discovery?.eligible&&recruiterProbe.track==="recruiter"?classifyInternalRecruiterCompany({name:source.currentOrganization.name,...domain?{domain}:{},providerNamespace:source.sourceProviderId,providerEmployerId:source.currentOrganization.providerId,recruiterTitleRelevant:!recruiterProbe.explanationCodes.includes("recruiter-title-excluded")}):null;
+    const effectiveDiscovery=discovery?.eligible?discovery:recruiterDiscovery??discovery;
+    const discoveredIdentity=effectiveDiscovery?.company?discoveredCompanyIdentity({employerDomain:source.currentOrganization.domain,providerNamespace:source.sourceProviderId,providerEmployerId:source.currentOrganization.providerId}):null;
+    const discoveredCompany=effectiveDiscovery?.company&&discoveredIdentity?{...effectiveDiscovery.company,id:discoveredIdentity}:undefined;
+    const company=knownCompany??discoveredCompany;
     const method=alias?"simulation-alias":knownCompany&&byDomain?"domain":knownCompany&&byName?"exact-name":effectiveDiscovery?.eligible?"discovered-provider":null;
-    const identity={companyId:company?.id??null,employerDomain:source.currentOrganization.domain,providerEmployerId:source.currentOrganization.providerId};
+    const identity={companyId:company?.id??null,employerDomain:source.currentOrganization.domain,providerNamespace:source.sourceProviderId,providerEmployerId:source.currentOrganization.providerId};
     const employerTrust=repository.resolveCompanyTrust?.(identity)??resolveCompanyTrust(identity);
     const companyOpportunity=company?Math.round((company.careerUpsideScore+company.technicalInterestScore+company.recognitionScore)/30):0;
     const recruiterResult=qualifyRecruiterWithCompanyTrust({title:source.currentTitle,employerName:source.currentOrganization.name,employerDomain:source.currentOrganization.domain,minimumExperience:experience.minimumSupportedYears,maximumExperience:experience.maximumSupportedYears,trust:employerTrust,evidence:source.responsibilityEvidence,companyOpportunity});

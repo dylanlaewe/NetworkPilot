@@ -1,7 +1,7 @@
 import {addBucketDraftsFromRepository,resolveBucketDraftCorrectionInRepository} from "./bucket-reserve";
 import {initialResumeSelection} from "@/application/resumes/recruiter-default";
 import {assertFiveBucketEnabled,type BucketScope} from "@/domain/recipient-buckets";
-import {readDraftGenerations,readQueueCandidates,readQueueOperations,loadQueueReviews,renderQueueReview,draftIsDismissed,draftCampaignDate} from "./draft-queue";
+import {readCurrentQueueCandidates,readDraftGenerations,readQueueOperations,loadQueueReviews,renderQueueReview,draftIsDismissed,draftCampaignDate} from "./draft-queue";
 import Database from "better-sqlite3";
 import {localCampaignDate,planNextDraftBatch,refreshDailyPipeline,type DailyRefreshRepository,type DailyRefreshResult} from "@/application/daily-refresh";
 import {loadDailyCommandCenter} from "./daily-command-center";
@@ -32,7 +32,7 @@ export function runNextDraftBatchFromReserve(additionalDraftCount=5,now:()=>Date
     const active=loadQueueReviews(repository,at).filter(r=>r.operation?.sendState!=="sent"&&!repository.findManualOutreach(r.snapshotId));
     const activeCandidates=active.map(r=>({id:r.candidateId,company:r.companyId,companyKind:state.reserve.find(c=>c.id===r.candidateId)?.companyKind,track:r.outreachTrack,score:r.score,available:true}));
     for(const review of active)alreadyPlanned.add(review.candidateId);
-    const occupied=new Set(active.map(r=>r.companyId)),byId=new Map(readQueueCandidates(repository.native).map(c=>[c.id,c]));
+    const occupied=new Set(active.map(r=>r.companyId)),byId=new Map(readCurrentQueueCandidates(repository).map(c=>[c.id,c]));
     const eligible=state.reserve.filter(c=>c.stage==="qualified-available"&&!alreadyPlanned.has(c.id)&&!occupied.has(c.companyId||c.company)&&!draftIsDismissed(repository.native,c.id,campaignDate));
     const selected=planNextDraftBatch(eligible.map(c=>({id:c.id,company:c.companyId||c.company,companyKind:c.companyKind,track:c.track??"professional",score:c.score,available:true})),additionalDraftCount,activeCandidates);
     const draftReviews=selected.map((c,i)=>renderQueueReview(byId.get(c.id)!,active.length+i,at,initialResumeSelection(byId.get(c.id)!.outreachTrack??"professional",repository))).filter((r):r is NonNullable<typeof r>=>Boolean(r));

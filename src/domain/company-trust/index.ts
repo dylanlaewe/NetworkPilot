@@ -19,6 +19,9 @@ export interface CompanyTrustRecord {
   latestAuditEventId: string | null;
   version: number;
   updatedAt: string;
+  providerNamespace: string | null;
+  providerEmployerId: string | null;
+  reviewedDomain: string | null;
 }
 
 export interface CompanyTrustResolution {
@@ -34,7 +37,14 @@ export interface CompanyTrustResolution {
 export interface CompanyIdentityEvidence {
   companyId: string | null;
   employerDomain?: string | null;
+  providerNamespace?: string | null;
   providerEmployerId?: string | null;
+}
+
+export interface NormalizedCompanyIdentityEvidence {
+  employerDomain: string | null;
+  providerNamespace: string | null;
+  providerEmployerId: string | null;
 }
 
 export function normalizeCompanyDomain(value?: string | null): string | null {
@@ -43,11 +53,63 @@ export function normalizeCompanyDomain(value?: string | null): string | null {
   return normalized.includes(".") ? normalized : null;
 }
 
-export function discoveredCompanyIdentity(input: Pick<CompanyIdentityEvidence, "employerDomain" | "providerEmployerId">): string | null {
-  const domain = normalizeCompanyDomain(input.employerDomain);
-  const providerId = input.providerEmployerId?.trim();
-  const identity = domain ?? (providerId ? `provider:${providerId}` : null);
+export function normalizeCompanyIdentityEvidence(
+  input: Pick<CompanyIdentityEvidence, "employerDomain" | "providerNamespace" | "providerEmployerId">,
+): NormalizedCompanyIdentityEvidence {
+  const providerEmployerId = input.providerEmployerId?.trim() || null;
+  return {
+    employerDomain: normalizeCompanyDomain(input.employerDomain),
+    providerNamespace: providerEmployerId ? input.providerNamespace?.trim().toLowerCase() || null : null,
+    providerEmployerId,
+  };
+}
+
+export function discoveredCompanyIdentity(
+  input: Pick<CompanyIdentityEvidence, "employerDomain" | "providerNamespace" | "providerEmployerId">,
+): string | null {
+  const evidence = normalizeCompanyIdentityEvidence(input);
+  // A provider-native ID is authoritative only inside its provider namespace.
+  // Its domain corroborates the identity but never replaces it.
+  if (evidence.providerEmployerId && !evidence.providerNamespace) return null;
+  const identity = evidence.providerEmployerId
+    ? `provider:${evidence.providerNamespace}:${evidence.providerEmployerId}`
+    : evidence.employerDomain
+      ? `domain:${evidence.employerDomain}`
+      : null;
   return identity ? `discovered-${createHash("sha256").update(identity).digest("hex").slice(0, 16)}` : null;
+}
+
+export function companyIdentityMatchesKey(
+  companyId: string,
+  input: Pick<CompanyIdentityEvidence, "employerDomain" | "providerNamespace" | "providerEmployerId">,
+): boolean {
+  const domain = normalizeCompanyDomain(input.employerDomain);
+  const curatedDomain = AUTHORITATIVE_OPERATING_COMPANY_DOMAINS[companyId];
+  return Boolean(
+    (curatedDomain && domain === curatedDomain) ||
+      discoveredCompanyIdentity(input) === companyId,
+  );
+}
+
+function reviewedIdentityMatches(
+  identity: CompanyIdentityEvidence,
+  current: CompanyTrustRecord,
+  curatedIdentity: boolean,
+): boolean {
+  if (curatedIdentity) return true;
+  const evidence = normalizeCompanyIdentityEvidence(identity);
+  if (current.providerEmployerId) {
+    return (
+      evidence.providerNamespace === current.providerNamespace &&
+      evidence.providerEmployerId === current.providerEmployerId &&
+      evidence.employerDomain === current.reviewedDomain
+    );
+  }
+  return (
+    evidence.providerEmployerId === null &&
+    evidence.employerDomain !== null &&
+    evidence.employerDomain === current.reviewedDomain
+  );
 }
 
 export function resolveCompanyTrust(
@@ -61,7 +123,14 @@ export function resolveCompanyTrust(
   const discoveredIdentity = Boolean(companyId && discoveredCompanyIdentity(identity) === companyId);
   const identityVerified = curatedIdentity || discoveredIdentity;
 
-  if (current && current.companyId === companyId && current.latestAuditEventId && current.version > 0 && identityVerified) {
+  if (
+    current &&
+    current.companyId === companyId &&
+    current.latestAuditEventId &&
+    current.version > 0 &&
+    identityVerified &&
+    reviewedIdentityMatches(identity, current, curatedIdentity)
+  ) {
     return {
       companyId,
       state: current.trustState,

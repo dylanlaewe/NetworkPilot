@@ -1,15 +1,20 @@
 import { createHash } from "node:crypto";
 import {
   COMPANY_TRUST_STATES,
+  companyIdentityMatchesKey,
+  normalizeCompanyIdentityEvidence,
   resolveCompanyTrust,
+  type CompanyIdentityEvidence,
   type CompanyTrustRecord,
   type CompanyTrustState,
 } from "@/domain/company-trust";
-import {AUTHORITATIVE_OPERATING_COMPANY_DOMAINS} from "@/domain/targeting";
 
 export interface CompanyTrustAuditEvent {
   id: string;
   companyId: string;
+  providerNamespace: string | null;
+  providerEmployerId: string | null;
+  reviewedDomain: string | null;
   previousTrustState: CompanyTrustState;
   resultingTrustState: CompanyTrustState;
   reviewerActor: "local-operator";
@@ -28,12 +33,12 @@ export interface CompanyTrustReviewRepository {
   findCompanyTrustRecord(companyId: string): CompanyTrustRecord | null;
   findCompanyTrustAuditByCommand(commandId: string): CompanyTrustAuditEvent | null;
   appendCompanyTrustAudit(event: CompanyTrustAuditEvent): void;
-  saveCompanyTrustRecord(record: CompanyTrustRecord): void;
 }
 
 export interface ReviewCompanyTrustCommand {
   commandId: string;
   companyId: string;
+  identity: Omit<CompanyIdentityEvidence, "companyId">;
   expectedVersion: number;
   resultingTrustState: CompanyTrustState;
   reason: string;
@@ -49,16 +54,22 @@ export interface ReviewCompanyTrustResult {
 }
 
 const commandPattern = /^[a-z0-9][a-z0-9._:-]{7,127}$/i;
-const fingerprint = (command: ReviewCompanyTrustCommand) =>
-  createHash("sha256")
-    .update(JSON.stringify({
+const canonicalCommand = (command: ReviewCompanyTrustCommand) => {
+  const identity = normalizeCompanyIdentityEvidence(command.identity);
+  return {
       companyId: command.companyId,
+      identity,
       expectedVersion: command.expectedVersion,
       resultingTrustState: command.resultingTrustState,
       reason: command.reason.trim(),
       reviewerActor: command.reviewerActor,
       sourceReference: command.sourceReference.trim(),
-    }))
+      at: command.at.toISOString(),
+    };
+};
+const fingerprint = (command: ReviewCompanyTrustCommand) =>
+  createHash("sha256")
+    .update(JSON.stringify(canonicalCommand(command)))
     .digest("hex");
 
 export function reviewCompanyTrust(
@@ -67,6 +78,8 @@ export function reviewCompanyTrust(
 ): ReviewCompanyTrustResult {
   if (!commandPattern.test(command.commandId)) throw new Error("company-trust-command-id-invalid");
   if (!command.companyId.trim()) throw new Error("company-trust-company-id-required");
+  if (!companyIdentityMatchesKey(command.companyId, command.identity))
+    throw new Error("company-trust-identity-mismatch");
   if (!Number.isInteger(command.expectedVersion) || command.expectedVersion < 0)
     throw new Error("company-trust-version-invalid");
   if (!COMPANY_TRUST_STATES.includes(command.resultingTrustState))
@@ -76,6 +89,7 @@ export function reviewCompanyTrust(
   if (!command.sourceReference.trim()) throw new Error("company-trust-source-reference-required");
   if (!Number.isFinite(command.at.getTime())) throw new Error("company-trust-time-invalid");
 
+  const identity = normalizeCompanyIdentityEvidence(command.identity);
   const digest = fingerprint(command);
   return repository.transaction(() => {
     const replay = repository.findCompanyTrustAuditByCommand(command.commandId);
@@ -90,10 +104,13 @@ export function reviewCompanyTrust(
     const previous = repository.findCompanyTrustRecord(command.companyId);
     const version = previous?.version ?? 0;
     if (version !== command.expectedVersion) throw new Error("company-trust-stale-version");
-    const previousTrustState=previous&&previous.version>0?previous.trustState:resolveCompanyTrust({companyId:command.companyId,employerDomain:AUTHORITATIVE_OPERATING_COMPANY_DOMAINS[command.companyId]}).state;
+    const previousTrustState=previous&&previous.version>0?previous.trustState:resolveCompanyTrust({companyId:command.companyId,...identity}).state;
     const event: CompanyTrustAuditEvent = {
       id: `company-trust-${createHash("sha256").update(command.commandId).digest("hex").slice(0, 24)}`,
       companyId: command.companyId,
+      providerNamespace: identity.providerNamespace,
+      providerEmployerId: identity.providerEmployerId,
+      reviewedDomain: identity.employerDomain,
       previousTrustState,
       resultingTrustState: command.resultingTrustState,
       reviewerActor: command.reviewerActor,
@@ -106,14 +123,8 @@ export function reviewCompanyTrust(
       resultingVersion: version + 1,
     };
     repository.appendCompanyTrustAudit(event);
-    const current: CompanyTrustRecord = {
-      companyId: command.companyId,
-      trustState: command.resultingTrustState,
-      latestAuditEventId: event.id,
-      version: event.resultingVersion,
-      updatedAt: event.occurredAt,
-    };
-    repository.saveCompanyTrustRecord(current);
+    const current = repository.findCompanyTrustRecord(command.companyId);
+    if (!current) throw new Error("company-trust-derived-state-missing");
     return { event, current, replayed: false };
   });
 }

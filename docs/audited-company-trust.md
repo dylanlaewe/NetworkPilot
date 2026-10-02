@@ -4,7 +4,7 @@ Company trust is a separate safety boundary from provider discovery, target-comp
 
 ## Stable identity and states
 
-The resolver uses the exact `strategyCompanyMatch.companyId` plus identity evidence from the candidate. Provider-discovered companies use the deterministic `discovered_companies.id`: normalized exact domain when present, otherwise the exact provider employer ID. Similar display names, fuzzy matches, candidate IDs, partial domains, and different provider employer IDs do not share trust.
+The resolver uses the exact `strategyCompanyMatch.companyId` plus identity evidence from the candidate. When provider-native employer identity exists, the deterministic identity is `provider:<normalized-provider-namespace>:<exact-employer-id>`; the normalized domain is retained as corroborating reviewed evidence and any later domain drift fails closed. Only when no provider employer ID exists may an exact normalized domain form the deterministic fallback identity. Similar display names, fuzzy matches, partial domains, different provider IDs, different provider namespaces, and parent/subsidiary-looking names do not share trust. An employer ID without its provider namespace, or evidence with neither employer ID nor usable domain, has no reusable identity.
 
 Trust states are:
 
@@ -12,7 +12,7 @@ Trust states are:
 - `trusted-operating`
 - `disallowed-recruiting-service`
 
-New provider discoveries create a version-zero `unverified` current row. Existing companies are not backfilled; absence of a current row also resolves to `unverified` unless the exact curated identity rule below succeeds.
+Provider discovery creates no trust row or audit event. A company without human audit history resolves as version-zero `unverified` unless the exact curated identity rule below succeeds.
 
 ## Authoritative curated source
 
@@ -22,16 +22,16 @@ An exact display-name match without the approved domain stays unverified. Free-f
 
 ## Audited human review
 
-`reviewCompanyTrust` is the explicit application command. It requires an exact company ID, intended state, non-empty reason, `local-operator`-style actor identity, source reference, command ID, expected current version, and timestamp. It runs in an immediate SQLite transaction, appends one `company_trust_audit` event, and advances `company_trust_current` by one version.
+`reviewCompanyTrust` is the explicit application command. It requires an exact company identity key and reviewed identity evidence, intended state, non-empty reason, `local-operator`-style actor identity, source reference, command ID, expected current version, and timestamp. Its canonical replay fingerprint includes every one of those fields, including the timestamp. It runs in an immediate SQLite transaction and appends one `company_trust_audit` event. `company_trust_current` advances only because its read-only view selects the new highest valid audit version.
 
-The command supports deliberate changes between all three states. Command replay with the same payload is idempotent. Reusing a command ID with a different payload fails. An incorrect expected version fails as stale. Database triggers reject audit updates and deletes.
+The command supports deliberate changes between all three states. Command replay with the same complete payload is idempotent. Reusing a command ID with any different meaningful field fails. An incorrect expected version fails as stale. Database constraints and triggers enforce unique event and command IDs, unique identity/version pairs, positive contiguous versions, valid states, consistent previous state after version one, and append-only audit history. SQLite rejects direct writes to the current view.
 
 ## Recruiter projection and history
 
 The authoritative resolver supplies state and provenance to recruiter qualification. Neutral or missed domain vocabulary is supporting evidence only and cannot promote an unverified company. A disallowed company fails closed. A trusted company with current agency or ambiguous-domain evidence still fails or routes to review under the existing contradiction policy.
 
-Current trust is projected over mutable candidate supply when candidates are read. This lets one exact-company review apply to future and existing unsent recruiters without rewriting candidate import snapshots. Reserve and planner reads therefore stop treating historical provider-only recruiters as actionable internal supply. Gmail approvals, sent messages, outreach records, and other immutable snapshots are never rewritten.
+Current trust is projected over mutable candidate supply through one repository projection when candidates or queue supply are read. Bucket reserve, capacity, Add Drafts, Replace, and current candidate views consume that same projection. This lets one exact-company review apply to future and existing unsent recruiters without reimport or provider activity, while a disallow correction removes future actionability immediately. Candidate imports, Gmail approvals, sent messages, outreach records, and other immutable snapshots are never rewritten.
 
 ## Migration boundary
 
-Migration `0022_company_trust.sql` adds `company_trust_current` and append-only `company_trust_audit`. It performs no historical trust inference or data backfill. Five-bucket/trust-dependent runtime now requires `0022`; feature-off application/system runtime retains its `0020` contract. Only the explicit migration command may apply the migration.
+Migration `0022_company_trust.sql` adds authoritative append-only `company_trust_audit` and the derived read-only `company_trust_current` view. It performs no historical trust inference or data backfill. Five-bucket/trust-dependent runtime now requires `0022`; feature-off application/system runtime retains its `0020` contract. Only the explicit migration command may apply the migration.

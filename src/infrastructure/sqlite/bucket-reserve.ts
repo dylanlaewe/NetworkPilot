@@ -3,8 +3,8 @@ import {
   draftCampaignDate,
   draftIsDismissed,
   loadQueueReviews,
+  readCurrentQueueCandidates,
   readDraftGenerations,
-  readQueueCandidates,
   readQueueOperations,
   renderQueueReview,
 } from "./draft-queue";
@@ -44,7 +44,7 @@ export function bucketReserve(
   // legacy recruiter database is evidence-only and must never participate in
   // five-bucket persistence or capacity calculations.
   const canonicalOnly = { includeSecondary: false } as const,
-    candidates = readQueueCandidates(repository.native, canonicalOnly),
+    candidates = readCurrentQueueCandidates(repository, canonicalOnly),
     active = loadQueueReviews(repository, at, canonicalOnly).filter(
       (r) =>
         r.operation?.sendState !== "sent" &&
@@ -385,7 +385,7 @@ export function resolveBucketDraftCorrectionInRepository(
       throw new Error("bucket-copy-decision-unavailable");
     if (input.snapshotId !== review.snapshotId)
       throw new Error("bucket-copy-decision-stale");
-    const current = readQueueCandidates(repository.native, options).find(
+    const current = readCurrentQueueCandidates(repository, options).find(
       (c) => c.id === input.candidateId,
     )!;
     let next: CommandCenterDraftReview;
