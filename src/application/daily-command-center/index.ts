@@ -29,6 +29,12 @@ export interface ReserveCandidate {
   company: string;
   companyId?: string;
   companyKind?: "preferred" | "discovered";
+  employerTrust?: import("@/domain/company-trust").CompanyTrustResolution;
+  employerIdentity?: {
+    domain: string | null;
+    providerNamespace: string | null;
+    providerEmployerId: string | null;
+  };
   title: string;
   industry: string;
   geography?: string;

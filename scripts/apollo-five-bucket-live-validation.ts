@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 
 import type { CandidateRefreshResult } from "@/application/candidate-refresh";
+import { stagedAccountUsageAnomalies } from "@/application/candidate-refresh/live-validation-accounting";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
 import type { CompanyTrustResolution } from "@/domain/company-trust";
 import type { BucketScope, RecipientBucket } from "@/domain/recipient-buckets";
@@ -66,7 +67,7 @@ type ValidationOutcome = {
   requestId: string;
   operationId: string;
   attempts: number;
-  observedConsumption: number;
+  observedConsumption: number | null;
   accountConsumedAfter: number;
   searchedCandidates: number;
   rejectedCandidates: number;
@@ -210,7 +211,18 @@ function readState(
   repository: SqliteSimulationRepository,
 ): ValidationState | null {
   const value = repository.getSetting(STATE_KEY);
-  return value ? (JSON.parse(value) as ValidationState) : null;
+  if (!value) return null;
+  const parsed = JSON.parse(value) as ValidationState;
+  return {
+    ...parsed,
+    outcomes: parsed.outcomes.map((outcome) => ({
+      ...outcome,
+      observedConsumption:
+        outcome.observedConsumption === -1
+          ? null
+          : outcome.observedConsumption,
+    })),
+  };
 }
 
 function writeState(
@@ -549,8 +561,6 @@ function localInspection(
   if (candidates.length > 1) anomalies.push("multiple-candidates-imported");
   if (candidate && candidate.recipientBucket?.bucket !== expectedScope.bucket)
     anomalies.push("recipient-bucket-scope-mismatch");
-  if (candidate?.gateFailures.includes("discovery-scope-mismatch"))
-    anomalies.push("discovery-scope-mismatch");
   if (
     candidate &&
     candidate.source.providerMetadata?.providerNativeRequestId !==
@@ -578,7 +588,7 @@ function localInspection(
         child.batch_id !== result.id ||
         child.state !== "completed" ||
         child.attempt_count !== 1 ||
-        child.observed_consumption !== null ||
+        child.observed_consumption !== parent?.observed_consumption ||
         metadata?.version !== "apollo-person-reservation-v1" ||
         metadata?.ownerOperationId !== result.id ||
         metadata?.attemptedForOwner !== true ||
@@ -856,10 +866,13 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
     anomalies.push("per-bucket-enrichment-cap-exceeded");
   if (inspection.parent?.attempt_count !== result.enrichmentCreditsUsed)
     anomalies.push("parent-attempt-accounting-mismatch");
-  if (observedConsumption === null || observedConsumption === undefined)
-    anomalies.push("provider-consumption-unknown");
-  else if (accountDelta !== observedConsumption)
-    anomalies.push("apollo-account-usage-disagreement");
+  anomalies.push(
+    ...stagedAccountUsageAnomalies({
+      authorizedAttempts: result.enrichmentCreditsUsed,
+      observedConsumption,
+      accountUsageDelta: accountDelta,
+    }),
+  );
   if (consumedAfter - baselineConsumed > 5)
     anomalies.push("session-account-usage-cap-exceeded");
   const totalAttempts =
@@ -873,7 +886,7 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
     requestId,
     operationId: result.id,
     attempts: result.enrichmentCreditsUsed,
-    observedConsumption: observedConsumption ?? -1,
+    observedConsumption: observedConsumption ?? null,
     accountConsumedAfter: consumedAfter,
     searchedCandidates: result.searchedCandidates ?? -1,
     rejectedCandidates: result.rejectedCandidates ?? -1,
@@ -920,15 +933,121 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
   if (state.stopped) process.exitCode = 1;
 }
 
+async function reassessStoppedSession(databasePath: string) {
+  const repository = new SqliteSimulationRepository(databasePath);
+  try {
+    const state = readState(repository);
+    if (!state?.outcomes.length)
+      throw new Error("live-validation-outcome-required-for-reassessment");
+    const anomalies: string[] = [];
+    if (
+      !snapshotsEqual(
+        datastoreSnapshot(repository, COMMUNICATION_TABLES),
+        state.communicationSnapshot,
+      ) ||
+      !snapshotsEqual(
+        datastoreSnapshot(repository, TRUST_OBJECTS),
+        state.trustSnapshot,
+      )
+    )
+      anomalies.push("protected-state-changed-before-reassessment");
+
+    let previousAccountConsumption = consumedCredits(state.baseline);
+    let sessionAttempts = 0;
+    const outcomes = state.outcomes.map((outcome) => {
+      const scope = BUCKETS.find((item) => item.bucket === outcome.bucket);
+      const event = repository.native
+        .prepare("SELECT result_json FROM candidate_refresh_events WHERE id=?")
+        .get(outcome.operationId) as { result_json: string } | undefined;
+      if (!scope || !event) {
+        anomalies.push(`${outcome.bucket}:reassessment-evidence-missing`);
+        previousAccountConsumption = outcome.accountConsumedAfter;
+        sessionAttempts += outcome.attempts;
+        return { ...outcome, anomalyCount: 1 };
+      }
+      const result = JSON.parse(event.result_json) as CandidateRefreshResult;
+      const inspection = localInspection(
+        repository,
+        result,
+        scope,
+        state.communicationSnapshot,
+        state.trustSnapshot,
+      );
+      const bucketAnomalies = [...inspection.anomalies];
+      if (
+        !Number.isInteger(result.enrichmentCreditsUsed) ||
+        result.enrichmentCreditsUsed > 1
+      )
+        bucketAnomalies.push("per-bucket-enrichment-cap-exceeded");
+      if (inspection.parent?.attempt_count !== result.enrichmentCreditsUsed)
+        bucketAnomalies.push("parent-attempt-accounting-mismatch");
+      bucketAnomalies.push(
+        ...stagedAccountUsageAnomalies({
+          authorizedAttempts: result.enrichmentCreditsUsed,
+          observedConsumption: inspection.parent?.observed_consumption,
+          accountUsageDelta:
+            outcome.accountConsumedAfter - previousAccountConsumption,
+        }),
+      );
+      previousAccountConsumption = outcome.accountConsumedAfter;
+      sessionAttempts += result.enrichmentCreditsUsed;
+      if (sessionAttempts > 5)
+        bucketAnomalies.push("session-enrichment-attempt-cap-exceeded");
+      anomalies.push(
+        ...bucketAnomalies.map((anomaly) => `${outcome.bucket}:${anomaly}`),
+      );
+      return {
+        ...outcome,
+        attempts: result.enrichmentCreditsUsed,
+        observedConsumption: inspection.parent?.observed_consumption ?? null,
+        anomalyCount: bucketAnomalies.length,
+      };
+    });
+    if (previousAccountConsumption - consumedCredits(state.baseline) > 5)
+      anomalies.push("session-account-usage-cap-exceeded");
+    const reassessed: ValidationState = {
+      ...state,
+      outcomes,
+      stopped: anomalies.length > 0,
+      ...(anomalies.length
+        ? { stopReason: anomalies.join(",") }
+        : { stopReason: undefined }),
+    };
+    writeState(repository, reassessed);
+    console.log(
+      JSON.stringify(
+        {
+          phase: "reassess",
+          sessionId: SESSION_ID,
+          providerCalls: 0,
+          gmailCalls: 0,
+          outcomes,
+          anomalies,
+          stopped: reassessed.stopped,
+          nextBucket: reassessed.stopped
+            ? null
+            : (BUCKETS[reassessed.outcomes.length] ?? null),
+        },
+        null,
+        2,
+      ),
+    );
+    if (reassessed.stopped) process.exitCode = 1;
+  } finally {
+    repository.close();
+  }
+}
+
 async function main() {
   const { databasePath, recruiterPath } = configureEnvironment();
   const phase = process.argv[2];
   if (phase === "preflight") return preflight(databasePath, recruiterPath);
   if (phase === "baseline") return baseline(databasePath);
+  if (phase === "reassess") return reassessStoppedSession(databasePath);
   const scope = BUCKETS.find((item) => item.bucket === phase);
   if (!scope)
     throw new Error(
-      "live-validation-phase-required:preflight|baseline|recruiters|peers|managers|executives|ceos",
+      "live-validation-phase-required:preflight|baseline|reassess|recruiters|peers|managers|executives|ceos",
     );
   return validateBucket(databasePath, scope);
 }

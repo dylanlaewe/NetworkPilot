@@ -70,7 +70,11 @@ export function completeScopedCandidateRecords(input: {
     .listImportedCandidates()
     .filter((candidate) => !beforeIds.has(candidate.id));
   for (const candidate of added) {
-    if (!matchesBucketScope(candidate.recipientBucket, input.scope)) {
+    const classification = candidate.recipientBucket;
+    const classifiedInRequestedScope =
+      classification?.bucket === input.scope.bucket &&
+      (!input.scope.earlyCareerOnly || classification.earlyCareer);
+    if (!matchesBucketScope(classification, input.scope) && !classifiedInRequestedScope) {
       candidate.gateFailures = [
         ...new Set([...candidate.gateFailures, "discovery-scope-mismatch"]),
       ];

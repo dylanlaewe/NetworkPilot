@@ -125,7 +125,7 @@ class FixtureTransport implements ApolloHttpTransport {
   private searchCount = 0;
   constructor(
     private readonly candidate: ReturnType<typeof person>,
-    private readonly creditsConsumed = 1,
+    private readonly creditsConsumed: number | null = 1,
   ) {}
   async request(
     input: Parameters<ApolloHttpTransport["request"]>[0],
@@ -141,7 +141,9 @@ class FixtureTransport implements ApolloHttpTransport {
       body: JSON.stringify({
         person: this.candidate,
         match_confidence: "high",
-        credits_consumed: this.creditsConsumed,
+        ...(this.creditsConsumed === null
+          ? {}
+          : { credits_consumed: this.creditsConsumed }),
       }),
     };
   }
@@ -286,6 +288,80 @@ describe("offline scoped Apollo orchestration", () => {
       observedConsumption: 5,
     });
     canonical.close();
+  });
+
+  it("persists missing response consumption as unknown without inventing account attribution", async () => {
+    const { canonical, topology } = setup();
+    const value = person(
+      "missing-consumption-001",
+      "Senior Data Engineer",
+      "senior",
+      "Unknown Consumption Technology Employer",
+    );
+    const transport = new FixtureTransport(value, null);
+    const provider = new ScopedApolloProvider({
+      config,
+      transport,
+      now: () => at,
+      sleep: async () => undefined,
+      datasetClassification: "authorized-provider",
+      localDate: () => "2026-09-28",
+      personReservations: new SqliteApolloPersonReservationStore(canonical),
+      existingProviderIds: () => new Set(),
+    });
+    try {
+      const result = await refreshScopedCandidateReserve({
+        requestId: "missing-consumption-request",
+        scope: { bucket: "peers" },
+        requested: 1,
+        usableBefore: 0,
+        policy: { ...policy, maximumPerBatch: 1 },
+        store: new SqliteScopedDiscoveryStore(canonical, { topology }),
+        provider,
+        allowProvider: true,
+        now: () => at,
+      });
+      expect(result).toMatchObject({
+        enrichmentCreditsUsed: 1,
+        enrichedCandidates: 1,
+        candidatesAdded: 1,
+      });
+      expect(canonical.getApolloProviderStatus("2026-09-28")).toMatchObject({
+        attempted: 1,
+        estimatedExposure: 1,
+        observedConsumption: null,
+        knownObservedConsumption: 0,
+        hasUnknownConsumption: true,
+      });
+      expect(
+        canonical.native
+          .prepare(
+            "SELECT state,attempt_count,estimated_max_exposure,observed_consumption FROM provider_operations WHERE candidate_count>0",
+          )
+          .get(),
+      ).toEqual({
+        state: "completed",
+        attempt_count: 1,
+        estimated_max_exposure: 1,
+        observed_consumption: null,
+      });
+      expect(
+        canonical.native
+          .prepare(
+            "SELECT state,attempt_count,observed_consumption,bucket_scope_json FROM provider_operations WHERE candidate_count=0",
+          )
+          .get(),
+      ).toMatchObject({
+        state: "completed",
+        attempt_count: 1,
+        observed_consumption: null,
+        bucket_scope_json: expect.stringContaining(
+          '"lifecycle":"completed-imported"',
+        ),
+      });
+    } finally {
+      canonical.close();
+    }
   });
 
   it("allows one People Match call for concurrent distinct requests sharing an Apollo ID", async () => {

@@ -92,6 +92,17 @@ async function renderCandidatesPage({
     showResult = params.added !== undefined;
   const refreshRequestId = crypto.randomUUID(),
     apolloConfig = readApolloConfig(process.env);
+  const workspaceCandidates = data.reserve.map((candidate) => ({
+    ...candidate,
+    ...(candidate.employerTrust?.state === "unverified" && candidate.companyId
+      ? {
+          companyTrustReview: {
+            commandId: `company-trust-ui:${crypto.randomUUID()}`,
+            reviewedAt: new Date().toISOString(),
+          },
+        }
+      : {}),
+  }));
   const health =
     data.safety.apolloExposure >= apolloConfig.maxEnrichmentsPerDay
       ? "Candidate refresh available tomorrow"
@@ -140,7 +151,7 @@ async function renderCandidatesPage({
       bucketNavigation={bucketNavigation}
     >
       <CandidatesWorkspace
-        candidates={data.reserve}
+        candidates={workspaceCandidates}
         initialSelectedId={params.selected}
         initialFilterOpen={params.filters === "open"}
         refreshControl={refresh}

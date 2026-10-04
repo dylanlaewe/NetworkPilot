@@ -16,3 +16,16 @@ export const APOLLO_PEOPLE={
  unavailable:person("unavailable-001","Data Engineer","senior","unavailable",[{start:"2018-01-01",current:true}]),
  suppressed:person("suppressed-001","Data Engineer","senior","verified",[{start:"2018-01-01",current:true}]),
 } as const;
+
+/** Sanitized live-contract fixture: People Match can succeed without a cost scalar. */
+export const APOLLO_ENRICHMENT_WITHOUT_CREDIT_CONSUMPTION = {
+  person: {
+    ...APOLLO_PEOPLE.senior,
+    id: "live-shape-no-consumption-001",
+    first_name: "Sanitized",
+    last_name: "Provider Fixture",
+    email: "sanitized.provider.fixture@example.test",
+    match_confidence: "high",
+  },
+  request_id: 424242,
+} as const;

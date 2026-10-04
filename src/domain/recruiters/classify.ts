@@ -15,9 +15,11 @@ export function classifyRecruiter(input:{title:string;employerName:string;intern
   const seniority=has(title,["coordinator","intern","assistant"])?"coordinator":has(title,["chief","vice president","vp","head of"])?"executive":has(title,["manager","lead"])?"manager":has(title,["senior","sr"])?"senior-recruiter":titleMatch?"recruiter":"unknown";
   const recruiterType:RecruiterType=earlyCareerRelevance?"early-career-recruiter":technicalRelevance?"technical-recruiter":has(title,["talent acquisition partner","talent partner"])?"talent-acquisition-partner":seniority==="manager"?"recruiting-manager":titleMatch?"general-recruiter":"ambiguous";
   const recruitingDomain:RecruitingDomain=reviewedInternal?input.reviewedRecruitingDomain!:earlyCareerRelevance?"early-career":technicalRelevance?"technical-data-ai":titleMatch?"general":"unknown";
-  const experiencePass=input.minimumExperience!==null&&input.maximumExperience!==null&&input.maximumExperience>=2&&input.minimumExperience<=20;
-  if(!titleMatch)codes.push("recruiter-title-ambiguous");if(excluded)codes.push("recruiter-title-excluded");if(agency)codes.push("recruiter-agency-employer");else if(!internal)codes.push("recruiter-employer-ambiguous");if(seniority==="coordinator"||seniority==="executive"&&!reviewedInternal)codes.push("recruiter-seniority-excluded");if(!experiencePass)codes.push("recruiter-experience-unsupported");
-  const accepted=titleMatch&&!excluded&&internal&&!agency&&seniority!=="coordinator"&&(seniority!=="executive"||reviewedInternal)&&experiencePass;
+  // Relationship-bucket eligibility is based on current recruiter role and
+  // employer evidence. Total career history is not recruiter tenure and must
+  // not impose the legacy 2–20 year recruiter-track cap.
+  if(!titleMatch)codes.push("recruiter-title-ambiguous");if(excluded)codes.push("recruiter-title-excluded");if(agency)codes.push("recruiter-agency-employer");else if(!internal)codes.push("recruiter-employer-ambiguous");if(seniority==="coordinator"||seniority==="executive"&&!reviewedInternal)codes.push("recruiter-seniority-excluded");
+  const accepted=titleMatch&&!excluded&&internal&&!agency&&seniority!=="coordinator"&&(seniority!=="executive"||reviewedInternal);
   const score=Math.max(0,Math.min(100,45+(internal?20:0)+(technicalRelevance?20:0)+(earlyCareerRelevance?15:0)+(seniority==="senior-recruiter"?5:seniority==="manager"?-5:0)-(recruitingDomain==="general"?10:0)));
   return{track:titleMatch?"recruiter":"professional",recruiterType,recruitingDomain,internalStatus:agency?"agency":internal?"internal":"ambiguous",seniority,technicalRelevance,earlyCareerRelevance,accepted,score,explanationCodes:codes.length?codes:["recruiter-qualified"],classificationVersion:RECRUITER_CLASSIFICATION_VERSION,relevanceVersion:RECRUITER_RELEVANCE_VERSION};
 }

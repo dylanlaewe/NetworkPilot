@@ -465,6 +465,43 @@ describe("bucket persistence and reserve integration", () => {
     const added=addBucketDraftsFromRepository(r,1,{bucket:"recruiters"},FIXTURE_AT,{includeSecondary:false});
     expect(added.candidateIds).toEqual([candidate.id]);
   });
+  it("removes a stale same-scope mismatch while preserving the employer-trust gate", () => {
+    const r = repo(), candidate = add(r, "recruiters", 1);
+    const row = r.native
+      .prepare(
+        "SELECT normalized_snapshot_json value FROM imported_candidates WHERE id=?",
+      )
+      .get(candidate.id) as { value: string };
+    const stale = JSON.parse(row.value) as typeof candidate;
+    stale.gateFailures = [
+      ...new Set([...stale.gateFailures, "discovery-scope-mismatch"]),
+    ];
+    r.native
+      .prepare(
+        "UPDATE imported_candidates SET normalized_snapshot_json=? WHERE id=?",
+      )
+      .run(JSON.stringify(stale), candidate.id);
+    r.native
+      .prepare(
+        "INSERT INTO provider_operations(id,provider_id,batch_id,operation,state,candidate_count,estimated_max_exposure,observed_consumption,attempt_count,failure_reason,occurred_at_utc,bucket_scope_json) VALUES(?,'apollo',?,'enrichment','completed',1,1,NULL,1,NULL,?,?)",
+      )
+      .run(
+        candidate.batchId,
+        candidate.batchId,
+        FIXTURE_AT.toISOString(),
+        JSON.stringify({ bucket: "recruiters" }),
+      );
+    expect(r.listImportedCandidates()[0]).toMatchObject({
+      gateFailures: expect.not.arrayContaining(["discovery-scope-mismatch"]),
+      employerTrust: { state: "unverified" },
+    });
+    trustCandidateCompany(r, candidate, "stale-scope-trust-one");
+    expect(r.listImportedCandidates()[0]).toMatchObject({
+      state: "eligible",
+      gateFailures: [],
+      employerTrust: { state: "trusted-operating" },
+    });
+  });
   it("uses newly trusted current supply for Replace selection", () => {
     const r=repo(),active=add(r,"recruiters",1),replacement=add(r,"recruiters",2);
     setCandidateCompanyTrust(r,active,"trusted-operating","replace-active-trust");

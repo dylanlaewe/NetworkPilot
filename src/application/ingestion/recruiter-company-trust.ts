@@ -1,4 +1,4 @@
-import { bucketAwareGateFailures, classifyRecipientBucket, verifiedBucketEvidence } from "@/domain/recipient-buckets";
+import { bucketAwareGateFailures, classifyRecipientBucket, verifiedBucketEvidence, type BucketScope } from "@/domain/recipient-buckets";
 import { classifyRecruiter, classifyRecruiterEmployerDomain, type RecruiterClassification, type RecruitingDomain } from "@/domain/recruiters";
 import type { CompanyTrustResolution } from "@/domain/company-trust";
 import type { ImportedCandidateSnapshot } from "./types";
@@ -38,13 +38,21 @@ export function qualifyRecruiterWithCompanyTrust(input: {
 }
 
 /** Projects current company trust onto mutable candidate supply; sent snapshots are not touched. */
-export function applyCurrentCompanyTrust(candidate: ImportedCandidateSnapshot, trust: CompanyTrustResolution): ImportedCandidateSnapshot {
+export function applyCurrentCompanyTrust(candidate: ImportedCandidateSnapshot, trust: CompanyTrustResolution, expectedScope?: BucketScope): ImportedCandidateSnapshot {
   const next = structuredClone(candidate); next.employerTrust = trust;
   if ((next.outreachTrack ?? next.recruiterClassification?.track) !== "recruiter") return next;
   const opportunity = Number(next.recruiterClassification?.explanationCodes.find((code) => code.startsWith("target-company-opportunity:"))?.split(":")[1] ?? 0);
   const result = qualifyRecruiterWithCompanyTrust({title: next.source.currentTitle, employerName: next.source.currentOrganization.name, employerDomain: next.source.currentOrganization.domain, minimumExperience: next.experience.minimumSupportedYears, maximumExperience: next.experience.maximumSupportedYears, trust, evidence: next.recipientBucket?.evidence ?? next.source.responsibilityEvidence, companyOpportunity: Number.isFinite(opportunity) ? opportunity : 0});
   next.recruiterClassification = result.classification;
-  const retained = next.gateFailures.filter((code) => !dynamicRecruiterGate(code));
+  const staleSameBucketMismatch =
+    expectedScope &&
+    next.recipientBucket?.bucket === expectedScope.bucket &&
+    (!expectedScope.earlyCareerOnly || next.recipientBucket.earlyCareer);
+  const retained = next.gateFailures.filter(
+    (code) =>
+      !dynamicRecruiterGate(code) &&
+      !(code === "discovery-scope-mismatch" && staleSameBucketMismatch),
+  );
   const retainedReview=retained.filter((code)=>code==="discovery-scope-mismatch"||code==="geography-ambiguous"||code==="provider-match-confidence-review"||code.startsWith("recipient-bucket:"));
   const hard = [...retained.filter((code)=>!retainedReview.includes(code)), ...result.hardGates], review = [...retainedReview,...result.reviewGates];
   if (next.recipientBucket) {

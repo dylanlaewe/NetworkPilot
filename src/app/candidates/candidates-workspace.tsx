@@ -7,6 +7,11 @@ import type {
 } from "@/application/daily-command-center";
 import styles from "./candidates-command.module.css";
 import type { BucketNavigationData } from "@/app/recipient-bucket-navigation";
+import { reviewCandidateCompanyTrust } from "./actions";
+
+export type CandidateWorkspaceRow = ReserveCandidate & {
+  companyTrustReview?: { commandId: string; reviewedAt: string };
+};
 
 type Density = "comfortable" | "compact";
 type Filters = {
@@ -49,6 +54,8 @@ function relevance(candidate: ReserveCandidate) {
   return `${roleLabel(candidate.functionName)} experience in ${candidate.industry}.`;
 }
 function companyEvidence(candidate: ReserveCandidate) {
+  if (candidate.employerTrust?.state === "unverified")
+    return "Provider-backed employer identity is stored, but operating-employer trust has not been reviewed.";
   if (candidate.companyKind === "preferred")
     return "Reviewed preferred employer identity is present in the candidate record.";
   if (candidate.companyKind === "discovered")
@@ -56,6 +63,14 @@ function companyEvidence(candidate: ReserveCandidate) {
   return candidate.companyId
     ? "A stable employer identity is present in the reviewed candidate record."
     : "Employer evidence is limited; eligibility remains fail-closed where required.";
+}
+function employerReviewRequired(candidate: ReserveCandidate) {
+  return (
+    candidate.recipientBucket?.bucket === "recruiters" &&
+    candidate.employerTrust?.state === "unverified" &&
+    Boolean(candidate.employerTrust.identityVerified) &&
+    Boolean(candidate.companyId)
+  );
 }
 function history(candidate: ReserveCandidate) {
   if (candidate.stage === "already-contacted")
@@ -90,7 +105,7 @@ export function CandidatesWorkspace({
   bucketNavigation,
   actionableCapacity,
 }: {
-  candidates: ReserveCandidate[];
+  candidates: CandidateWorkspaceRow[];
   initialSelectedId?: string;
   initialFilterOpen?: boolean;
   refreshControl: ReactNode;
@@ -125,6 +140,9 @@ export function CandidatesWorkspace({
         ].sort(),
       [candidates],
     );
+  const employerReviewCount = candidates.filter(
+    (row) => matchesBucket(row, bucketNavigation) && employerReviewRequired(row),
+  ).length;
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return candidates.filter(
@@ -137,7 +155,10 @@ export function CandidatesWorkspace({
         (filters.role === "all" || row.functionName === filters.role) &&
         (filters.industry === "all" || row.industry === filters.industry) &&
         (filters.geography === "all" || row.geography === filters.geography) &&
-        (filters.status === "all" || row.stage === filters.status) &&
+        (filters.status === "all" ||
+          (filters.status === "employer-review-required"
+            ? employerReviewRequired(row)
+            : row.stage === filters.status)) &&
         (!query ||
           `${row.recipient} ${row.title} ${row.company} ${row.functionName} ${row.industry}`
             .toLowerCase()
@@ -157,7 +178,9 @@ export function CandidatesWorkspace({
     filters.industry !== "all" ? filters.industry : null,
     filters.geography !== "all" ? filters.geography : null,
     filters.status !== "qualified-available"
-      ? (stageLabel[filters.status as ReserveStage] ?? filters.status)
+      ? filters.status === "employer-review-required"
+        ? "Employer review required"
+        : (stageLabel[filters.status as ReserveStage] ?? filters.status)
       : null,
   ].filter(Boolean) as string[];
   const select = (id: string) => {
@@ -233,6 +256,21 @@ export function CandidatesWorkspace({
           {active.length || search ? (
             <button type="button" onClick={clear}>
               Clear
+            </button>
+          ) : null}
+          {employerReviewCount > 0 ? (
+            <button
+              type="button"
+              onClick={() =>
+                setFilters((current) => ({
+                  ...current,
+                  track: "recruiter",
+                  status: "employer-review-required",
+                }))
+              }
+            >
+              {employerReviewCount} employer review
+              {employerReviewCount === 1 ? "" : "s"} required
             </button>
           ) : null}
         </div>
@@ -332,6 +370,7 @@ export function CandidatesWorkspace({
               options={[
                 ["qualified-available", "Available"],
                 ["all", "All states"],
+                ["employer-review-required", "Employer review required"],
                 ["in-draft-queue", "In Drafts"],
                 ["cooldown", "Available later"],
                 ["suppressed", "Do not contact"],
@@ -415,7 +454,9 @@ export function CandidatesWorkspace({
                       {candidate.stage === "suppressed" ? "×" : "·"}
                     </i>
                     {candidate.bucketReviewState === "review-required"
-                      ? "Review needed"
+                      ? employerReviewRequired(candidate)
+                        ? "Employer review"
+                        : "Review needed"
                       : stageLabel[candidate.stage]}
                   </em>
                 </span>
@@ -460,20 +501,95 @@ export function CandidatesWorkspace({
                   <dd>{stageLabel[selected.stage]}</dd>
                 </div>
               </dl>
-              {selected.bucketReviewState === "review-required" ? (
+              {selected.bucketReviewState === "review-required" &&
+              !employerReviewRequired(selected) ? (
                 <Link
                   href={`/candidate-review?candidate=${encodeURIComponent(selected.id)}`}
                 >
                   Review bucket evidence
                 </Link>
               ) : null}
+              {employerReviewRequired(selected) &&
+              selected.companyTrustReview ? (
+                <section className={styles.employerReview}>
+                  <h3>Employer review required</h3>
+                  <strong>{selected.company}</strong>
+                  <dl>
+                    <div>
+                      <dt>Domain</dt>
+                      <dd>{selected.employerIdentity?.domain ?? "Not provided"}</dd>
+                    </div>
+                    <div>
+                      <dt>Provider identity</dt>
+                      <dd>
+                        {selected.employerIdentity?.providerNamespace &&
+                        selected.employerIdentity.providerEmployerId
+                          ? `${selected.employerIdentity.providerNamespace} · ${selected.employerIdentity.providerEmployerId}`
+                          : "Domain-backed identity"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Current trust</dt>
+                      <dd>Unverified</dd>
+                    </div>
+                  </dl>
+                  <p>
+                    This recruiter remains review-required, non-actionable, and
+                    excluded from drafting until the employer is trusted.
+                  </p>
+                  <form action={reviewCandidateCompanyTrust}>
+                    <input type="hidden" name="candidateId" value={selected.id} />
+                    <input
+                      type="hidden"
+                      name="expectedVersion"
+                      value={selected.employerTrust?.version ?? 0}
+                    />
+                    <input
+                      type="hidden"
+                      name="commandId"
+                      value={selected.companyTrustReview.commandId}
+                    />
+                    <input
+                      type="hidden"
+                      name="reviewedAt"
+                      value={selected.companyTrustReview.reviewedAt}
+                    />
+                    <label>
+                      <span>Review reason</span>
+                      <textarea
+                        name="reason"
+                        maxLength={500}
+                        required
+                        placeholder="Record the evidence supporting this trust decision."
+                      />
+                    </label>
+                    <div>
+                      <button name="decision" value="trusted-operating">
+                        Trust operating employer
+                      </button>
+                      <button
+                        name="decision"
+                        value="disallowed-recruiting-service"
+                      >
+                        Mark recruiting/staffing service
+                      </button>
+                    </div>
+                  </form>
+                  <small>
+                    Leave unverified by taking no action; the candidate remains
+                    blocked.
+                  </small>
+                </section>
+              ) : null}
               <div className={styles.evidenceGroups}>
                 <section>
                   <h3>Bucket evidence</h3>
                   <p>
                     {selected.bucketReviewState === "review-required"
-                      ? (selected.bucketReviewReason ??
-                        "Classification evidence needs review; this person is not actionable.")
+                      ? employerReviewRequired(selected)
+                        ? "The recruiter bucket is supported, but the provider-only employer must be reviewed before this person is actionable."
+                        : (selected.bucketReviewReason ??
+                          "Classification evidence needs review; this person is not actionable.")
                       : selected.bucketReviewState === "legacy-unclassified"
                         ? "No bucket was stored for this record. It has not been inferred."
                         : selected.bucketEvidenceReferences?.length
@@ -512,14 +628,18 @@ export function CandidatesWorkspace({
                 <h3>Planning eligibility</h3>
                 <strong>
                   {selected.bucketReviewState === "review-required"
-                    ? "Review needed"
+                    ? employerReviewRequired(selected)
+                      ? "Employer review required"
+                      : "Review needed"
                     : selected.stage === "qualified-available"
                       ? "Eligible for a future plan"
                       : stageLabel[selected.stage]}
                 </strong>
                 <p>
                   {selected.bucketReviewState === "review-required"
-                    ? "This candidate is excluded from actionable capacity until bucket evidence is reviewed."
+                    ? employerReviewRequired(selected)
+                      ? "This candidate is excluded from actionable capacity until the audited employer review is complete."
+                      : "This candidate is excluded from actionable capacity until bucket evidence is reviewed."
                     : selected.stage === "qualified-available"
                       ? "Company cooldown and one-per-company protections still apply when planning."
                       : "NetworkPilot will not plan this person while the current state applies."}

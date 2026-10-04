@@ -255,6 +255,16 @@ export function loadDailyCommandCenter(
           company: c.source.currentOrganization.name,
           companyId,
           companyKind,
+          employerTrust: c.employerTrust,
+          employerIdentity: {
+            domain: c.source.currentOrganization.domain ?? null,
+            providerNamespace:
+              c.source.currentOrganization.providerId
+                ? c.source.sourceProviderId
+                : null,
+            providerEmployerId:
+              c.source.currentOrganization.providerId ?? null,
+          },
           title: c.source.currentTitle,
           industry: c.source.industrySignals[0] ?? "Unclassified",
           geography: c.source.location,
