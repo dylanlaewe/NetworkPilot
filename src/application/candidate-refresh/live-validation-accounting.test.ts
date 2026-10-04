@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   reservationAccountingMatches,
+  scopedClassificationBypassAnomalies,
   stagedAccountUsageAnomalies,
 } from "./live-validation-accounting";
 
@@ -64,5 +65,42 @@ describe("staged Apollo account-usage evidence", () => {
         parentObservedConsumption: 1,
       }),
     ).toBe(false);
+  });
+
+  it("accepts a fail-closed scoped classification mismatch", () => {
+    expect(
+      scopedClassificationBypassAnomalies({
+        expectedBucket: "managers",
+        actualBucket: null,
+        reviewState: "review-required",
+        lifecycle: "review-required",
+        gateFailures: [
+          "recipient-bucket:responsibility-evidence-missing",
+          "discovery-scope-mismatch",
+        ],
+        qualifiedCandidatesAdded: 0,
+        draftPresent: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    { lifecycle: "eligible" },
+    { gateFailures: [] },
+    { qualifiedCandidatesAdded: 1 },
+    { draftPresent: true },
+  ])("stops when a scope mismatch bypasses a fail-closed gate", (override) => {
+    expect(
+      scopedClassificationBypassAnomalies({
+        expectedBucket: "executives",
+        actualBucket: null,
+        reviewState: "review-required",
+        lifecycle: "review-required",
+        gateFailures: ["discovery-scope-mismatch"],
+        qualifiedCandidatesAdded: 0,
+        draftPresent: false,
+        ...override,
+      }),
+    ).toEqual(["recipient-bucket-scope-mismatch-bypass"]);
   });
 });

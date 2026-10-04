@@ -6,6 +6,7 @@ import { loadEnvFile } from "node:process";
 import type { CandidateRefreshResult } from "@/application/candidate-refresh";
 import {
   reservationAccountingMatches,
+  scopedClassificationBypassAnomalies,
   stagedAccountUsageAnomalies,
 } from "@/application/candidate-refresh/live-validation-accounting";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
@@ -562,8 +563,18 @@ function localInspection(
   if (result.enrichedCandidates !== candidates.length)
     anomalies.push("enriched-candidate-count-mismatch");
   if (candidates.length > 1) anomalies.push("multiple-candidates-imported");
-  if (candidate && candidate.recipientBucket?.bucket !== expectedScope.bucket)
-    anomalies.push("recipient-bucket-scope-mismatch");
+  if (candidate)
+    anomalies.push(
+      ...scopedClassificationBypassAnomalies({
+        expectedBucket: expectedScope.bucket,
+        actualBucket: candidate.recipientBucket?.bucket,
+        reviewState: candidate.recipientBucket?.reviewState,
+        lifecycle: candidate.state,
+        gateFailures: candidate.gateFailures,
+        qualifiedCandidatesAdded: result.qualifiedCandidatesAdded,
+        draftPresent: Boolean(draft),
+      }),
+    );
   if (
     candidate &&
     candidate.source.providerMetadata?.providerNativeRequestId !==

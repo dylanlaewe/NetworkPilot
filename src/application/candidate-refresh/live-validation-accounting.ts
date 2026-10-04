@@ -45,3 +45,22 @@ export function reservationAccountingMatches(input: {
     input.metadataObservedConsumption === input.parentObservedConsumption
   );
 }
+
+export function scopedClassificationBypassAnomalies(input: {
+  expectedBucket: string;
+  actualBucket: string | null | undefined;
+  reviewState: string | null | undefined;
+  lifecycle: string;
+  gateFailures: readonly string[];
+  qualifiedCandidatesAdded: number;
+  draftPresent: boolean;
+}): string[] {
+  if (input.actualBucket === input.expectedBucket) return [];
+  const mismatchEnforced =
+    input.reviewState === "review-required" &&
+    input.lifecycle !== "eligible" &&
+    input.gateFailures.includes("discovery-scope-mismatch") &&
+    input.qualifiedCandidatesAdded === 0 &&
+    !input.draftPresent;
+  return mismatchEnforced ? [] : ["recipient-bucket-scope-mismatch-bypass"];
+}
