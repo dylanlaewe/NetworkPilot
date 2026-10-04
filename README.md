@@ -79,6 +79,7 @@ New plans rank by versioned `targeting-v2`, which consumes persisted `recipient-
 - `npm run check:no-remote-fonts` — fail if application source references Google-hosted fonts
 - `npm run check:no-email-send` — permit only the reviewed explicit Gmail draft-send path and reject generic, bulk, scheduled, background, SMTP, or bypass delivery paths
 - `npm run check:no-implicit-migrations` — reject runtime imports of migration authority and the retired implicit migration API
+- `npm run check:security-audit` — require an empty production audit and permit only the exact temporary development-only advisory exception documented in `docs/security/accepted-dev-advisories.md`
 - `npm run manual-send:list` — list confirmable pilot drafts with privacy-safe operation-derived IDs
 - `npm run manual-send:confirm` — after sending independently in Gmail, record an explicit operator confirmation by listed ID
 - `npm run manual-send:bounce` — atomically record a manual attempt and human-reported address-not-found hard bounce

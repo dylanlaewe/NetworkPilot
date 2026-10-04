@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-09-28 after merging the datastore-topology hotfix. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-04 after integrating the scoped provider, audited company trust, and bounded development-only security exception. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Exact merged product/code baseline on `main`: `ce5e7d5e59af6ce929658dfc8a8fdc881e402eff` (`fix: preflight five-bucket datastore topology`). The handoff itself is a later documentation-only commit.
+- Exact accepted product/security baseline on `main`: `7dabece0b63a012817c90e49a202224dc14cfeb4` (`security: recheck audit remediation`). The handoff itself is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
-- Five-bucket production integration, explicit migration boundary, and datastore/capability preflight are merged.
+- Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` defaults to `false` and remains OFF unless its value is exactly `true`.
-- No running Next.js production PID or listener was observable when this handoff was written. The previously observed PID `86905` had exited. Its exact loaded Git SHA was not independently encoded in observable process metadata. No restart or deployment was performed during this merge sequence.
+- No running Next.js production PID or listener was observable when this handoff was updated. No restart or deployment was performed during this integration sequence.
 
 ## Datastore topology
 
@@ -22,7 +22,7 @@ See [the authoritative topology](../datastore-topology.md).
 
 | Role | Default path or configuration | Authority and schema contract |
 | --- | --- | --- |
-| Canonical operational | `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`, default `data/apollo-operational-scale-enrichment.sqlite` | Sole owner of real imported candidate/outreach state and all mutable five-bucket state; schema `0021` for five-bucket use |
+| Canonical operational | `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`, default `data/apollo-operational-scale-enrichment.sqlite` | Sole owner of real imported candidate/outreach state and all mutable five-bucket/trust state; schema `0022` is required when five-bucket mode is enabled |
 | Application/system | `NETWORKPILOT_DATABASE_PATH`, default `data/networkpilot.sqlite` | Simulation and system state; role contract through `0020` |
 | Recruiter evidence | `NETWORKPILOT_RECRUITER_DATABASE_PATH`, default `data/apollo-recruiter-enrichment.sqlite` | Read-only source evidence; legitimate schema contract `0011` |
 | Professional search cache | `data/apollo-operational-scale-search.sqlite` | Scratch/source cache with its own validated lineage |
@@ -78,9 +78,16 @@ Do not duplicate or casually edit the fixture bodies in documentation. Change th
 
 Apollo uses server-side search and controlled enrichment adapters with a shared persisted account budget across all buckets. Search does not establish verified-email evidence; only accepted enrichment evidence may pass that hard gate. Phone, personal-email, waterfall, scraping, and browser-automation paths are outside the approved architecture.
 
-Bucket-scoped sourcing must complete the role-aware local preflight before provider readiness, budget authorization, or any provider request. It validates canonical `0021`, each source store against its own legitimate schema, repository/capability ownership, downstream reserve projection, bucket support, and shared budget. The atomic claim rechecks the budget with a fresh timestamp. Source databases may legitimately remain on older schema versions.
+Bucket-scoped sourcing must complete the role-aware local preflight before provider readiness, budget authorization, or any provider request. It validates canonical `0022`, each source store against its own legitimate schema, repository/capability ownership, downstream reserve projection, bucket support, and shared budget. The atomic claim rechecks the budget with a fresh timestamp. Source databases may legitimately remain on older schema versions.
 
 The failed September 27 isolated validation consumed 20 real Apollo credits while moving provider usage from 220 to 240, but produced no completed canonical imports. Those credits are represented as external validation spend for that provider day, not fabricated candidate success. Another live run requires separate authorization, a fresh account-usage baseline, and exactly one bounded attempt. Never start an automatic second run.
+
+## Dependency security
+
+- `npm audit --omit=dev` reports zero production vulnerabilities.
+- The raw full audit reports five propagated high-severity findings from one development-only advisory: `GHSA-vfj7-8cjw-p6xm` / `CVE-2026-93687` in `braces@3.0.3`.
+- `npm run check:security-audit` accepts only the exact reviewed dev-only dependency path, advisory graph, breaking remediation, registry version, ESLint configuration, and review window. Any drift fails closed.
+- The exception expires on 2026-11-03 and must be re-reviewed then or earlier if a compatible fix appears. Do not force npm's breaking Next 14 downgrade.
 
 ## Gmail safety
 
@@ -98,31 +105,26 @@ The failed September 27 isolated validation consumed 20 real Apollo credits whil
 - Reduced-motion desktop/mobile browser validation: PASS.
 - Explicit migration boundary and no-implicit-migrations guard: PASS.
 - Datastore role/capability/preflight hotfix: PASS and independently reviewed.
-- Offline mocked production orchestration across all five buckets, including heterogeneous canonical `0021` and recruiter-source `0011`: PASS.
+- Offline mocked production orchestration across all five buckets, including heterogeneous canonical `0022` and recruiter-source `0011`: PASS.
+- Production scoped Apollo adapter and shared accounting/reconciliation path: PASS offline and independently reviewed.
+- Audited company-trust boundary with exact stable identity and fail-closed recruiter qualification: PASS offline and independently reviewed.
+- Exact development-only security exception and enforcement gate: PASS and independently reviewed.
 
 Mocked orchestration is not live provider validation.
 
 ## Current blocker
 
-Five-bucket production activation remains blocked until:
+Offline implementation is complete. Five-bucket production activation remains blocked on a separately authorized tiny live Apollo validation and evaluation of its real provider, classification, trust, accounting, persistence, and draft-quality results.
 
-1. the scoped production Apollo adapter/wiring is validated; and
-2. a separately authorized bounded live run proves real classification and downstream draft quality.
-
-Concrete offline entry points for that task:
-
-- `src/application/candidate-refresh/scoped.ts` defines the provider/preflight orchestration contract.
-- `src/infrastructure/sqlite/candidate-refresh.ts` currently accepts only an injected `scopedProvider`; normal runtime supplies none, and readiness intentionally reports `provider-not-configured`.
-- `src/infrastructure/providers/apollo/adapter.ts` is the existing legacy search/enrichment adapter. Its mapper currently emits identity, employment, organization, experience, email, and seniority evidence, but no `responsibilityEvidence`.
-- `src/domain/recipient-buckets/index.ts` requires exactly one verified responsibility scope for non-recruiters and verified internal/domain evidence plus accepted recruiter qualification for recruiters. Simply wiring the legacy Apollo adapter cannot prove leadership buckets. Missing responsibility evidence must remain review-required; do not infer scope from title.
-- Primary regressions are `src/infrastructure/sqlite/datastore-preflight.integration.test.ts`, `src/infrastructure/sqlite/scoped-discovery.test.ts`, `src/infrastructure/providers/apollo/adapter.test.ts`, `src/infrastructure/sqlite/buckets.integration.test.ts`, and `src/application/command-center-drafts/bucket-copy.test.ts`.
+The intended live validation is sequential, capped at five enrichment attempts total and one per bucket, with full local-pipeline inspection after each attempt. Stop on the first accounting, provider-shape, duplicate, datastore, migration, trust, scope, persistence, or overage anomaly. Review-required outcomes are valid; do not force qualification. No Gmail action or production mutation is part of this validation.
 
 ## Production state
 
 - Five-bucket flag: OFF.
 - Additive migration `0021_recipient_buckets.sql` already exists in the production operational database because of the documented pre-activation incident. Do not down-migrate it and do not restore an older database over later legitimate history.
+- Migration `0022_company_trust.sql` is merged but was not present in the operational database during the 2026-10-04 read-only inspection. Applying it is a later explicit production approval gate, not part of live validation.
 - Historical comparison found no unexplained candidate, outreach, Gmail-operation, suppression, or snapshot changes.
-- The datastore hotfix merge and validation made zero production database writes and performed no production restart.
+- The provider/trust/security integration and validation made zero production database writes, provider calls, Gmail calls, deployments, or restarts.
 - Before any future production action, re-establish the actual runtime/process state and take a verified backup when the task authorizes mutation.
 
 ## Engineering invariants
@@ -138,6 +140,4 @@ Concrete offline entry points for that task:
 
 ## Next recommended task
 
-Do not implement this from the handoff task:
-
-> Validate and, if needed, implement the production scoped Apollo adapter offline before requesting another live provider run.
+Request explicit authorization for the tiny staged live Apollo validation. Do not call Apollo until that authorization is current and specific. The maximum is five sequential enrichment attempts total, one per bucket, with no second batch and no Gmail.

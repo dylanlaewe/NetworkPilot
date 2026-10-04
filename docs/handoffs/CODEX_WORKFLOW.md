@@ -29,3 +29,9 @@ Repository commits and docs are NetworkPilot's shared engineering memory. A new 
 - Use stronger reasoning for architecture, safety, migrations, provider accounting, and production-state work. Lighter workers are appropriate for bounded searches, documentation checks, and focused test execution.
 - Preserve history; never force-push, rebase approved shared history, or overwrite production state without explicit authority.
 - Record model/runtime usage only when it is actually observable. Do not make unmeasured cost-saving or efficiency claims.
+
+## Required merge validation
+
+- Run the focused tests for the changed subsystem, then the full unit/integration suite, typecheck, zero-warning lint, production build, migration guard, Gmail-send guard, remote-font guard, and `git diff --check`.
+- Run `npm run check:security-audit` explicitly. The full raw npm audit is intentionally nonzero only for the exact temporary development-only exception documented in `docs/security/accepted-dev-advisories.md`; the production audit must remain empty.
+- Treat any security-gate drift or the 2026-11-03 exception expiry as a fresh review requirement. Do not force npm's breaking remediation.
