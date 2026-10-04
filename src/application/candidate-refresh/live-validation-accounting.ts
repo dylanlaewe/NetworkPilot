@@ -31,3 +31,17 @@ export function stagedAccountUsageAnomalies(input: {
     anomalies.push("apollo-account-usage-disagreement");
   return anomalies;
 }
+
+export function reservationAccountingMatches(input: {
+  childObservedConsumption: number | null;
+  metadataObservedConsumption: unknown;
+  parentObservedConsumption: number | null | undefined;
+}): boolean {
+  // The reservation row deliberately keeps its scalar NULL. Its versioned
+  // metadata carries exact or unknown person-level consumption, which the
+  // parent operation aggregates canonically.
+  return (
+    input.childObservedConsumption === null &&
+    input.metadataObservedConsumption === input.parentObservedConsumption
+  );
+}

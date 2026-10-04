@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { stagedAccountUsageAnomalies } from "./live-validation-accounting";
+import {
+  reservationAccountingMatches,
+  stagedAccountUsageAnomalies,
+} from "./live-validation-accounting";
 
 describe("staged Apollo account-usage evidence", () => {
   it("accepts missing response consumption while retaining unknown attribution", () => {
@@ -37,5 +40,29 @@ describe("staged Apollo account-usage evidence", () => {
         accountUsageDelta: 0,
       }),
     ).toEqual(["apollo-account-usage-disagreement"]);
+  });
+
+  it("validates exact and unknown reservation accounting without copying metadata into the child scalar", () => {
+    expect(
+      reservationAccountingMatches({
+        childObservedConsumption: null,
+        metadataObservedConsumption: 1,
+        parentObservedConsumption: 1,
+      }),
+    ).toBe(true);
+    expect(
+      reservationAccountingMatches({
+        childObservedConsumption: null,
+        metadataObservedConsumption: null,
+        parentObservedConsumption: null,
+      }),
+    ).toBe(true);
+    expect(
+      reservationAccountingMatches({
+        childObservedConsumption: 1,
+        metadataObservedConsumption: 1,
+        parentObservedConsumption: 1,
+      }),
+    ).toBe(false);
   });
 });

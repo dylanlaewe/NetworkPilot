@@ -4,7 +4,10 @@ import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 
 import type { CandidateRefreshResult } from "@/application/candidate-refresh";
-import { stagedAccountUsageAnomalies } from "@/application/candidate-refresh/live-validation-accounting";
+import {
+  reservationAccountingMatches,
+  stagedAccountUsageAnomalies,
+} from "@/application/candidate-refresh/live-validation-accounting";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
 import type { CompanyTrustResolution } from "@/domain/company-trust";
 import type { BucketScope, RecipientBucket } from "@/domain/recipient-buckets";
@@ -588,11 +591,14 @@ function localInspection(
         child.batch_id !== result.id ||
         child.state !== "completed" ||
         child.attempt_count !== 1 ||
-        child.observed_consumption !== parent?.observed_consumption ||
+        !reservationAccountingMatches({
+          childObservedConsumption: child.observed_consumption,
+          metadataObservedConsumption: metadata?.observedConsumption,
+          parentObservedConsumption: parent?.observed_consumption,
+        }) ||
         metadata?.version !== "apollo-person-reservation-v1" ||
         metadata?.ownerOperationId !== result.id ||
         metadata?.attemptedForOwner !== true ||
-        metadata?.observedConsumption !== parent?.observed_consumption ||
         metadata?.lifecycle !== "completed-imported" ||
         metadata?.importedCandidateId !== candidate.id ||
         metadata?.personId !== candidate.source.providerRecordId
