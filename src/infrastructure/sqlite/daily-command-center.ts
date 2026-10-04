@@ -101,6 +101,23 @@ export function candidatePresentationName(
     last = candidate.source.person.lastName.trim();
   return `${first || "Unknown"}${last ? ` ${last[0]}.` : ""}`;
 }
+export function recruiterSelectionRationale(input: {
+  trustState: "unverified" | "trusted-operating" | "disallowed-recruiting-service";
+  technicalRecruiting: boolean;
+  earlyCareerRecruiting: boolean;
+}): string {
+  if (input.trustState === "unverified")
+    return "Recruiter role evidence matches this relationship bucket; employer review is still required.";
+  if (input.trustState === "disallowed-recruiting-service")
+    return "Recruiter role evidence is present, but the employer is marked as a recruiting or staffing service.";
+  if (input.earlyCareerRecruiting && input.technicalRecruiting)
+    return "Internal early-career technology recruiter at a reviewed operating employer.";
+  if (input.technicalRecruiting)
+    return "Internal technical recruiter at a reviewed operating employer.";
+  if (input.earlyCareerRecruiting)
+    return "Internal early-career recruiter at a reviewed operating employer.";
+  return "Internal recruiter at a reviewed operating employer.";
+}
 export const RECRUITER_OPERATIONAL_DATABASE =
   "data/apollo-recruiter-enrichment.sqlite" as const;
 export function loadDailyCommandCenter(
@@ -288,14 +305,15 @@ export function loadDailyCommandCenter(
             c.recruiterClassification?.earlyCareerRelevance,
           whySelected:
             track === "recruiter"
-              ? c.recruiterClassification?.earlyCareerRelevance &&
-                c.recruiterClassification.technicalRelevance
-                ? "Internal early-career technology recruiter at a reviewed target company."
-                : c.recruiterClassification?.technicalRelevance
-                  ? "Internal technical recruiter at a reviewed target company."
-                  : c.recruiterClassification?.earlyCareerRelevance
-                    ? "Internal early-career recruiter at a reviewed target company."
-                    : "Internal recruiter at a reviewed target company."
+              ? recruiterSelectionRationale({
+                  trustState: c.employerTrust?.state ?? "unverified",
+                  technicalRecruiting: Boolean(
+                    c.recruiterClassification?.technicalRelevance,
+                  ),
+                  earlyCareerRecruiting: Boolean(
+                    c.recruiterClassification?.earlyCareerRelevance,
+                  ),
+                })
               : undefined,
           draftSubject: recruiterDraft?.subject,
           draftBody: recruiterDraft?.body,
