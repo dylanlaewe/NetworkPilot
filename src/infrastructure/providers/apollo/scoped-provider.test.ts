@@ -127,10 +127,7 @@ class Reservations implements ApolloPersonReservationStore {
     state.resultRetained = Boolean(input.record);
   }
 
-  releaseUnattempted(input: {
-    personId: string;
-    operationId: string;
-  }): void {
+  releaseUnattempted(input: { personId: string; operationId: string }): void {
     const state = this.states.get(input.personId);
     if (!state || state.owner !== input.operationId || state.attempted)
       throw new Error("fixture-reservation-release-unavailable");
@@ -182,7 +179,13 @@ describe("concrete scoped Apollo provider", () => {
         response(200, { people: [searchPerson(recruiter)] }),
         response(200, { people: [] }),
       ],
-      [response(200, { person: recruiter, match_confidence: "high", credits_consumed: 1 })],
+      [
+        response(200, {
+          person: recruiter,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
     );
     const result = await discover(provider(transport), "recruiters");
     expect(result).toMatchObject({
@@ -194,7 +197,10 @@ describe("concrete scoped Apollo provider", () => {
     });
     expect(result.records[0]!.responsibilityEvidence).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: "recruiting-function", verified: true }),
+        expect.objectContaining({
+          kind: "recruiting-function",
+          verified: true,
+        }),
         expect.objectContaining({
           kind: "internal-recruiting",
           value: "internal",
@@ -229,18 +235,18 @@ describe("concrete scoped Apollo provider", () => {
       ],
       [],
     );
-    await expect(discover(provider(transport), "recruiters")).resolves.toMatchObject(
-      {
-        searchedCandidates: 1,
-        rejectedCandidates: 1,
-        enrichmentAttempts: 0,
-        records: [],
-        observedCredits: 0,
-      },
-    );
-    expect(transport.calls.every((call) => call.path.includes("api_search"))).toBe(
-      true,
-    );
+    await expect(
+      discover(provider(transport), "recruiters"),
+    ).resolves.toMatchObject({
+      searchedCandidates: 1,
+      rejectedCandidates: 1,
+      enrichmentAttempts: 0,
+      records: [],
+      observedCredits: 0,
+    });
+    expect(
+      transport.calls.every((call) => call.path.includes("api_search")),
+    ).toBe(true);
   });
 
   it("enriches a plausible search-only employer but preserves missing identity", async () => {
@@ -291,14 +297,26 @@ describe("concrete scoped Apollo provider", () => {
         response(200, { people: [searchPerson(peer)] }),
         response(200, { people: [] }),
       ],
-      [response(200, { person: peer, match_confidence: "high", credits_consumed: 1 })],
+      [
+        response(200, {
+          person: peer,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
     );
     const managerTransport = new Transport(
       [
         response(200, { people: [searchPerson(manager)] }),
         response(200, { people: [] }),
       ],
-      [response(200, { person: manager, match_confidence: "high", credits_consumed: 1 })],
+      [
+        response(200, {
+          person: manager,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
     );
     const peerResult = await discover(provider(peerTransport), "peers");
     expect(peerResult.records[0]!.responsibilityEvidence).toContainEqual(
@@ -307,7 +325,10 @@ describe("concrete scoped Apollo provider", () => {
         sourceReference: "apollo.person.seniority",
       }),
     );
-    const managerResult = await discover(provider(managerTransport), "managers");
+    const managerResult = await discover(
+      provider(managerTransport),
+      "managers",
+    );
     expect(
       managerResult.records[0]!.responsibilityEvidence?.some((item) =>
         [
@@ -323,25 +344,59 @@ describe("concrete scoped Apollo provider", () => {
   it.each([
     ["executives", "VP of Data", "vp"],
     ["ceos", "Chief Executive Officer", "c_suite"],
-    ["ceos", "President, East Region", "c_suite"],
   ] as const)(
     "keeps %s title-only scope review-required evidence-wise",
     async (bucket, title, seniority) => {
       const candidate = person(`${bucket}-${title}`, title, seniority);
       const transport = new Transport(
-        [response(200, { people: [searchPerson(candidate)] }), ...(bucket === "executives" ? [response(200, { people: [] })] : [])],
-        [response(200, { person: candidate, match_confidence: "high", credits_consumed: 1 })],
+        [
+          response(200, { people: [searchPerson(candidate)] }),
+          ...(bucket === "executives" ? [response(200, { people: [] })] : []),
+        ],
+        [
+          response(200, {
+            person: candidate,
+            match_confidence: "high",
+            credits_consumed: 1,
+          }),
+        ],
       );
       const result = await discover(provider(transport), bucket);
       expect(
         result.records[0]!.responsibilityEvidence?.some((item) =>
-          ["functional-leadership", "division-leadership", "company-leadership"].includes(
-            item.kind,
-          ),
+          [
+            "functional-leadership",
+            "division-leadership",
+            "company-leadership",
+          ].includes(item.kind),
         ),
       ).toBe(false);
     },
   );
+
+  it("does not enrich a search result whose title falls outside the requested title scope", async () => {
+    const regionalPresident = person(
+      "regional-president-001",
+      "President, East Region",
+      "c_suite",
+    );
+    const transport = new Transport(
+      [response(200, { people: [searchPerson(regionalPresident)] })],
+      [],
+    );
+    await expect(
+      discover(provider(transport), "ceos", 1),
+    ).resolves.toMatchObject({
+      searchedCandidates: 1,
+      rejectedCandidates: 1,
+      enrichmentAttempts: 0,
+      records: [],
+      observedCredits: 0,
+    });
+    expect(
+      transport.calls.every((call) => call.path.includes("api_search")),
+    ).toBe(true);
+  });
 
   it("does not spend on an already imported provider identity", async () => {
     const peer = person("duplicate-001", "Senior Data Engineer", "senior");
@@ -365,7 +420,11 @@ describe("concrete scoped Apollo provider", () => {
   });
 
   it("deduplicates the same Apollo ID repeated within one search response", async () => {
-    const peer = person("duplicate-search-001", "Senior Data Engineer", "senior");
+    const peer = person(
+      "duplicate-search-001",
+      "Senior Data Engineer",
+      "senior",
+    );
     const transport = new Transport(
       [
         response(200, {
@@ -427,17 +486,15 @@ describe("concrete scoped Apollo provider", () => {
       ],
     );
     const results = await Promise.all([
-      discover(
-        provider(recruiterTransport, { reservations }),
-        "recruiters",
-        1,
-      ),
+      discover(provider(recruiterTransport, { reservations }), "recruiters", 1),
       discover(provider(peerTransport, { reservations }), "peers", 1),
     ]);
     expect(results.map((result) => result.enrichmentAttempts).sort()).toEqual([
       0, 1,
     ]);
-    expect(results.map((result) => result.records.length).sort()).toEqual([0, 1]);
+    expect(results.map((result) => result.records.length).sort()).toEqual([
+      0, 1,
+    ]);
     expect(
       [...recruiterTransport.calls, ...peerTransport.calls].filter((call) =>
         call.path.includes("people/match"),
@@ -521,9 +578,7 @@ describe("concrete scoped Apollo provider", () => {
     const error = await discover(
       provider(transport, { reservations }),
       "peers",
-    ).catch(
-      (caught: unknown) => caught,
-    );
+    ).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ScopedDiscoveryProviderFailure);
     expect(error).toMatchObject({
       accounting: { attempts: 2, observedCredits: null },
@@ -587,12 +642,14 @@ describe("concrete scoped Apollo provider", () => {
       ],
       [],
     );
-    await expect(discover(provider(transport), "peers")).resolves.toMatchObject({
-      searchedCandidates: 1,
-      rejectedCandidates: 1,
-      enrichmentAttempts: 0,
-      records: [],
-    });
+    await expect(discover(provider(transport), "peers")).resolves.toMatchObject(
+      {
+        searchedCandidates: 1,
+        rejectedCandidates: 1,
+        enrichmentAttempts: 0,
+        records: [],
+      },
+    );
   });
 
   it("preflights missing configuration without transport", () => {

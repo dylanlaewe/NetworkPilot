@@ -1,24 +1,30 @@
-import { loadEnvFile } from "node:process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { loadEnvFile } from "node:process";
 
+import type { CandidateRefreshResult } from "@/application/candidate-refresh";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
-import { runCandidateRefresh } from "@/infrastructure/sqlite/candidate-refresh";
-import { readPersistedApolloDailyAccounting } from "@/infrastructure/sqlite/apollo-accounting";
-import { bucketCopyBlockReason, renderQueueReview } from "@/infrastructure/sqlite/draft-queue";
-import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
-import {
-  appliedMigrationVersions,
-  FIVE_BUCKET_RUNTIME_SCHEMA,
-} from "@/infrastructure/sqlite/schema-contract";
-import { resolveDatastoreTopology } from "@/infrastructure/sqlite/datastore-topology";
-import { SqliteScopedDiscoveryStore } from "@/infrastructure/sqlite/scoped-discovery";
+import type { CompanyTrustResolution } from "@/domain/company-trust";
+import type { BucketScope, RecipientBucket } from "@/domain/recipient-buckets";
 import { ApolloAdapter } from "@/infrastructure/providers/apollo/adapter";
 import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import { FetchApolloTransport } from "@/infrastructure/providers/apollo/http";
 import { scopedApolloProviderConfigured } from "@/infrastructure/providers/apollo/scoped-runtime";
 import type { ApolloCreditUsage } from "@/infrastructure/providers/apollo/types";
-import type { BucketScope, RecipientBucket } from "@/domain/recipient-buckets";
+import { readPersistedApolloDailyAccounting } from "@/infrastructure/sqlite/apollo-accounting";
+import { runCandidateRefresh } from "@/infrastructure/sqlite/candidate-refresh";
+import { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
+import {
+  bucketCopyBlockReason,
+  renderQueueReview,
+} from "@/infrastructure/sqlite/draft-queue";
+import {
+  appliedMigrationVersions,
+  FIVE_BUCKET_RUNTIME_SCHEMA,
+} from "@/infrastructure/sqlite/schema-contract";
+import { SqliteScopedDiscoveryStore } from "@/infrastructure/sqlite/scoped-discovery";
+import { resolveDatastoreTopology } from "@/infrastructure/sqlite/datastore-topology";
 
 const SESSION_ID = "five-bucket-live-2026-10-04-v1";
 const STATE_KEY = `apolloFiveBucketLiveValidation:${SESSION_ID}`;
@@ -37,13 +43,24 @@ const BUCKETS: readonly BucketScope[] = [
   { bucket: "executives" },
   { bucket: "ceos" },
 ];
+const COMMUNICATION_TABLES = [
+  "drafts",
+  "draft_dispositions",
+  "draft_disposition_audit",
+  "gmail_connection_metadata",
+  "gmail_connection_audit",
+  "gmail_draft_operations",
+  "gmail_send_audit",
+  "gmail_send_reconciliations",
+  "gmail_send_reconciliation_audit",
+  "manual_outreach_records",
+  "manual_outreach_audit",
+  "outreach_events",
+] as const;
+const TRUST_OBJECTS = ["company_trust_audit", "company_trust_current"] as const;
 
-type SafetyCounts = {
-  gmailDraftOperations: number;
-  manualOutreachRecords: number;
-  outreachEvents: number;
-};
-
+type ObjectFingerprint = { exists: boolean; rowCount: number; sha256: string };
+type DatastoreSnapshot = Record<string, ObjectFingerprint>;
 type ValidationOutcome = {
   bucket: RecipientBucket;
   requestId: string;
@@ -57,16 +74,17 @@ type ValidationOutcome = {
   qualifiedCandidatesAdded: number;
   anomalyCount: number;
 };
-
 type ValidationState = {
-  version: "five-bucket-live-validation-v1";
+  version: "five-bucket-live-validation-v2";
   sessionId: typeof SESSION_ID;
   baseline: ApolloCreditUsage;
-  safetyCounts: SafetyCounts;
+  communicationSnapshot: DatastoreSnapshot;
+  trustSnapshot: DatastoreSnapshot;
   outcomes: ValidationOutcome[];
   stopped: boolean;
   stopReason?: string;
 };
+type FileIdentity = { realpath: string; device: number; inode: number };
 
 function consumedCredits(usage: ApolloCreditUsage): number {
   if (
@@ -86,24 +104,48 @@ const localDate = (date: Date): string =>
     day: "2-digit",
   }).format(date);
 
+function fileIdentity(path: string): FileIdentity {
+  const realpath = realpathSync(path);
+  const stat = statSync(realpath);
+  if (!stat.isFile()) throw new Error(`live-validation-not-a-file:${path}`);
+  return { realpath, device: stat.dev, inode: stat.ino };
+}
+
+function sameFile(left: FileIdentity, right: FileIdentity): boolean {
+  return (
+    left.realpath === right.realpath ||
+    (left.device === right.device && left.inode === right.inode)
+  );
+}
+
 function requiredPath(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`live-validation-path-required:${name}`);
   const path = resolve(value);
-  if (!existsSync(path)) throw new Error(`live-validation-path-missing:${name}`);
-  return path;
+  if (!existsSync(path))
+    throw new Error(`live-validation-path-missing:${name}`);
+  return fileIdentity(path).realpath;
 }
 
-function configureEnvironment(): { databasePath: string; recruiterPath: string } {
+function configureEnvironment(): {
+  databasePath: string;
+  recruiterPath: string;
+} {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
-  const databasePath = requiredPath("NETWORKPILOT_LIVE_VALIDATION_DATABASE_PATH");
+  const databasePath = requiredPath(
+    "NETWORKPILOT_LIVE_VALIDATION_DATABASE_PATH",
+  );
   const recruiterPath = requiredPath(
     "NETWORKPILOT_LIVE_VALIDATION_RECRUITER_DATABASE_PATH",
   );
-  if (databasePath === PRODUCTION_OPERATIONAL)
-    throw new Error("live-validation-production-operational-path-rejected");
-  if (recruiterPath === PRODUCTION_RECRUITER)
-    throw new Error("live-validation-production-recruiter-path-rejected");
+  const operationalIdentity = fileIdentity(databasePath);
+  const recruiterIdentity = fileIdentity(recruiterPath);
+  if (sameFile(operationalIdentity, fileIdentity(PRODUCTION_OPERATIONAL)))
+    throw new Error("live-validation-production-operational-file-rejected");
+  if (sameFile(recruiterIdentity, fileIdentity(PRODUCTION_RECRUITER)))
+    throw new Error("live-validation-production-recruiter-file-rejected");
+  if (sameFile(operationalIdentity, recruiterIdentity))
+    throw new Error("live-validation-datastore-copies-must-be-distinct");
 
   process.env.NETWORKPILOT_DATABASE_PATH = databasePath;
   process.env.NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH = databasePath;
@@ -118,27 +160,54 @@ function configureEnvironment(): { databasePath: string; recruiterPath: string }
   return { databasePath, recruiterPath };
 }
 
-function tableCount(repository: SqliteSimulationRepository, table: string): number {
-  const exists = repository.native
-    .prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?")
-    .get(table);
-  if (!exists) return 0;
-  return (
-    repository.native.prepare(`SELECT COUNT(*) count FROM ${table}`).get() as {
-      count: number;
-    }
-  ).count;
-}
-
-function safetyCounts(repository: SqliteSimulationRepository): SafetyCounts {
+function fingerprintObject(
+  repository: SqliteSimulationRepository,
+  name: string,
+): ObjectFingerprint {
+  if (!/^[a-z_]+$/.test(name)) throw new Error("snapshot-object-name-invalid");
+  const exists = Boolean(
+    repository.native
+      .prepare(
+        "SELECT 1 FROM sqlite_schema WHERE name=? AND type IN ('table','view')",
+      )
+      .get(name),
+  );
+  if (!exists)
+    return {
+      exists: false,
+      rowCount: 0,
+      sha256: createHash("sha256").update("[]").digest("hex"),
+    };
+  const rows = repository.native.prepare(`SELECT * FROM "${name}"`).all();
+  const serialized = rows.map((row) => JSON.stringify(row)).sort();
   return {
-    gmailDraftOperations: tableCount(repository, "gmail_draft_operations"),
-    manualOutreachRecords: tableCount(repository, "manual_outreach_records"),
-    outreachEvents: tableCount(repository, "outreach_events"),
+    exists: true,
+    rowCount: rows.length,
+    sha256: createHash("sha256")
+      .update(JSON.stringify(serialized))
+      .digest("hex"),
   };
 }
 
-function readState(repository: SqliteSimulationRepository): ValidationState | null {
+function datastoreSnapshot(
+  repository: SqliteSimulationRepository,
+  names: readonly string[],
+): DatastoreSnapshot {
+  return Object.fromEntries(
+    names.map((name) => [name, fingerprintObject(repository, name)]),
+  );
+}
+
+function snapshotsEqual(
+  left: DatastoreSnapshot,
+  right: DatastoreSnapshot,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function readState(
+  repository: SqliteSimulationRepository,
+): ValidationState | null {
   const value = repository.getSetting(STATE_KEY);
   return value ? (JSON.parse(value) as ValidationState) : null;
 }
@@ -218,11 +287,12 @@ function creditAdapter(repository: SqliteSimulationRepository): ApolloAdapter {
 
 function currentSchemas(repository: SqliteSimulationRepository) {
   const topology = resolveDatastoreTopology();
-  const operational = appliedMigrationVersions(repository.native).at(-1) ?? null;
-  const recruiter = new SqliteSimulationRepository(topology.recruiterSource.path, {
-    readonly: true,
-    fileMustExist: true,
-  });
+  const operational =
+    appliedMigrationVersions(repository.native).at(-1) ?? null;
+  const recruiter = new SqliteSimulationRepository(
+    topology.recruiterSource.path,
+    { readonly: true, fileMustExist: true },
+  );
   try {
     return {
       operational,
@@ -268,8 +338,7 @@ function sanitizedCandidate(candidate: ImportedCandidateSnapshot | undefined) {
       ? {
           accepted: candidate.recruiterClassification.accepted,
           recruiterType: candidate.recruiterClassification.recruiterType,
-          explanationCodes:
-            candidate.recruiterClassification.explanationCodes,
+          explanationCodes: candidate.recruiterClassification.explanationCodes,
         }
       : null,
     function: candidate.recipientFunction,
@@ -277,17 +346,130 @@ function sanitizedCandidate(candidate: ImportedCandidateSnapshot | undefined) {
   };
 }
 
+function validateAuditedTrust(
+  repository: SqliteSimulationRepository,
+  trust: CompanyTrustResolution,
+  anomalies: string[],
+): void {
+  if (
+    !trust.companyId ||
+    !trust.auditEventId ||
+    trust.version < 1 ||
+    !trust.identityVerified ||
+    trust.sourceReference !== trust.auditEventId
+  ) {
+    anomalies.push("audited-company-trust-shape-invalid");
+    return;
+  }
+  const audit = repository.native
+    .prepare(
+      "SELECT company_identity_key,resulting_trust_state,resulting_version FROM company_trust_audit WHERE id=?",
+    )
+    .get(trust.auditEventId) as
+    | {
+        company_identity_key: string;
+        resulting_trust_state: string;
+        resulting_version: number;
+      }
+    | undefined;
+  const current = repository.native
+    .prepare(
+      "SELECT company_identity_key,trust_state,latest_audit_event_id,version FROM company_trust_current WHERE company_identity_key=?",
+    )
+    .get(trust.companyId) as
+    | {
+        company_identity_key: string;
+        trust_state: string;
+        latest_audit_event_id: string;
+        version: number;
+      }
+    | undefined;
+  if (
+    !audit ||
+    audit.company_identity_key !== trust.companyId ||
+    audit.resulting_trust_state !== trust.state ||
+    audit.resulting_version !== trust.version ||
+    !current ||
+    current.company_identity_key !== trust.companyId ||
+    current.trust_state !== trust.state ||
+    current.latest_audit_event_id !== trust.auditEventId ||
+    current.version !== trust.version
+  )
+    anomalies.push("audited-company-trust-persistence-invalid");
+}
+
+function validateTrust(
+  repository: SqliteSimulationRepository,
+  candidate: ImportedCandidateSnapshot,
+  anomalies: string[],
+): void {
+  const trust = candidate.employerTrust;
+  if (!trust) {
+    anomalies.push("company-trust-resolution-missing");
+    return;
+  }
+  if (
+    candidate.recruiterClassification?.accepted === true &&
+    trust.state !== "trusted-operating"
+  )
+    anomalies.push("recruiter-accepted-without-trusted-company");
+  if (
+    trust.sourceKind === "provider-discovery-default" &&
+    trust.state === "trusted-operating"
+  )
+    anomalies.push("provider-discovery-created-trust");
+  if (trust.state === "trusted-operating") {
+    if (trust.sourceKind === "authoritative-curated-registry") {
+      if (
+        trust.version !== 0 ||
+        trust.auditEventId !== null ||
+        !trust.identityVerified ||
+        !trust.sourceReference?.startsWith("curated-company-domain:")
+      )
+        anomalies.push("curated-company-trust-shape-invalid");
+    } else if (trust.sourceKind === "audited-human-review") {
+      validateAuditedTrust(repository, trust, anomalies);
+    } else anomalies.push("trusted-company-source-invalid");
+  } else if (trust.state === "disallowed-recruiting-service") {
+    if (trust.sourceKind !== "audited-human-review")
+      anomalies.push("disallowed-company-source-invalid");
+    else validateAuditedTrust(repository, trust, anomalies);
+    if (!candidate.gateFailures.includes("company-trust-disallowed"))
+      anomalies.push("disallowed-company-gate-missing");
+  } else {
+    if (
+      !["provider-discovery-default", "identity-unverified"].includes(
+        trust.sourceKind,
+      ) ||
+      trust.auditEventId !== null
+    )
+      anomalies.push("unverified-company-trust-shape-invalid");
+    if (
+      trust.sourceKind === "provider-discovery-default" &&
+      !trust.identityVerified
+    )
+      anomalies.push("provider-company-identity-unverified");
+    if (
+      candidate.outreachTrack === "recruiter" &&
+      (!candidate.gateFailures.includes("company-trust-unverified") ||
+        candidate.recruiterClassification?.accepted === true)
+    )
+      anomalies.push("unverified-recruiter-not-failed-closed");
+  }
+}
+
 function localInspection(
   repository: SqliteSimulationRepository,
-  operationId: string,
+  result: CandidateRefreshResult,
   expectedScope: BucketScope,
-  expectedSafetyCounts: SafetyCounts,
+  expectedCommunication: DatastoreSnapshot,
+  expectedTrust: DatastoreSnapshot,
 ) {
   const parent = repository.native
     .prepare(
       "SELECT state,candidate_count,estimated_max_exposure,observed_consumption,attempt_count,failure_reason,bucket_scope_json FROM provider_operations WHERE id=?",
     )
-    .get(operationId) as
+    .get(result.id) as
     | {
         state: string;
         candidate_count: number;
@@ -299,13 +481,17 @@ function localInspection(
       }
     | undefined;
   const event = repository.native
-    .prepare("SELECT result_json FROM candidate_refresh_events WHERE id=?")
-    .get(operationId) as { result_json: string } | undefined;
+    .prepare(
+      "SELECT created_at_utc,usable_before,target_reserve,provider_cap,search_calls,enrichment_credits_used,candidates_added,qualified_candidates_added,usable_after,professional_candidates_added,recruiter_candidates_added,companies_added,bucket_scope_json,result_json FROM candidate_refresh_events WHERE id=?",
+    )
+    .get(result.id) as Record<string, string | number | null> | undefined;
   const childRows = repository.native
     .prepare(
-      "SELECT state,attempt_count,observed_consumption,bucket_scope_json FROM provider_operations WHERE batch_id=? AND candidate_count=0 ORDER BY id",
+      "SELECT id,batch_id,state,attempt_count,observed_consumption,bucket_scope_json FROM provider_operations WHERE batch_id=? AND candidate_count=0 ORDER BY id",
     )
-    .all(operationId) as Array<{
+    .all(result.id) as Array<{
+    id: string;
+    batch_id: string;
     state: string;
     attempt_count: number;
     observed_consumption: number | null;
@@ -313,23 +499,53 @@ function localInspection(
   }>;
   const candidates = repository
     .listImportedCandidates()
-    .filter((candidate) => candidate.batchId === operationId)
+    .filter((candidate) => candidate.batchId === result.id)
     .map((candidate) => repository.projectCurrentCompanyTrust(candidate));
   const candidate = candidates[0];
   const draft = candidate ? renderQueueReview(candidate, 0, new Date()) : null;
   const schemas = currentSchemas(repository);
-  const currentSafetyCounts = safetyCounts(repository);
+  const communication = datastoreSnapshot(repository, COMMUNICATION_TABLES);
+  const trust = datastoreSnapshot(repository, TRUST_OBJECTS);
   const anomalies: string[] = [];
 
   if (!parent) anomalies.push("parent-operation-missing");
-  if (parent?.state !== "completed") anomalies.push("parent-operation-not-completed");
+  if (parent?.state !== "completed")
+    anomalies.push("parent-operation-not-completed");
   if (parent?.candidate_count !== 1 || parent?.estimated_max_exposure !== 1)
     anomalies.push("parent-authorization-bound-invalid");
   if (parent?.bucket_scope_json !== JSON.stringify(expectedScope))
     anomalies.push("parent-scope-persistence-invalid");
   if (!event) anomalies.push("candidate-refresh-event-missing");
+  if (event) {
+    const persistedResult = JSON.parse(
+      String(event.result_json),
+    ) as CandidateRefreshResult;
+    if (JSON.stringify(persistedResult) !== JSON.stringify(result))
+      anomalies.push("candidate-refresh-result-persistence-mismatch");
+    const scalarPairs: Array<[unknown, unknown]> = [
+      [event.created_at_utc, result.createdAt],
+      [event.usable_before, result.usableBefore],
+      [event.target_reserve, result.target],
+      [event.provider_cap, result.providerCap],
+      [event.search_calls, result.searchCalls],
+      [event.enrichment_credits_used, result.enrichmentCreditsUsed],
+      [event.candidates_added, result.candidatesAdded],
+      [event.qualified_candidates_added, result.qualifiedCandidatesAdded],
+      [event.usable_after, result.usableAfter],
+      [event.professional_candidates_added, result.professionalCandidatesAdded],
+      [event.recruiter_candidates_added, result.recruiterCandidatesAdded],
+      [event.companies_added, result.companiesAdded],
+      [event.bucket_scope_json, JSON.stringify(expectedScope)],
+    ];
+    if (scalarPairs.some(([persisted, returned]) => persisted !== returned))
+      anomalies.push("candidate-refresh-event-scalar-mismatch");
+  }
+  if (candidates.length !== result.candidatesAdded)
+    anomalies.push("imported-candidate-count-mismatch");
+  if (result.enrichedCandidates !== candidates.length)
+    anomalies.push("enriched-candidate-count-mismatch");
   if (candidates.length > 1) anomalies.push("multiple-candidates-imported");
-  if (candidate?.recipientBucket?.bucket !== expectedScope.bucket)
+  if (candidate && candidate.recipientBucket?.bucket !== expectedScope.bucket)
     anomalies.push("recipient-bucket-scope-mismatch");
   if (candidate?.gateFailures.includes("discovery-scope-mismatch"))
     anomalies.push("discovery-scope-mismatch");
@@ -339,26 +555,71 @@ function localInspection(
       candidate.source.providerMetadata?.providerNativeReturnedId
   )
     anomalies.push("provider-native-identity-mismatch");
+
+  if (result.enrichmentCreditsUsed === 0) {
+    if (childRows.length !== 0 || candidates.length !== 0)
+      anomalies.push("zero-attempt-persistence-invalid");
+  } else if (result.enrichmentCreditsUsed === 1) {
+    if (childRows.length !== 1 || !candidate)
+      anomalies.push("single-attempt-persistence-invalid");
+    const child = childRows[0];
+    if (child && candidate) {
+      let metadata: Record<string, unknown> | null = null;
+      try {
+        metadata = child.bucket_scope_json
+          ? (JSON.parse(child.bucket_scope_json) as Record<string, unknown>)
+          : null;
+      } catch {
+        anomalies.push("person-reservation-metadata-malformed");
+      }
+      if (
+        child.batch_id !== result.id ||
+        child.state !== "completed" ||
+        child.attempt_count !== 1 ||
+        child.observed_consumption !== parent?.observed_consumption ||
+        metadata?.version !== "apollo-person-reservation-v1" ||
+        metadata?.ownerOperationId !== result.id ||
+        metadata?.attemptedForOwner !== true ||
+        metadata?.lifecycle !== "completed-imported" ||
+        metadata?.importedCandidateId !== candidate.id ||
+        metadata?.personId !== candidate.source.providerRecordId
+      )
+        anomalies.push("person-reservation-persistence-invalid");
+    }
+  } else anomalies.push("per-bucket-enrichment-cap-exceeded");
+
+  if (candidate) validateTrust(repository, candidate, anomalies);
   if (schemas.operational !== FIVE_BUCKET_RUNTIME_SCHEMA)
     anomalies.push("operational-schema-drift");
   if (schemas.recruiter !== "0011_outreach_tracks.sql")
     anomalies.push("recruiter-schema-drift");
-  if (JSON.stringify(currentSafetyCounts) !== JSON.stringify(expectedSafetyCounts))
+  if (!snapshotsEqual(communication, expectedCommunication))
     anomalies.push("communication-state-mutated");
+  if (!snapshotsEqual(trust, expectedTrust))
+    anomalies.push("company-trust-state-mutated");
 
   return {
     parent,
-    childRows: childRows.map((row) => ({
-      state: row.state,
-      attemptCount: row.attempt_count,
-      observedConsumption: row.observed_consumption,
-      lifecycle: row.bucket_scope_json
-        ? (JSON.parse(row.bucket_scope_json) as { lifecycle?: string }).lifecycle ?? null
-        : null,
-    })),
+    childRows: childRows.map((row) => {
+      let metadata: Record<string, unknown> | null = null;
+      try {
+        metadata = row.bucket_scope_json
+          ? (JSON.parse(row.bucket_scope_json) as Record<string, unknown>)
+          : null;
+      } catch {
+        metadata = null;
+      }
+      return {
+        state: row.state,
+        attemptCount: row.attempt_count,
+        observedConsumption: row.observed_consumption,
+        lifecycle: metadata?.lifecycle ?? null,
+      };
+    }),
     eventPersisted: Boolean(event),
     schemas,
-    safetyCounts: currentSafetyCounts,
+    communicationSnapshot: communication,
+    trustSnapshot: trust,
     candidate: sanitizedCandidate(candidate),
     draftPreview: draft
       ? {
@@ -369,13 +630,13 @@ function localInspection(
         }
       : null,
     draftBlockReason: candidate
-      ? bucketCopyBlockReason(candidate) ??
+      ? (bucketCopyBlockReason(candidate) ??
         (candidate.gateFailures.length
           ? candidate.gateFailures.join(",")
           : candidate.state !== "eligible"
             ? candidate.state
-            : "not-renderable")
-      : "no-enriched-candidate",
+            : "not-renderable"))
+      : "no-appropriate-candidate",
     anomalies,
   };
 }
@@ -401,8 +662,12 @@ async function preflight(databasePath: string, recruiterPath: string) {
           schemas: currentSchemas(repository),
           readiness,
           accounting,
-          safetyCounts: safetyCounts(repository),
-          productionPathsRejected: true,
+          communicationSnapshot: datastoreSnapshot(
+            repository,
+            COMMUNICATION_TABLES,
+          ),
+          trustSnapshot: datastoreSnapshot(repository, TRUST_OBJECTS),
+          productionFileIdentitiesRejected: true,
           gmailDisabled: process.env.NETWORKPILOT_GMAIL_ENABLED === "false",
           providerCalls: 0,
         },
@@ -421,22 +686,8 @@ async function baseline(databasePath: string) {
     const at = new Date();
     const readiness = assertLocalPreflight(repository, at);
     const existing = readState(repository);
-    if (existing) {
-      console.log(
-        JSON.stringify(
-          {
-            phase: "baseline",
-            sessionId: SESSION_ID,
-            replayed: true,
-            baseline: existing.baseline,
-            readiness,
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
+    if (existing?.outcomes.length)
+      throw new Error("live-validation-baseline-already-used");
     const accounting = readPersistedApolloDailyAccounting(
       repository.native,
       localDate(at),
@@ -446,10 +697,14 @@ async function baseline(databasePath: string) {
     const usage = await creditAdapter(repository).creditUsage();
     consumedCredits(usage);
     const state: ValidationState = {
-      version: "five-bucket-live-validation-v1",
+      version: "five-bucket-live-validation-v2",
       sessionId: SESSION_ID,
       baseline: usage,
-      safetyCounts: safetyCounts(repository),
+      communicationSnapshot: datastoreSnapshot(
+        repository,
+        COMMUNICATION_TABLES,
+      ),
+      trustSnapshot: datastoreSnapshot(repository, TRUST_OBJECTS),
       outcomes: [],
       stopped: false,
     };
@@ -459,10 +714,12 @@ async function baseline(databasePath: string) {
         {
           phase: "baseline",
           sessionId: SESSION_ID,
-          replayed: false,
+          refreshed: Boolean(existing),
           baseline: usage,
           readiness,
           localAccounting: accounting,
+          communicationSnapshot: state.communicationSnapshot,
+          trustSnapshot: state.trustSnapshot,
           nextBucket: BUCKETS[0],
         },
         null,
@@ -492,6 +749,19 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
       `live-validation-bucket-order-invalid:expected-${expected?.bucket ?? "complete"}`,
     );
   }
+  if (
+    !snapshotsEqual(
+      datastoreSnapshot(repository, COMMUNICATION_TABLES),
+      state.communicationSnapshot,
+    ) ||
+    !snapshotsEqual(
+      datastoreSnapshot(repository, TRUST_OBJECTS),
+      state.trustSnapshot,
+    )
+  ) {
+    repository.close();
+    throw new Error("live-validation-protected-state-changed-before-bucket");
+  }
   const priorConsumed =
     state.outcomes.at(-1)?.accountConsumedAfter ??
     consumedCredits(state.baseline);
@@ -514,7 +784,7 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
   repository.close();
 
   const requestId = `${SESSION_ID}:${scope.bucket}`;
-  let result;
+  let result: CandidateRefreshResult;
   try {
     result = await runCandidateRefresh({
       allowProvider: true,
@@ -526,10 +796,19 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
     repository = new SqliteSimulationRepository(databasePath);
     state = readState(repository)!;
     const usageAfterFailure = await creditAdapter(repository).creditUsage();
+    const protectedStateChanged =
+      !snapshotsEqual(
+        datastoreSnapshot(repository, COMMUNICATION_TABLES),
+        state.communicationSnapshot,
+      ) ||
+      !snapshotsEqual(
+        datastoreSnapshot(repository, TRUST_OBJECTS),
+        state.trustSnapshot,
+      );
     state = {
       ...state,
       stopped: true,
-      stopReason: error instanceof Error ? error.message : "live-validation-bucket-failed",
+      stopReason: `${error instanceof Error ? error.message : "live-validation-bucket-failed"}${protectedStateChanged ? ",protected-state-mutated" : ""}`,
     };
     writeState(repository, state);
     console.error(
@@ -556,9 +835,10 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
   const usageAfter = await creditAdapter(repository).creditUsage();
   const inspection = localInspection(
     repository,
-    result.id,
+    result,
     scope,
-    state.safetyCounts,
+    state.communicationSnapshot,
+    state.trustSnapshot,
   );
   const consumedBefore = consumedCredits(usageBefore);
   const consumedAfter = consumedCredits(usageAfter);
@@ -566,7 +846,10 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
   const accountDelta = consumedAfter - consumedBefore;
   const observedConsumption = inspection.parent?.observed_consumption;
   const anomalies = [...inspection.anomalies];
-  if (!Number.isInteger(result.enrichmentCreditsUsed) || result.enrichmentCreditsUsed > 1)
+  if (
+    !Number.isInteger(result.enrichmentCreditsUsed) ||
+    result.enrichmentCreditsUsed > 1
+  )
     anomalies.push("per-bucket-enrichment-cap-exceeded");
   if (inspection.parent?.attempt_count !== result.enrichmentCreditsUsed)
     anomalies.push("parent-attempt-accounting-mismatch");
@@ -579,7 +862,8 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
   const totalAttempts =
     state.outcomes.reduce((sum, outcome) => sum + outcome.attempts, 0) +
     result.enrichmentCreditsUsed;
-  if (totalAttempts > 5) anomalies.push("session-enrichment-attempt-cap-exceeded");
+  if (totalAttempts > 5)
+    anomalies.push("session-enrichment-attempt-cap-exceeded");
 
   const outcome: ValidationOutcome = {
     bucket: scope.bucket,
@@ -621,7 +905,9 @@ async function validateBucket(databasePath: string, scope: BucketScope) {
         dailyAccounting,
         sessionAttempts: totalAttempts,
         stopped: state.stopped,
-        nextBucket: state.stopped ? null : BUCKETS[state.outcomes.length] ?? null,
+        nextBucket: state.stopped
+          ? null
+          : (BUCKETS[state.outcomes.length] ?? null),
       },
       null,
       2,

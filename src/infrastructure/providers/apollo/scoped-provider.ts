@@ -113,6 +113,50 @@ function recruiterSearchEligible(record: CandidateSourceRecord): boolean {
   return internal?.value !== "agency";
 }
 
+const SEARCH_TITLE_MODIFIERS = new Set([
+  "associate",
+  "junior",
+  "jr",
+  "lead",
+  "principal",
+  "senior",
+  "sr",
+  "staff",
+]);
+
+function normalizedTitleTokens(value: string): string[] {
+  const tokens = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  while (tokens[0] && SEARCH_TITLE_MODIFIERS.has(tokens[0])) tokens.shift();
+  return tokens;
+}
+
+function searchTitleEligible(
+  record: CandidateSourceRecord,
+  requestedTitles: readonly string[],
+): boolean {
+  const actual = normalizedTitleTokens(record.currentTitle);
+  if (actual.length === 0) return false;
+  return requestedTitles.some((requestedTitle) => {
+    const requested = normalizedTitleTokens(requestedTitle);
+    if (actual.join(" ") === requested.join(" ")) return true;
+    // Apollo can omit a functional qualifier (for example, "Data" from
+    // "Data Analytics Manager") or return a harmless seniority prefix. Keep
+    // those narrow variants, but never accept extra scope such as a regional
+    // president or a wholly different role before a paid enrichment.
+    return (
+      actual.length >= 2 &&
+      requested.length >= 2 &&
+      (actual.every((token) => requested.includes(token)) ||
+        requested.every((token) => actual.includes(token)))
+    );
+  });
+}
+
 function diversifiedCandidates(
   candidates: readonly CandidateSourceRecord[],
   maximum: number,
@@ -180,7 +224,9 @@ export interface ScopedApolloProviderDependencies {
  * reusing Apollo's existing endpoint, identity, mapping, and safety behavior.
  */
 export class ScopedApolloProvider implements ScopedDiscoveryProvider {
-  constructor(private readonly dependencies: ScopedApolloProviderDependencies) {}
+  constructor(
+    private readonly dependencies: ScopedApolloProviderDependencies,
+  ) {}
 
   preflight(): void {
     assertApolloEnabled(this.dependencies.config);
@@ -222,6 +268,9 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
       maximum: input.maximum,
       maximumSearchCalls: input.maximumSearchCalls,
     });
+    const requestedTitles = plans.flatMap(
+      (plan) => plan.request.specificTitles ?? [],
+    );
     const existing = this.dependencies.existingProviderIds?.() ?? new Set();
     const seen = new Set(existing);
     const candidates: CandidateSourceRecord[] = [];
@@ -243,6 +292,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
           if (
             seen.has(record.providerRecordId) ||
             !plausibleEmployer(record) ||
+            !searchTitleEligible(record, requestedTitles) ||
             (input.scope.bucket === "recruiters" &&
               !recruiterSearchEligible(record))
           ) {
@@ -379,9 +429,9 @@ export function isScopedApolloProviderConfigured(
 ): boolean {
   return Boolean(
     config.enabled &&
-      config.apiKey?.trim() &&
-      config.hardStop &&
-      config.maxEnrichmentsPerBatch > 0 &&
-      config.maxEnrichmentsPerDay > 0,
+    config.apiKey?.trim() &&
+    config.hardStop &&
+    config.maxEnrichmentsPerBatch > 0 &&
+    config.maxEnrichmentsPerDay > 0,
   );
 }
