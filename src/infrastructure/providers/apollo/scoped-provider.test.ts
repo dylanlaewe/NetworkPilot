@@ -141,6 +141,7 @@ function provider(
     config?: ApolloConfig;
     existing?: ReadonlySet<string>;
     reservations?: ApolloPersonReservationStore;
+    strictProviderShape?: boolean;
   } = {},
 ) {
   return new ScopedApolloProvider({
@@ -152,6 +153,7 @@ function provider(
     localDate: () => "2026-09-28",
     personReservations: options.reservations ?? new Reservations(),
     existingProviderIds: () => options.existing ?? new Set(),
+    strictProviderShape: options.strictProviderShape,
   });
 }
 
@@ -650,6 +652,40 @@ describe("concrete scoped Apollo provider", () => {
         records: [],
       },
     );
+  });
+
+  it("fails closed on a malformed search record in strict provider-shape mode", async () => {
+    const valid = person("valid-sibling-001", "Data Analyst", "senior");
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [
+            {
+              id: "malformed-strict-001",
+              first_name: "Missing",
+              title: "Data Analyst",
+              organization: { name: "Employer" },
+            },
+            searchPerson(valid),
+          ],
+        }),
+      ],
+      [
+        response(200, {
+          person: valid,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    await expect(
+      discover(provider(transport, { strictProviderShape: true }), "peers"),
+    ).rejects.toMatchObject({
+      message: "provider-search-record-shape-anomaly",
+      accounting: { attempts: 0, observedCredits: 0 },
+    });
+    expect(transport.calls).toHaveLength(1);
+    expect(transport.calls[0]?.path).toContain("api_search");
   });
 
   it("preflights missing configuration without transport", () => {

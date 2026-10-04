@@ -39,6 +39,8 @@ export function createServerScopedApolloProvider(
     datasetClassification: "authorized-provider",
     localDate,
     personReservations: new SqliteApolloPersonReservationStore(repository),
+    strictProviderShape:
+      environment.NETWORKPILOT_APOLLO_STRICT_PROVIDER_SHAPE === "true",
     existingProviderIds: () =>
       new Set(
         repository

@@ -156,6 +156,7 @@ function configureEnvironment(): {
   process.env.NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_BATCH = "1";
   process.env.NETWORKPILOT_APOLLO_MAX_ENRICHMENTS_PER_DAY = "5";
   process.env.NETWORKPILOT_APOLLO_MAX_RETRIES = "0";
+  process.env.NETWORKPILOT_APOLLO_STRICT_PROVIDER_SHAPE = "true";
   process.env.NETWORKPILOT_GMAIL_ENABLED = "false";
   return { databasePath, recruiterPath };
 }
@@ -229,6 +230,7 @@ function controlledConfig() {
     config.maxEnrichmentsPerBatch !== 1 ||
     config.maxEnrichmentsPerDay !== 5 ||
     config.maxRetries !== 0 ||
+    process.env.NETWORKPILOT_APOLLO_STRICT_PROVIDER_SHAPE !== "true" ||
     process.env.NETWORKPILOT_GMAIL_ENABLED !== "false"
   )
     throw new Error("live-validation-controlled-configuration-invalid");
@@ -576,10 +578,11 @@ function localInspection(
         child.batch_id !== result.id ||
         child.state !== "completed" ||
         child.attempt_count !== 1 ||
-        child.observed_consumption !== parent?.observed_consumption ||
+        child.observed_consumption !== null ||
         metadata?.version !== "apollo-person-reservation-v1" ||
         metadata?.ownerOperationId !== result.id ||
         metadata?.attemptedForOwner !== true ||
+        metadata?.observedConsumption !== parent?.observed_consumption ||
         metadata?.lifecycle !== "completed-imported" ||
         metadata?.importedCandidateId !== candidate.id ||
         metadata?.personId !== candidate.source.providerRecordId

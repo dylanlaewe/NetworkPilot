@@ -117,7 +117,6 @@ const SEARCH_TITLE_MODIFIERS = new Set([
   "associate",
   "junior",
   "jr",
-  "lead",
   "principal",
   "senior",
   "sr",
@@ -151,8 +150,7 @@ function searchTitleEligible(
     return (
       actual.length >= 2 &&
       requested.length >= 2 &&
-      (actual.every((token) => requested.includes(token)) ||
-        requested.every((token) => actual.includes(token)))
+      actual.every((token) => requested.includes(token))
     );
   });
 }
@@ -216,6 +214,7 @@ export interface ScopedApolloProviderDependencies {
   localDate: (date: Date) => string;
   personReservations: ApolloPersonReservationStore;
   existingProviderIds?: () => ReadonlySet<string>;
+  strictProviderShape?: boolean;
 }
 
 /**
@@ -286,6 +285,8 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
         });
         searchCalls += 1;
         const recordRejections = result.recordRejections ?? [];
+        if (this.dependencies.strictProviderShape && recordRejections.length)
+          throw new ApolloProviderError("provider-search-record-shape-anomaly");
         searchedCandidates += result.records.length + recordRejections.length;
         rejectedCandidates += recordRejections.length;
         for (const record of result.records) {
