@@ -20,27 +20,36 @@ function reviewedProductionAudit() {
 }
 
 function reviewedFullAudit() {
+  const fixAvailable = {
+    name: "eslint-config-next",
+    version: "14.2.35",
+    isSemVerMajor: true,
+  };
   return {
     vulnerabilities: {
       "eslint-config-next": {
         severity: "high",
         via: ["@next/eslint-plugin-next"],
         effects: [],
+        fixAvailable: { ...fixAvailable },
       },
       "@next/eslint-plugin-next": {
         severity: "high",
         via: ["fast-glob"],
         effects: ["eslint-config-next"],
+        fixAvailable: { ...fixAvailable },
       },
       "fast-glob": {
         severity: "high",
         via: ["micromatch"],
         effects: ["@next/eslint-plugin-next"],
+        fixAvailable: { ...fixAvailable },
       },
       micromatch: {
         severity: "high",
         via: ["braces"],
         effects: ["fast-glob"],
+        fixAvailable: { ...fixAvailable },
       },
       braces: {
         severity: "high",
@@ -53,6 +62,7 @@ function reviewedFullAudit() {
           },
         ],
         effects: ["micromatch"],
+        fixAvailable: { ...fixAvailable },
       },
     },
   };
@@ -131,6 +141,16 @@ test("fails when the latest published braces version changes", () => {
   const input = reviewedInput();
   input.latestPublishedVersion = "3.0.4";
   assert.throws(() => evaluateSecurityAudit(input), /registry version changed/);
+});
+
+test("fails when npm offers a different remediation", () => {
+  const input = reviewedInput();
+  input.fullAudit.vulnerabilities.braces.fixAvailable = {
+    name: "eslint-config-next",
+    version: "16.3.9",
+    isSemVerMajor: false,
+  };
+  assert.throws(() => evaluateSecurityAudit(input), /remediation changed/);
 });
 
 test("fails when the reviewed ESLint reachability premise can change", () => {

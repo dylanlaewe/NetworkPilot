@@ -63,12 +63,29 @@ const EXPECTED_VULNERABILITIES = Object.freeze({
   braces: { via: [APPROVED_EXCEPTION.advisory], effects: ["micromatch"] },
 });
 
+const EXPECTED_REMEDIATION = Object.freeze({
+  name: "eslint-config-next",
+  version: "14.2.35",
+  isSemVerMajor: true,
+});
+
 function sorted(values) {
   return [...values].sort();
 }
 
 function sameStrings(actual, expected) {
   return JSON.stringify(sorted(actual)) === JSON.stringify(sorted(expected));
+}
+
+function sameRemediation(actual) {
+  return (
+    actual &&
+    typeof actual === "object" &&
+    Object.keys(actual).length === Object.keys(EXPECTED_REMEDIATION).length &&
+    actual.name === EXPECTED_REMEDIATION.name &&
+    actual.version === EXPECTED_REMEDIATION.version &&
+    actual.isSemVerMajor === EXPECTED_REMEDIATION.isSemVerMajor
+  );
 }
 
 function viaIdentifiers(via) {
@@ -108,6 +125,9 @@ function validateFullAudit(fullAudit) {
     }
     if (!sameStrings(actual.effects ?? [], expected.effects)) {
       throw new Error(`${name} dependent-package effects changed`);
+    }
+    if (!sameRemediation(actual.fixAvailable)) {
+      throw new Error(`${name} remediation changed from the reviewed breaking downgrade`);
     }
   }
 

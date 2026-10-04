@@ -90,11 +90,13 @@ The gate runs both production-only and full npm audits. It passes only when the
 production audit is empty and the full audit contains exactly this advisory
 through the exact reviewed, dev-only package versions and dependency edges. A
 new advisory, changed path, production vulnerability, loss of a `dev: true`
-marker, newly published `braces` version, change to the reviewed ESLint
-configuration, or expiration fails the gate. Pinning the exact reviewed
-`eslint.config.mjs` digest ensures any configuration change forces a fresh
-reachability review before the exception can continue. The expected current
-result is:
+marker, changed npm remediation, newly published `braces` version, change to
+the reviewed ESLint configuration, or expiration fails the gate. The reviewed
+remediation is specifically the breaking downgrade to
+`eslint-config-next@14.2.35`; a newly offered compatible remediation therefore
+forces review. Pinning the exact reviewed `eslint.config.mjs` digest ensures any
+configuration change forces a fresh reachability review before the exception
+can continue. The expected current result is:
 
 ```text
 PASS WITH APPROVED DEV-ONLY EXCEPTION: GHSA-vfj7-8cjw-p6xm
