@@ -18,6 +18,21 @@ This file records only facts recoverable from accepted handoffs and Git history.
 
 No earlier Provider Specialist / Reviewer experiment record existed in the repository when this log was created. The accepted Git history shows the scoped provider implementation in `3552e51c50f39f41f9f1c5fdedc4720b094ecaea`, followed by provider accounting/classification/reconciliation corrections through `a3a1dd27c9e616d1f5ce2737a7115c2393be3fb6`, then recruiter evidence/domain corrections through `fb8b4a41780e932c2b66922397ef295f509db6d2`. No agent metrics were recoverable for that earlier sequence.
 
+## Staged Apollo validation milestone
+
+| Field | Recorded outcome |
+| --- | --- |
+| Scope | Five sequential buckets in an isolated migrated operational copy; one enrichment attempt per bucket |
+| Account evidence | 240 → 245 consumed; exactly one account-level credit increase around each attempt |
+| Canonical accounting | Five attempts and five authorized exposure; per-operation observed consumption unknown because every live response omitted `credits_consumed` |
+| Pipeline result | Five imported, zero qualified, zero actionable, zero drafts; provider-only employers remained unverified and title-only leadership failed closed |
+| Correction during continuation | Harness-only scope-mismatch false positive corrected and regression-tested in `089ec74a2e4612c00cbce73065f6bf03029f0dfc` before provider work resumed |
+| Independent review | PASS with no critical, high, or medium findings; informational limitation that no candidate legitimately reached renderable outreach |
+| External effects | Five explicitly authorized Apollo enrichments; zero Gmail calls, drafts, or emails; zero production mutations, migrations, restarts, or feature activations |
+| Elapsed time | Not recorded |
+| Model/runtime | Not recorded |
+| Token/cost | Not recorded |
+
 ## Development-only security exception integration
 
 | Field | Recorded outcome |

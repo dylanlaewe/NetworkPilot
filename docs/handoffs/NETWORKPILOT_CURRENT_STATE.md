@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-04 after integrating the scoped provider, audited company trust, and bounded development-only security exception. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-04 after the authorized five-bucket staged Apollo validation completed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,7 +10,7 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Exact accepted product/security baseline on `main`: `7dabece0b63a012817c90e49a202224dc14cfeb4` (`security: recheck audit remediation`). The handoff itself is a later documentation-only commit.
+- Exact accepted live-validation code baseline on `main`: `089ec74a2e4612c00cbce73065f6bf03029f0dfc` (`fix: distinguish scoped rejection from bypass`). The handoff itself is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` defaults to `false` and remains OFF unless its value is exactly `true`.
@@ -80,7 +80,9 @@ Apollo uses server-side search and controlled enrichment adapters with a shared 
 
 Bucket-scoped sourcing must complete the role-aware local preflight before provider readiness, budget authorization, or any provider request. It validates canonical `0022`, each source store against its own legitimate schema, repository/capability ownership, downstream reserve projection, bucket support, and shared budget. The atomic claim rechecks the budget with a fresh timestamp. Source databases may legitimately remain on older schema versions.
 
-The failed September 27 isolated validation consumed 20 real Apollo credits while moving provider usage from 220 to 240, but produced no completed canonical imports. Those credits are represented as external validation spend for that provider day, not fabricated candidate success. Another live run requires separate authorization, a fresh account-usage baseline, and exactly one bounded attempt. Never start an automatic second run.
+The failed September 27 isolated validation consumed 20 real Apollo credits while moving provider usage from 220 to 240, but produced no completed canonical imports. Those credits are represented as external validation spend for that provider day, not fabricated candidate success.
+
+The separately authorized October 4 staged validation then moved account usage from 240 to 245 through exactly five sequential enrichment attempts, one per bucket. Each provider response omitted `credits_consumed`; canonical operations therefore retained their authorized exposure and persisted observed consumption as unknown. Account usage increased by exactly one around each attempt, but account-wide observations were not invented as attributable per-operation consumption. Five candidates were imported into an isolated schema-0022 copy, with zero qualified, zero actionable, and zero drafts. Provider-only employers stayed unverified. Title-only leadership records stayed review-required. See [the sanitized evidence package](../live-apollo-validation-2026-10-04.md). No additional Apollo request is authorized.
 
 ## Dependency security
 
@@ -109,14 +111,11 @@ The failed September 27 isolated validation consumed 20 real Apollo credits whil
 - Production scoped Apollo adapter and shared accounting/reconciliation path: PASS offline and independently reviewed.
 - Audited company-trust boundary with exact stable identity and fail-closed recruiter qualification: PASS offline and independently reviewed.
 - Exact development-only security exception and enforcement gate: PASS and independently reviewed.
-
-Mocked orchestration is not live provider validation.
+- Staged live Apollo accounting, normalization, trust, classification, persistence, and fail-closed behavior across all five buckets: PASS in an isolated operational copy; final independent review recorded in the sanitized evidence package.
 
 ## Current blocker
 
-Offline implementation is complete. Five-bucket production activation remains blocked on a separately authorized tiny live Apollo validation and evaluation of its real provider, classification, trust, accounting, persistence, and draft-quality results.
-
-The intended live validation is sequential, capped at five enrichment attempts total and one per bucket, with full local-pipeline inspection after each attempt. Stop on the first accounting, provider-shape, duplicate, datastore, migration, trust, scope, persistence, or overage anomaly. Review-required outcomes are valid; do not force qualification. No Gmail action or production mutation is part of this validation.
+Offline implementation and the bounded staged validation are complete. The run validated live accounting and fail-closed classification/trust behavior, but it produced no permissible draft, so the live positive path and downstream message quality remain unproven. Five-bucket production activation is blocked on an explicit Headquarters decision about that evidence gap and, if Headquarters elects to proceed, a controlled production-change plan. The required plan includes a verified backup, exact-target migration to schema `0022`, configuration review, deployment/restart authorization, default-off feature activation, post-change health checks, and a separately bounded initial production workflow. The staged result did not authorize another provider call or any production action.
 
 ## Production state
 
@@ -124,7 +123,7 @@ The intended live validation is sequential, capped at five enrichment attempts t
 - Additive migration `0021_recipient_buckets.sql` already exists in the production operational database because of the documented pre-activation incident. Do not down-migrate it and do not restore an older database over later legitimate history.
 - Migration `0022_company_trust.sql` is merged but was not present in the operational database during the 2026-10-04 read-only inspection. Applying it is a later explicit production approval gate, not part of live validation.
 - Historical comparison found no unexplained candidate, outreach, Gmail-operation, suppression, or snapshot changes.
-- The provider/trust/security integration and validation made zero production database writes, provider calls, Gmail calls, deployments, or restarts.
+- The staged validation made five explicitly authorized Apollo enrichment attempts against isolated copied data. It made zero production database writes, Gmail calls, Gmail drafts, emails, production migrations, deployments, restarts, or feature activations.
 - Before any future production action, re-establish the actual runtime/process state and take a verified backup when the task authorizes mutation.
 
 ## Engineering invariants
@@ -140,4 +139,4 @@ The intended live validation is sequential, capped at five enrichment attempts t
 
 ## Next recommended task
 
-Request explicit authorization for the tiny staged live Apollo validation. Do not call Apollo until that authorization is current and specific. The maximum is five sequential enrichment attempts total, one per bucket, with no second batch and no Gmail.
+Ask Headquarters to decide whether the safety-only live result is sufficient or whether a separately authorized positive-path validation is required before activation. Do not migrate, deploy, restart, activate the five-bucket flag, call Apollo again, or touch Gmail unless a new authorization explicitly covers that action.
