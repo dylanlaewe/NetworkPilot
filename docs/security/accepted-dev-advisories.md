@@ -61,10 +61,10 @@ the upstream vulnerability is unexploitable in every environment.
 
 ### Upstream and remediation assessment
 
-The latest stable patch alignment available at review time—`next@16.3.8`,
-`eslint-config-next@16.3.8`, and matching `@next/swc` artifacts—was tested
-without changing React. It retained the same `braces@3.0.3` chain and the same
-five findings. npm's proposed automatic remediation is a breaking downgrade to
+Registry metadata reviewed on 2026-10-04 reported `braces@3.0.3` as the latest
+published version. The GitHub advisory reported `<=3.0.3` as affected and no
+patched version. The security command rechecks the latest published version on
+every run. npm's proposed automatic remediation is a breaking downgrade to
 `eslint-config-next@14.2.35`, which is not an acceptable alignment for Next 16.
 No forced audit fix, forked replacement, dependency override, or downgrade is
 approved.
@@ -80,18 +80,21 @@ Remediate and remove this exception when any of these occurs:
 
 ### Enforcement
 
-Run:
+Run the repository's standard security validation command:
 
 ```bash
-node scripts/check-security-audit.mjs
-node --test scripts/check-security-audit.test.mjs
+npm run check:security-audit
 ```
 
 The gate runs both production-only and full npm audits. It passes only when the
 production audit is empty and the full audit contains exactly this advisory
 through the exact reviewed, dev-only package versions and dependency edges. A
 new advisory, changed path, production vulnerability, loss of a `dev: true`
-marker, or expiration fails the gate. The expected current result is:
+marker, newly published `braces` version, change to the reviewed ESLint
+configuration, or expiration fails the gate. Pinning the exact reviewed
+`eslint.config.mjs` digest ensures any configuration change forces a fresh
+reachability review before the exception can continue. The expected current
+result is:
 
 ```text
 PASS WITH APPROVED DEV-ONLY EXCEPTION: GHSA-vfj7-8cjw-p6xm

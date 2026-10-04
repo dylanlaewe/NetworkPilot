@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   APPROVED_EXCEPTION,
   evaluateSecurityAudit,
 } from "./check-security-audit.mjs";
+
+const reviewedEslintConfigSource = readFileSync(
+  new URL("../eslint.config.mjs", import.meta.url),
+  "utf8",
+);
 
 function reviewedProductionAudit() {
   return {
@@ -79,6 +85,8 @@ function reviewedInput() {
     productionAudit: reviewedProductionAudit(),
     fullAudit: reviewedFullAudit(),
     lockfile: reviewedLockfile(),
+    latestPublishedVersion: APPROVED_EXCEPTION.latestPublishedVersion,
+    eslintConfigSource: reviewedEslintConfigSource,
     today: "2026-10-04",
   };
 }
@@ -117,6 +125,18 @@ test("fails when an approved dependency is no longer dev-only", () => {
   const input = reviewedInput();
   input.lockfile.packages["node_modules/braces"].dev = false;
   assert.throws(() => evaluateSecurityAudit(input), /no longer dev-only/);
+});
+
+test("fails when the latest published braces version changes", () => {
+  const input = reviewedInput();
+  input.latestPublishedVersion = "3.0.4";
+  assert.throws(() => evaluateSecurityAudit(input), /registry version changed/);
+});
+
+test("fails when the reviewed ESLint reachability premise can change", () => {
+  const input = reviewedInput();
+  input.eslintConfigSource += "\n// configuration changed\n";
+  assert.throws(() => evaluateSecurityAudit(input), /re-review braces reachability/);
 });
 
 test("fails on the mandatory re-review date", () => {

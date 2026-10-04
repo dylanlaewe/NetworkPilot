@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 export const APPROVED_EXCEPTION = Object.freeze({
@@ -7,8 +8,10 @@ export const APPROVED_EXCEPTION = Object.freeze({
   cve: "CVE-2026-93687",
   package: "braces",
   version: "3.0.3",
+  latestPublishedVersion: "3.0.3",
   reviewedOn: "2026-10-04",
   expiresOn: "2026-11-03",
+  eslintConfigSha256: "623ea10cc7307c6519dfdd769cb390219c876181eeb832256f345527a7a5a630",
   path: Object.freeze([
     Object.freeze({
       lockKey: "node_modules/eslint-config-next",
@@ -140,6 +143,23 @@ function validateLockfilePath(lockfile) {
   }
 }
 
+function validateLatestPublishedVersion(latestPublishedVersion) {
+  if (latestPublishedVersion !== APPROVED_EXCEPTION.latestPublishedVersion) {
+    throw new Error(
+      `braces registry version changed from ${APPROVED_EXCEPTION.latestPublishedVersion} to ${latestPublishedVersion}; re-review is required`,
+    );
+  }
+}
+
+function validateEslintReachability(eslintConfigSource) {
+  const digest = createHash("sha256").update(eslintConfigSource).digest("hex");
+  if (digest !== APPROVED_EXCEPTION.eslintConfigSha256) {
+    throw new Error(
+      "eslint.config.mjs changed from the reviewed configuration; re-review braces reachability",
+    );
+  }
+}
+
 function validateReviewWindow(today) {
   if (today >= APPROVED_EXCEPTION.expiresOn) {
     throw new Error(
@@ -148,10 +168,19 @@ function validateReviewWindow(today) {
   }
 }
 
-export function evaluateSecurityAudit({ productionAudit, fullAudit, lockfile, today }) {
+export function evaluateSecurityAudit({
+  productionAudit,
+  fullAudit,
+  lockfile,
+  latestPublishedVersion,
+  eslintConfigSource,
+  today,
+}) {
   validateProductionAudit(productionAudit);
   validateFullAudit(fullAudit);
   validateLockfilePath(lockfile);
+  validateLatestPublishedVersion(latestPublishedVersion);
+  validateEslintReachability(eslintConfigSource);
   validateReviewWindow(today);
   return `PASS WITH APPROVED DEV-ONLY EXCEPTION: ${APPROVED_EXCEPTION.advisory}`;
 }
@@ -175,13 +204,45 @@ function runNpmAudit(args) {
   }
 }
 
+function runNpmViewVersion(packageName) {
+  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  const result = spawnSync(npm, ["view", packageName, "version", "--json"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.status !== 0 || !result.stdout) {
+    throw new Error(`npm view did not return registry metadata: ${result.stderr.trim()}`);
+  }
+
+  try {
+    const version = JSON.parse(result.stdout);
+    if (typeof version !== "string") throw new Error("version is not a string");
+    return version;
+  } catch {
+    throw new Error(`npm view returned invalid version JSON: ${result.stdout.trim()}`);
+  }
+}
+
 function main() {
   try {
     const productionAudit = runNpmAudit(["--omit=dev"]);
     const fullAudit = runNpmAudit([]);
     const lockfile = JSON.parse(readFileSync("package-lock.json", "utf8"));
+    const latestPublishedVersion = runNpmViewVersion(APPROVED_EXCEPTION.package);
+    const eslintConfigSource = readFileSync("eslint.config.mjs", "utf8");
     const today = new Date().toISOString().slice(0, 10);
-    console.log(evaluateSecurityAudit({ productionAudit, fullAudit, lockfile, today }));
+    console.log(
+      evaluateSecurityAudit({
+        productionAudit,
+        fullAudit,
+        lockfile,
+        latestPublishedVersion,
+        eslintConfigSource,
+        today,
+      }),
+    );
   } catch (error) {
     console.error(`FAIL: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
