@@ -2,6 +2,21 @@
 
 This file records only facts recoverable from accepted handoffs and Git history. Metrics that were not captured at execution time are intentionally omitted.
 
+## Controlled production activation
+
+| Field | Recorded outcome |
+| --- | --- |
+| Runtime build | `fbee75501c32d1b9c3b4bd203ce043e7b655e78c` |
+| Dependency remediation | `sharp@0.35.5` and `source-map-js@1.2.2`; production audit zero; accepted dev-only `braces` exception unchanged |
+| Independent security review | PASS; compatible patch-only lockfile change, resolved tree verified, no unrelated churn |
+| Backup | Read-only verified pre-0022 backup `networkpilot-operational-pre-0022-20261006T175824Z.sqlite`, SHA-256 `6bd534bd25d4bd5db1ef73d166c0fd3c5df61687b347048ef5658e05b0f69b1d` |
+| Operator incident | The first migration command supplied `NETWORKPILOT_MANUAL_OUTREACH_DATABASE_PATH`, but `db:migrate` read `NETWORKPILOT_DATABASE_PATH`; additive 0021/0022 drift on the empty application/system database was accepted without rollback and the CLI was hardened in `fbee75501c32d1b9c3b4bd203ce043e7b655e78c` |
+| Canonical migration | Exact operational target matched its recorded SHA and ledger at 0021; only `0022_company_trust.sql` applied; second invocation no-op; integrity, foreign keys, protected history, and empty trust state verified |
+| Configuration | Exact active `General Resume` configured as recruiter default; other buckets retain no default attachment |
+| Activation | Five-bucket mode deliberately enabled; production PID 61698 started 2026-10-06 14:14:30 America/New_York |
+| Browser review | Desktop and mobile Today, Drafts, Sent, Candidates, Resumes, and System checks passed; historical records remained `Legacy / unclassified`; System reported Operational |
+| External effects | Zero Apollo calls, Gmail calls, Gmail drafts, or emails; no provider, Gmail, candidate, draft, outreach, or trust records changed during health/browser checks |
+
 ## Provider and company-trust milestone
 
 ### Company Trust Specialist

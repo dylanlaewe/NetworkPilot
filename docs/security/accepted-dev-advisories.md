@@ -5,6 +5,10 @@ are absent from the production dependency tree and are not reachable through the
 NetworkPilot production runtime. It does not change npm severity data or make the
 raw full `npm audit` pass.
 
+## 2026-10-06 production advisory remediation
+
+Two newly disclosed production advisories were remediated before controlled activation: `GHSA-wq5f-xc86-pv6w` by updating `sharp` from 0.35.4 to 0.35.5, and `GHSA-68fv-2mgg-jv7q` by updating `source-map-js` from 1.2.1 to 1.2.2. Both were compatible patch updates inside existing transitive ranges; `package.json` and application behavior were unchanged. The resolved production tree contains the patched versions, `npm audit --omit=dev` reports zero vulnerabilities, and an independent security review found no unrelated dependency churn or runtime-compatibility blocker. This remediation does not alter the separately bounded development-only exception below.
+
 ## GHSA-vfj7-8cjw-p6xm / CVE-2026-93687
 
 | Field | Reviewed value |

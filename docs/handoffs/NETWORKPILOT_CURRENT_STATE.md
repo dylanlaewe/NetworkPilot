@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-04 after the authorized five-bucket staged Apollo validation completed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-06 after controlled production activation completed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Exact accepted live-validation code baseline on `main`: `089ec74a2e4612c00cbce73065f6bf03029f0dfc` (`fix: distinguish scoped rejection from bypass`). The handoff itself is a later documentation-only commit.
+- Activated runtime build: `fbee75501c32d1b9c3b4bd203ce043e7b655e78c` (`fix: require explicit migration target`). The handoff itself is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
-- `NETWORKPILOT_FIVE_BUCKET_ENABLED` defaults to `false` and remains OFF unless its value is exactly `true`.
-- No running Next.js production PID or listener was observable when this handoff was updated. No restart or deployment was performed during this integration sequence.
+- `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
+- The validated Next.js 16.3.6 production build is listening on port 3000 as PID 61698, started 2026-10-06 at 14:14:30 America/New_York.
 
 ## Datastore topology
 
@@ -116,16 +116,20 @@ The separately authorized October 4 staged validation then moved account usage f
 
 ## Current blocker
 
-Offline implementation, bounded live-provider safety validation, and the isolated real-record positive path are complete. Five-bucket production activation is blocked only on an explicit Headquarters activation decision and controlled production-change plan. The required plan includes a verified backup, exact-target migration to schema `0022`, configuration review, deployment/restart authorization, default-off feature activation, post-change health checks, and a separately bounded initial production workflow. The validations did not authorize another provider call or any production action.
+There is no activation blocker. Controlled production activation completed without provider or Gmail work. Another Apollo call, Gmail call/draft, or real email still requires separate task-specific authorization.
 
 ## Production state
 
-- Five-bucket flag: OFF.
-- Additive migration `0021_recipient_buckets.sql` already exists in the production operational database because of the documented pre-activation incident. Do not down-migrate it and do not restore an older database over later legitimate history.
-- Migration `0022_company_trust.sql` is merged but was not present in the operational database during the 2026-10-04 read-only inspection. Applying it is a later explicit production approval gate, not part of live validation.
-- Historical comparison found no unexplained candidate, outreach, Gmail-operation, suppression, or snapshot changes.
-- The staged validation made five explicitly authorized Apollo enrichment attempts against isolated copied data. It made zero production database writes, Gmail calls, Gmail drafts, emails, production migrations, deployments, restarts, or feature activations.
-- Before any future production action, re-establish the actual runtime/process state and take a verified backup when the task authorizes mutation.
+- Five-bucket flag: ON by deliberate local production configuration.
+- Canonical operational schema: `0022_company_trust.sql`. Final activated database SHA-256 after migration and recruiter-default configuration: `0ff7fb8905e2a739ead4c0366a4d88467869782f9278dee115128bbc3ed6489c`.
+- Verified pre-0022 backup: `/Users/dylanlaewe/Backups/NetworkPilot/networkpilot-operational-pre-0022-20261006T175824Z.sqlite`, SHA-256 `6bd534bd25d4bd5db1ef73d166c0fd3c5df61687b347048ef5658e05b0f69b1d`.
+- Exact active `General Resume` (`resume-25b41a9d-f581-4e1a-bd35-a9bafdf54bb3`) is the recruiter default. Professional buckets still default to no attachment.
+- `company_trust_audit` and `company_trust_current` remain empty. No existing or provider-discovered company was silently trusted.
+- Protected candidate, draft, outreach, Gmail, provider-accounting, resume, and trust fingerprints were unchanged by migration except for the authorized schema ledger and recruiter-default preference.
+- `data/networkpilot.sqlite` remains the application/system datastore. Its accepted additive 0021/0022 schema drift does not change role ownership or capabilities. Do not restore or down-migrate it.
+- The operator-targeting incident and guard are documented in `docs/explicit-migration-boundary.md`; `db:migrate` now requires and prints an explicit absolute target and rejects missing, nonexistent, or conflicting configuration.
+- Production dependency audit is zero after patching `sharp@0.35.5` and `source-map-js@1.2.2`; the exact accepted dev-only `braces` exception remains enforced.
+- Activation made zero Apollo calls, Gmail calls, Gmail drafts, or emails.
 
 ## Engineering invariants
 
@@ -140,4 +144,4 @@ Offline implementation, bounded live-provider safety validation, and the isolate
 
 ## Next recommended task
 
-Request explicit authorization for controlled production activation. Do not migrate, deploy, restart, activate the five-bucket flag, call Apollo again, or touch Gmail unless a new authorization explicitly covers that action.
+Open NetworkPilot and use it yourself before any further engineering work. Do not call Apollo or Gmail, create Gmail drafts, or send email without new task-specific authorization.
