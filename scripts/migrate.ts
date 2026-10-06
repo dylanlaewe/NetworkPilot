@@ -1,9 +1,11 @@
 import { SqliteSimulationRepository } from "../src/infrastructure/sqlite/database";
 import { applyPendingMigrations } from "../src/infrastructure/sqlite/migration-runner";
-import { displayDatabasePath } from "../src/infrastructure/sqlite/schema-contract";
-const repository = new SqliteSimulationRepository();
+import { resolveExplicitMigrationTarget } from "../src/infrastructure/sqlite/migration-target";
+
+const target = resolveExplicitMigrationTarget();
+console.log(`Migration target (absolute): ${target}`);
+const repository = new SqliteSimulationRepository(target, { fileMustExist: true });
 try {
-  console.log(`Migration target: ${displayDatabasePath(repository.native.name)}`);
   const applied=applyPendingMigrations(repository);
   console.log(applied.length?`Applied: ${applied.join(", ")}`:"Database schema is current.");
 } finally {

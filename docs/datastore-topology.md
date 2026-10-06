@@ -18,6 +18,8 @@ Five-bucket mutable state exists exactly once, in the canonical operational stor
 
 The runtime capability model distinguishes `canonical-operational`, `application-system`, `source-evidence`, `scratch-cache`, and `test-only`. Capabilities such as bucket-state writes and provider accounting are declared independently from candidate-evidence reads. Asking a source descriptor for a canonical capability fails before authorization or provider work.
 
+Schema presence does not assign a role. In particular, the accepted additive 0021/0022 schema drift on `data/networkpilot.sqlite` does not give that application/system datastore canonical ownership, bucket-write authority, provider-accounting authority, or company-trust authority.
+
 ## Scoped sourcing preflight
 
 The production order is:
