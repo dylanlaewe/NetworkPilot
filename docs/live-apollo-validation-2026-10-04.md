@@ -98,3 +98,23 @@ Verdict: **PASS with no critical, high, or medium findings.**
 The reviewer made no provider, Gmail, database-write, or repository-edit action. Read-only inspection independently confirmed both datastore integrity checks, operational schema `0022`, recruiter schema `0011`, five ordered one-attempt outcomes, distinct provider identities, exact parent/child reconciliation, unknown observed consumption at every canonical layer, account-ending checkpoints 241/242/243/244/245, zero anomalies, zero qualified/actionable candidates, zero drafts, and unchanged protected communication/trust fingerprints. Production database hashes matched the pre-run values exactly.
 
 The reviewer specifically confirmed that the manager result was a safe fail-closed scope mismatch rather than a bypass. The only informational limitation was that no live candidate legitimately reached renderable outreach, so the run validated live provider/accounting/persistence/trust/scope safety but did not exercise live message quality.
+
+## Isolated positive-path follow-up — 2026-10-06
+
+Headquarters explicitly approved the exact reviewed operating-employer identity for the existing recruiter record after reviewing official company terms, nationwide operating materials, and careers evidence. No evidence indicated a staffing, recruiting-service, or executive-search business.
+
+The normal audited company-trust command ran only against the isolated validation copy. It used the stable provider-scoped company identity, exact reviewed domain, expected version zero, a deterministic command identity, local-operator actor, explicit reason, and public-evidence source reference. The resulting audit and current view reconciled exactly at version one:
+
+`unverified → trusted-operating`
+
+Without reimport or provider activity, current projection changed the recruiter from rejected/review-required to `eligible`, accepted the Recruiters bucket, accepted the recruiter classification, and removed every gate failure. The stored imported snapshot remained byte-for-byte unchanged; only current trust projection changed.
+
+The Recruiters reserve changed from zero to one actionable company. The normal scoped Add Drafts path then selected that recruiter, persisted exactly one local review draft, and consumed the available reserve into the active queue. Its deterministic request replay returned the same result. Replacement supply was unavailable afterward because there was no second eligible recruiter; no candidate was promoted to manufacture a replacement path.
+
+The isolated copy had one active resume record labeled `General Resume`. It was explicitly configured as the recruiter default before generation. The draft selected that exact active metadata record, and the pure local approval projection validated that its attachment metadata matched the message's resume claim. PDF bytes were not read, Gmail MIME was not created, and no Gmail operation was persisted. The UI retains the existing ability to choose another active resume or None, with attachment-copy consistency enforced before approval; historical Gmail snapshots were unchanged.
+
+The generated draft used the canonical Recruiters template, was 58 words, and made no open-requisition or personal hiring-ownership claim. A fresh independent reviewer returned **PASS** after confirming the user-supplied biographical facts and selected attachment evidence. The reviewer found the copy truthful, concise, natural, relevant to a general internal recruiter, correctly substituted, and free of em dashes, corporate/AI clichés, or unsupported claims.
+
+The other four live records remained fail-closed and non-renderable: the Peer remained rejected by independent gates; the Manager, Executive, and CEO/president still lacked responsibility evidence and remained review-required or rejected. No manual promotion was attempted.
+
+Validation passed typecheck, lint, 52 focused company-trust/bucket/draft/UI tests, and the complete 1,152-test suite. This follow-up made zero Apollo calls, zero Gmail calls or drafts, zero emails, and zero production mutations, migrations, restarts, or feature activations.

@@ -112,10 +112,11 @@ The separately authorized October 4 staged validation then moved account usage f
 - Audited company-trust boundary with exact stable identity and fail-closed recruiter qualification: PASS offline and independently reviewed.
 - Exact development-only security exception and enforcement gate: PASS and independently reviewed.
 - Staged live Apollo accounting, normalization, trust, classification, persistence, and fail-closed behavior across all five buckets: PASS in an isolated operational copy; final independent review recorded in the sanitized evidence package.
+- Existing-live-record positive path from audited employer review through actionable Recruiters reserve, one local draft, and configured `General Resume` selection: PASS in the isolated copy; independent copy review passed.
 
 ## Current blocker
 
-Offline implementation and the bounded staged validation are complete. The run validated live accounting and fail-closed classification/trust behavior, but it produced no permissible draft, so the live positive path and downstream message quality remain unproven. Five-bucket production activation is blocked on an explicit Headquarters decision about that evidence gap and, if Headquarters elects to proceed, a controlled production-change plan. The required plan includes a verified backup, exact-target migration to schema `0022`, configuration review, deployment/restart authorization, default-off feature activation, post-change health checks, and a separately bounded initial production workflow. The staged result did not authorize another provider call or any production action.
+Offline implementation, bounded live-provider safety validation, and the isolated real-record positive path are complete. Five-bucket production activation is blocked only on an explicit Headquarters activation decision and controlled production-change plan. The required plan includes a verified backup, exact-target migration to schema `0022`, configuration review, deployment/restart authorization, default-off feature activation, post-change health checks, and a separately bounded initial production workflow. The validations did not authorize another provider call or any production action.
 
 ## Production state
 
@@ -139,4 +140,4 @@ Offline implementation and the bounded staged validation are complete. The run v
 
 ## Next recommended task
 
-Ask Headquarters to decide whether the safety-only live result is sufficient or whether a separately authorized positive-path validation is required before activation. Do not migrate, deploy, restart, activate the five-bucket flag, call Apollo again, or touch Gmail unless a new authorization explicitly covers that action.
+Request explicit authorization for controlled production activation. Do not migrate, deploy, restart, activate the five-bucket flag, call Apollo again, or touch Gmail unless a new authorization explicitly covers that action.

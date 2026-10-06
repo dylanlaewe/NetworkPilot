@@ -33,6 +33,18 @@ No earlier Provider Specialist / Reviewer experiment record existed in the repos
 | Model/runtime | Not recorded |
 | Token/cost | Not recorded |
 
+### Existing-record positive-path follow-up
+
+| Field | Recorded outcome |
+| --- | --- |
+| Scope | Existing isolated recruiter only; zero new search or enrichment |
+| Human decision | Exact reviewed operating-employer identity approved `trusted-operating` for the isolated copy |
+| Dynamic transition | Audit/current trust version 1; candidate became eligible with zero gates; actionable Recruiters capacity 0 → 1 |
+| Draft and resume | One canonical local recruiter draft; active `General Resume` selected as configured default; attachment metadata/claim validated without reading PDF bytes or creating Gmail MIME |
+| Independent review | PASS; truthful, concise, relevant, correctly substituted, no unsupported hiring or requisition claim |
+| Regression validation | Typecheck, lint, 52 focused tests, and 1,152 full-suite tests passed |
+| External effects | Zero Apollo calls, Gmail calls/drafts, emails, or production mutations; production activation remained off |
+
 ## Development-only security exception integration
 
 | Field | Recorded outcome |
