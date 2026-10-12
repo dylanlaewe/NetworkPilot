@@ -52,13 +52,17 @@ describe("Network Command Phase C.2", () => {
       "Role relevance",
       "Company evidence",
       "History",
-      "Next step",
+      "Current status",
       "Create draft",
     ])
       expect(workspace).toContain(text);
     expect(workspace).toContain("window.history.replaceState");
     expect(workspace).toContain("data-density={density}");
     expect(workspace).toContain("evidenceGroups");
+    expect(workspace.indexOf("CandidateDraftAction candidate={selected}")).toBeLessThan(
+      workspace.indexOf("evidenceGroups"),
+    );
+    expect(workspace).toContain("/drafts/review?candidate=");
     expect(workspace).toContain('data-active={active ? "true" : undefined}');
     expect(styles).toContain(
       '.row[aria-selected="true"]{background:linear-gradient',
@@ -75,6 +79,7 @@ describe("Network Command Phase C.2", () => {
     expect(page).toContain("const primary=tasks[0]");
     expect(page).toContain("const later=tasks.slice(1)");
     expect(page).toContain("const hasWork=tasks.length>0");
+    expect(page).toContain('actionLabel:workflow.gmail.connectionState==="reauthorization-required"?"Reconnect Gmail":"Open System"');
     expect(styles).toContain(".primaryTask");
     expect(styles).toContain(".later");
     expect(page).not.toMatch(/placeholder task|sample task|fictional task/i);
@@ -99,5 +104,6 @@ describe("Network Command Phase C.2", () => {
     expect(today).toContain("grid-template-columns:repeat(2,minmax(0,1fr))");
     expect(candidates).toContain(".detailOpen{display:block}");
     expect(candidates).toContain("inset:auto 0 58px");
+    expect(shell).toContain("min-height:44px");
   });
 });

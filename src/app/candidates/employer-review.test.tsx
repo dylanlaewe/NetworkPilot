@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CandidatesWorkspace, type CandidateWorkspaceRow } from "./candidates-workspace";
@@ -64,9 +66,26 @@ describe("Candidates employer-trust review", () => {
     expect(html).toContain("Trust operating employer");
     expect(html).toContain("Mark recruiting/staffing service");
     expect(html).toContain("Leave unverified");
+    expect(
+      readFileSync(
+        join(process.cwd(), "src/app/candidates/candidates-workspace.tsx"),
+        "utf8",
+      ),
+    ).toContain("No change saved. Employer remains unverified");
     expect(html).not.toContain("org-fixture");
     expect(html).toContain('name="reason"');
     expect(html).toContain('required=""');
     expect(html).not.toContain("Create Gmail Draft");
+  });
+
+  it("opens an existing draft in the composed mobile review route", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/app/candidates/candidates-workspace.tsx"),
+      "utf8",
+    );
+    expect(source).toContain(
+      "href={`/drafts/review?candidate=${encodeURIComponent(candidate.id)}`}",
+    );
+    expect(source).toContain("Open draft");
   });
 });

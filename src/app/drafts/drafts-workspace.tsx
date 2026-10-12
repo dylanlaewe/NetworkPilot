@@ -252,6 +252,14 @@ export function DraftsWorkspace({
     viewDrafts.find((draft) => draft.candidateId === selectedId) ??
     viewDrafts[0] ??
     null;
+  const closeMobileReview = useCallback(() => {
+    const candidateId = selected?.candidateId;
+    setMobileReview(false);
+    requestAnimationFrame(() => {
+      if (candidateId)
+        document.getElementById(`queue-${candidateId}`)?.focus();
+    });
+  }, [selected?.candidateId]);
   const selectedEdit = selected ? draftEdits[selected.snapshotId] : undefined;
   const editedSubject = selectedEdit?.subject ?? selected?.subject ?? "";
   const editedBody = selectedEdit?.body ?? selected?.body ?? "";
@@ -375,7 +383,7 @@ export function DraftsWorkspace({
         if (sendOpen) closeSend();
         else if (reconcileOpen) closeReconcile();
         else if (paletteOpen) closePalette();
-        else if (mobileReview) setMobileReview(false);
+        else if (mobileReview) closeMobileReview();
         return;
       }
       if (sendOpen || reconcileOpen || paletteOpen) return;
@@ -434,6 +442,7 @@ export function DraftsWorkspace({
     closePalette,
     closeReconcile,
     closeSend,
+    closeMobileReview,
     mobileReview,
     move,
     paletteOpen,
@@ -756,7 +765,7 @@ export function DraftsWorkspace({
                 >
                   <button
                     className={styles.mobileBack}
-                    onClick={() => setMobileReview(false)}
+                    onClick={closeMobileReview}
                   >
                     ← Queue{" "}
                     <span>
@@ -827,6 +836,11 @@ export function DraftsWorkspace({
                               name="resumeId"
                               value={selectedResumeId}
                               aria-label="Resume attachment"
+                              title={
+                                resumeOptions.find(
+                                  (resume) => resume.id === selectedResumeId,
+                                )?.label ?? "No attachment"
+                              }
                               disabled={!editsLoaded}
                               onChange={(event) =>
                                 updateSelectedEdit({
@@ -861,7 +875,7 @@ export function DraftsWorkspace({
                           </>
                         ) : (
                           <>
-                            <strong>
+                            <strong title={selected.attachment?.label ?? "No attachment"}>
                               {selected.attachment?.label ?? "None"}
                             </strong>
                             <small>
@@ -869,6 +883,13 @@ export function DraftsWorkspace({
                             </small>
                           </>
                         )}
+                        <small className={styles.attachmentFullText}>
+                          {selected.state === "ready"
+                            ? (resumeOptions.find(
+                                (resume) => resume.id === selectedResumeId,
+                              )?.label ?? "No attachment")
+                            : (selected.attachment?.label ?? "No attachment")}
+                        </small>
                       </label>
                     </header>
                     {bucketNavigation ? (
@@ -957,6 +978,8 @@ export function DraftsWorkspace({
                         ref={subjectRef}
                         name="subject"
                         value={editedSubject}
+                        title={editedSubject}
+                        aria-describedby="draft-subject-full-text"
                         onChange={(event) =>
                           updateSelectedEdit({
                             subject: event.currentTarget.value,
@@ -966,6 +989,12 @@ export function DraftsWorkspace({
                         required
                         maxLength={64}
                       />
+                      <small
+                        id="draft-subject-full-text"
+                        className={styles.subjectFullText}
+                      >
+                        {editedSubject}
+                      </small>
                     </label>
                     <label className={styles.body}>
                       <span className={styles.srOnly}>Message body</span>

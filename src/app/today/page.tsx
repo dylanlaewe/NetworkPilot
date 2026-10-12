@@ -23,9 +23,9 @@ async function renderTodayPage(){
   const gmailReason=workflow.gmail.readiness.reason?humanDraftError(workflow.gmail.readiness.reason):"Gmail is ready.";
   const date=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"long",month:"long",day:"numeric"}).format(new Date());
   const health=`${gmailReady?"Gmail ready":"Gmail needs attention"} · ${apolloExhausted?"Candidate refresh tomorrow":`${Math.max(0,20-data.safety.apolloExposure)} refresh credits available`}`;
-  const tasks:Array<{href:string;title:string;detail:string;count:string|number;attention?:boolean}>=[];
+  const tasks:Array<{href:string;title:string;detail:string;count:string|number;attention?:boolean;actionLabel?:string}>=[];
   if(uncertain>0)tasks.push({href:"/drafts",title:`Resolve ${uncertain} uncertain ${uncertain===1?"send":"sends"}`,detail:"Confirm the existing result before any retry.",count:uncertain});
-  if(!gmailReady)tasks.push({href:workflow.gmail.connectionState==="reauthorization-required"?"/gmail/reconnect":"/drafts",title:workflow.gmail.connectionState==="reauthorization-required"?"Reconnect Gmail":"Gmail needs attention",detail:gmailReason,count:"!"});
+  if(!gmailReady)tasks.push({href:workflow.gmail.connectionState==="reauthorization-required"?"/gmail/reconnect":"/",title:workflow.gmail.connectionState==="reauthorization-required"?"Reconnect Gmail":"Gmail needs attention",detail:gmailReason,count:"!",actionLabel:workflow.gmail.connectionState==="reauthorization-required"?"Reconnect Gmail":"Open System"});
   if(drafts.length>0)tasks.push({href:"/drafts",title:reviewable>0?`Review ${reviewable} prepared ${reviewable===1?"draft":"drafts"}`:`Continue ${drafts.length} active ${drafts.length===1?"draft":"drafts"}`,detail:"The next message is ready with intent, evidence, and safety checks.",count:drafts.length});
   if(relationships>0)tasks.push({href:"/sent",title:`${relationships} ${relationships===1?"relationship needs":"relationships need"} attention`,detail:"Review replies and follow-up decisions in Sent.",count:relationships});
   tasks.push({href:"/candidates",title:lowSupply?"Candidate supply needs attention":"Candidate supply is healthy",detail:`${data.pipeline.available} qualified candidates are available for future outreach.`,count:data.pipeline.available,attention:lowSupply});
@@ -38,7 +38,7 @@ async function renderTodayPage(){
         <header><p>{date}</p><h1>{hasWork?"Today":"All caught up"}</h1><span>{hasWork?"One clear next step.":"No prepared work needs attention."}</span></header>
         {primary?<article className={styles.primaryTask}>
           <div><span>{primary.count}</span><div><h2>{primary.title}</h2><p>{primary.detail}</p></div></div>
-          <Link href={primary.href}>Continue</Link>
+          <Link href={primary.href}>{primary.actionLabel??"Continue"}</Link>
         </article>:null}
         {later.length?<section className={styles.later}><h2>After that</h2>{later.map(task=><Link key={`${task.href}-${task.title}`} href={task.href}><span><strong>{task.title}</strong><small>{task.detail}</small></span><b>{task.count}</b></Link>)}</section>:null}
         <details className={styles.supplyActions}>

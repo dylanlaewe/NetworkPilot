@@ -136,11 +136,48 @@ function PendingSubmit({ children }: { children: ReactNode }) {
   );
 }
 
+function CandidateDraftAction({ candidate }: { candidate: CandidateWorkspaceRow }) {
+  if (candidate.stage === "in-draft-queue")
+    return (
+      <Link
+        className={styles.primaryAction}
+        href={`/drafts/review?candidate=${encodeURIComponent(candidate.id)}`}
+      >
+        Open draft
+      </Link>
+    );
+  const blocked = draftBlockReason(candidate);
+  if (blocked)
+    return (
+      <div className={styles.blockedDraftAction}>
+        <button className={styles.primaryAction} disabled>
+          Create draft
+        </button>
+        <p className={styles.blockReason}>{blocked}</p>
+      </div>
+    );
+  return (
+    <form action={createCandidateDraft} className={styles.createDraftForm}>
+      <input type="hidden" name="candidateId" value={candidate.id} />
+      <input
+        type="hidden"
+        name="requestId"
+        value={candidate.draftRequestId ?? `candidate-draft-ui:${candidate.id}`}
+      />
+      <PendingSubmit>Create draft</PendingSubmit>
+      <small>Uses the qualified reserve. No provider call.</small>
+    </form>
+  );
+}
+
 type TrustFeedback = { tone: "success" | "error"; message: string } | null;
 
 function EmployerReviewForm({ candidate }: { candidate: CandidateWorkspaceRow }) {
+  const [leaveFeedback, setLeaveFeedback] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const [feedback, action, pending] = useActionState(
     async (_prior: TrustFeedback, formData: FormData): Promise<TrustFeedback> => {
+      setLeaveFeedback(null);
       try {
         await reviewCandidateCompanyTrust(formData);
         return {
@@ -159,6 +196,15 @@ function EmployerReviewForm({ candidate }: { candidate: CandidateWorkspaceRow })
     },
     null,
   );
+  if (dismissed)
+    return (
+      <div className={styles.reviewDismissed} role="status">
+        <p>{leaveFeedback}</p>
+        <button type="button" onClick={() => setDismissed(false)}>
+          Review employer
+        </button>
+      </div>
+    );
   return (
     <form action={action} aria-busy={pending}>
       <input type="hidden" name="candidateId" value={candidate.id} />
@@ -177,7 +223,16 @@ function EmployerReviewForm({ candidate }: { candidate: CandidateWorkspaceRow })
           Mark recruiting/staffing service
         </button>
       </div>
-      <button type="button" className={styles.leaveUnverified}>Leave unverified</button>
+      <button
+        type="button"
+        className={styles.leaveUnverified}
+        onClick={() => {
+          setLeaveFeedback("No change saved. Employer remains unverified and this candidate remains blocked.");
+          setDismissed(true);
+        }}
+      >
+        Leave unverified
+      </button>
       {feedback ? (
         <p className={styles.actionFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
           {feedback.message}
@@ -609,17 +664,20 @@ export function CandidatesWorkspace({
               aria-modal={mobileDetail ? "true" : undefined}
               aria-label={`Candidate details for ${selected.recipient}`}
             >
-              <button
-                type="button"
-                className={styles.close}
-                onClick={closeDetail}
-              >
-                Close
-              </button>
-              <small>Selected candidate</small>
-              <h2>{selected.recipient}</h2>
-              <p className={styles.role}>{selected.title}</p>
-              <p className={styles.company}>{selected.company}</p>
+              <header className={styles.candidateLead}>
+                <button
+                  type="button"
+                  className={styles.close}
+                  onClick={closeDetail}
+                >
+                  Close
+                </button>
+                <small>Selected candidate</small>
+                <h2>{selected.recipient}</h2>
+                <p className={styles.role}>{selected.title}</p>
+                <p className={styles.company}>{selected.company}</p>
+                <CandidateDraftAction candidate={selected} />
+              </header>
               <dl>
                 <div>
                   <dt>Track</dt>
@@ -721,33 +779,7 @@ export function CandidatesWorkspace({
                     : styles.restricted
                 }
               >
-                <h3>Next step</h3>
-                {selected.stage === "in-draft-queue" ? (
-                  <Link
-                    className={styles.primaryAction}
-                    href={`/drafts?candidate=${encodeURIComponent(selected.id)}`}
-                  >
-                    Open draft
-                  </Link>
-                ) : draftBlockReason(selected) ? (
-                  <>
-                    <button className={styles.primaryAction} disabled>
-                      Create draft
-                    </button>
-                    <p className={styles.blockReason}>{draftBlockReason(selected)}</p>
-                  </>
-                ) : (
-                  <form action={createCandidateDraft} className={styles.createDraftForm}>
-                    <input type="hidden" name="candidateId" value={selected.id} />
-                    <input
-                      type="hidden"
-                      name="requestId"
-                      value={selected.draftRequestId ?? `candidate-draft-ui:${selected.id}`}
-                    />
-                    <PendingSubmit>Create draft</PendingSubmit>
-                    <small>Uses the qualified reserve. No provider call.</small>
-                  </form>
-                )}
+                <h3>Current status</h3>
                 <strong>
                   {selected.bucketReviewState === "review-required"
                     ? employerReviewRequired(selected)

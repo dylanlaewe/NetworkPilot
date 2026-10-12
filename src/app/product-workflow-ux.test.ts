@@ -29,6 +29,8 @@ describe("v1 daily workflow UX", () => {
     expect(workspace).toContain('input:not([type="hidden"]):not(:disabled)');
     expect(workspace).toContain('event.key !== "Tab"');
     expect(workspace).toContain("returnFocus");
+    expect(workspace).toContain("closeMobileReview");
+    expect(workspace).toContain('document.getElementById(`queue-${candidateId}`)?.focus()');
     expect(css.match(/@keyframes/g)).toHaveLength(4);
     for (const motion of [
       "selectionTracking",
@@ -81,6 +83,8 @@ describe("v1 daily workflow UX", () => {
     expect(review).toContain('<option value="">None</option>');
     expect(review).toContain('selected.state === "ready"');
     expect(review).toContain("continueWithoutAttachment");
+    expect(review).toContain('className={styles.subjectFullText}');
+    expect(review).toContain('className={styles.attachmentFullText}');
     for (const text of [
       "Add a resume",
       "PDF only, up to 10 MB",

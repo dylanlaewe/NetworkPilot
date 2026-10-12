@@ -22,7 +22,7 @@ export async function createCandidateDraft(formData: FormData) {
   revalidatePath("/today");
   revalidatePath("/drafts");
   revalidatePath("/candidates");
-  redirect(`/drafts?candidate=${encodeURIComponent(candidateId)}`);
+  redirect(`/drafts/review?candidate=${encodeURIComponent(candidateId)}`);
 }
 
 export async function reviewCandidateCompanyTrust(formData: FormData) {

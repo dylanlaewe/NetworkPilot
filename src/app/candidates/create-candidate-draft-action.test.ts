@@ -31,7 +31,7 @@ describe("candidate-specific Create draft action", () => {
     form.set("candidateId", "candidate-one");
     form.set("requestId", "candidate-draft-ui:request-one");
     await expect(createCandidateDraft(form)).rejects.toThrow(
-      "redirect:/drafts?candidate=candidate-one",
+      "redirect:/drafts/review?candidate=candidate-one",
     );
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
       candidateId: "candidate-one",
