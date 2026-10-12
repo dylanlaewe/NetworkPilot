@@ -4,7 +4,7 @@
 
 ## Product
 
-NetworkPilot is Dylan's private, local-first professional networking command center. It helps him find relevant people, qualify them conservatively, write thoughtful outreach, review every message, and preserve relationship history without surrendering control to automation.
+NetworkPilot is Dylan's private, local-first professional networking workspace. It helps him find relevant people, qualify them conservatively, write thoughtful outreach, review every message, and preserve relationship history without surrendering control to automation.
 
 ## Primary user
 
@@ -27,6 +27,7 @@ Turn a safely qualified person into a truthful, personal message with the least 
 7. Trust is earned explicitly and fails closed.
 8. Fast feedback must be truthful; animation must never disguise latency.
 9. Relationship history is durable and understandable.
+10. The daily product speaks in people, messages, and next actions—not pipeline machinery.
 
 ## Primary workflow
 
@@ -56,8 +57,14 @@ Turn a safely qualified person into a truthful, personal message with the least 
 ## Experience commitments
 
 - The product should feel calm, direct, and premium: a focused personal productivity application rather than generated admin software.
-- Preserve the established light, restrained visual direction while improving hierarchy, spacing, typography, density, and control quality.
+- The interaction model is a conversational workbench: a quiet shell, one dominant work surface, and one obvious next action.
+- Familiarity comes from standard controls and restrained navigation, not from copying another product's assets or visual identity.
 - Permanent screen space is reserved for information needed to make the current decision.
+- Buckets are page-local scope, never a permanently expanded navigation tree.
+- Add Drafts always returns a visible success, partial, or zero-result explanation with the best recovery action.
+- Create draft means one selected person and no provider use; Add drafts means several people already in the actionable pool and no provider use; Find more means provider-backed sourcing and must look and read differently.
+- A selected candidate's primary-action region stays in one place across ready, drafted, employer-review, evidence-review, contacted, and cooldown states.
+- Draft review is one continuous local-draft → Gmail-draft → confirmed-send experience; no action sends automatically.
 - Long names, companies, titles, explanations, attachment names, and messages must wrap or disclose safely with no overlap or horizontal page overflow.
 - Desktop and mobile are composed for their contexts; mobile is not a shrunken desktop.
 - Every interactive control exposes clear hover, selected, pressed, focus, pending, disabled, success, and error feedback as applicable.
@@ -65,7 +72,8 @@ Turn a safely qualified person into a truthful, personal message with the least 
 
 ## Current product evidence
 
-- First real production use confirmed that the functionality works, but the experience feels slow, clunky, visually unpolished, overly complicated, and difficult to navigate.
+- Two rounds of real production use confirmed that the functionality works, but the current direction still feels clunky, confusing, mechanical, visually weak, and over-engineered.
+- Add Drafts currently fails the subjective interaction contract when a zero or partial result is not immediately legible, even when the underlying domain operation is behaving safely.
 - Drafts is the highest-priority surface: the permanent inspector overwhelms the message and makes the approval-to-Gmail-to-send path painful.
 - Candidates failed a basic discoverability test: Dylan could not determine how to create a draft for a selected person.
 - Real use established company review as a necessary daily workflow, but the application—not the operator—must carry audit, version, and idempotency complexity.
@@ -78,5 +86,6 @@ Turn a safely qualified person into a truthful, personal message with the least 
 - Draft review gives the person and message overwhelming visual priority.
 - Company review is understandable without exposing implementation metadata.
 - Major navigation and selection interactions are measurably faster or provide immediate truthful feedback.
+- A first-time daily user can distinguish Create draft, Add drafts, and Find more without a tooltip.
 - All major pages work at 1440×900, 1280×800, 390×844, and 360×800, including long-content and 125% zoom stress.
 - The full offline test and browser-acceptance suite passes with zero Apollo calls and zero real Gmail calls.

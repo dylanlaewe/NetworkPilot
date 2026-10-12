@@ -1,209 +1,181 @@
 ---
 name: NetworkPilot
-description: A calm private desk for thoughtful professional outreach.
+description: A calm conversational workbench for thoughtful professional networking.
 colors:
-  ink: "#17211d"
-  muted: "#69736e"
-  canvas: "#f3f5f1"
-  paper: "#fbfcfa"
-  sage: "#dce9df"
-  green: "#205f48"
-  lime: "#c8f16a"
-  line: "#d6dcd7"
-  warning: "#a36f2e"
-  danger: "#93463b"
-  white: "#ffffff"
+  ink: "#20211f"
+  muted: "#6f706c"
+  canvas: "#f7f7f5"
+  paper: "#ffffff"
+  sidebar: "#efefec"
+  soft: "#e8e8e4"
+  accent: "#315c52"
+  accentHover: "#284b43"
+  accentSoft: "#e1ece8"
+  line: "#dfdfda"
+  warning: "#9a641d"
+  warningSoft: "#fbf1df"
+  danger: "#9d4037"
+  success: "#2f6b50"
 typography:
-  display:
-    fontFamily: "Arial, Helvetica, system-ui, sans-serif"
-    fontSize: "clamp(1.875rem, 3vw, 2.625rem)"
-    fontWeight: 770
-    lineHeight: 0.98
-    letterSpacing: "-0.045em"
-  title:
-    fontFamily: "Arial, Helvetica, system-ui, sans-serif"
-    fontSize: "1.3125rem"
-    fontWeight: 750
-    lineHeight: 1.15
+  pageTitle:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "2rem"
+    fontWeight: 620
+    lineHeight: 1.14
+    letterSpacing: "-0.035em"
+  person:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1.25rem"
+    fontWeight: 620
+    lineHeight: 1.25
   body:
-    fontFamily: "Arial, Helvetica, system-ui, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "0.9375rem"
     fontWeight: 400
-    lineHeight: 1.55
-  label:
-    fontFamily: "SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace"
-    fontSize: "0.625rem"
-    fontWeight: 650
-    lineHeight: 1.3
-    letterSpacing: "0.05em"
+    lineHeight: 1.62
+  metadata:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 500
+    lineHeight: 1.4
 rounded:
-  sm: "4px"
-  md: "8px"
-  lg: "12px"
+  control: "10px"
+  surface: "14px"
+  overlay: "18px"
   pill: "999px"
 spacing:
-  xs: "4px"
-  sm: "8px"
+  xxs: "4px"
+  xs: "8px"
+  sm: "12px"
   md: "16px"
   lg: "24px"
   xl: "32px"
+  xxl: "48px"
 components:
-  button-primary:
-    backgroundColor: "{colors.green}"
-    textColor: "{colors.white}"
-    rounded: "{rounded.md}"
-    padding: "12px 16px"
-    height: "48px"
-  button-secondary:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.green}"
-    rounded: "{rounded.md}"
-    padding: "10px 12px"
+  buttonPrimary:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.paper}"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
     height: "44px"
-  input:
-    backgroundColor: "{colors.white}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "10px 12px"
-    height: "44px"
-  card:
+  buttonSecondary:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.lg}"
-    padding: "24px"
+    rounded: "{rounded.control}"
+    padding: "10px 14px"
+    height: "44px"
+  field:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    padding: "11px 12px"
+    height: "44px"
 ---
 
 # Design System: NetworkPilot
 
-## Overview
+## North star: The Conversational Workbench
 
-**Creative North Star: "The Private Editorial Desk"**
+NetworkPilot feels like a thoughtful exchange between Dylan and a highly capable networking assistant. The shell recedes; the current person, message, and decision occupy the center. The product borrows ChatGPT's interaction logic—quiet navigation, a centered work surface, progressive disclosure, and immediate acknowledgement—without copying its proprietary assets, exact layout, or brand treatment.
 
-NetworkPilot should feel like a quiet, well-made writing and relationship workspace: private, evidence-aware, and purposeful. The interface uses a restrained editorial hierarchy, warm neutral surfaces, and deep green actions so people and messages dominate while provider mechanics recede.
+The distinguishing move is the **next-move thread**: every surface ends its active context with one plain-language state and one stable next action. Success, partial completion, and blockers replace that action in place rather than appearing as distant status machinery.
 
-Density is useful only when it shortens daily work. The system favors two-pane review, one visible next action, progressive disclosure for methodology, and clear recovery states. It rejects generic AI command-center theater, decorative dashboards, and any visual treatment that makes an irreversible action feel casual.
+## Shell
 
-**Key Characteristics:**
-
-- Calm warm-neutral surfaces with a rare deep-green action color.
-- People, message copy, and relationship state precede implementation metadata.
-- Compact desktop workspaces recompose into focused mobile review flows.
-- Safety and uncertainty remain explicit without overwhelming normal work.
-
-## Colors
-
-The palette is quiet and botanical: dark ink, warm paper, soft sage, and one confident operating green.
-
-### Primary
-
-- **Private Green:** The primary action, selected-state, and recoverable-navigation color.
-- **Signal Lime:** A rare accent reserved for the small NetworkPilot mark and high-confidence positive signal.
-
-### Neutral
-
-- **Deep Ink:** Primary text and the dark navigation rail.
-- **Quiet Muted:** Secondary copy and supporting metadata.
-- **Work Canvas:** The continuous application background.
-- **Writing Paper:** Review panes, messages, and focused editing surfaces.
-- **Soft Sage:** Selected filters and gentle supporting emphasis.
-- **Hairline:** Dividers that organize dense work without boxing every region.
-
-### Named Rules
-
-**The One Action Rule.** Deep green identifies the current safe next action; do not scatter equally weighted green controls across a workspace.
-
-**The Meaningful Warning Rule.** Amber and red communicate review, uncertainty, suppression, or danger only. They are not decorative accents.
+- Desktop uses one 224px quiet left sidebar and one flexible content surface. No permanent third column.
+- Primary navigation is exactly Today, Drafts, Candidates, and Sent. Resumes and Settings sit below a divider.
+- Recipient buckets are compact page-local tabs or a single mobile select; they never expand in global navigation.
+- The active work surface is centered at a maximum width of 1120px. Reading and message copy stop near 68ch.
+- At 760px and below, the sidebar becomes a 56px top bar plus a four-item bottom navigation. The content remains a single focused column.
 
 ## Typography
 
-**Display Font:** Arial / Helvetica / system sans-serif
-**Body Font:** Arial / Helvetica / system sans-serif
-**Label/Mono Font:** SFMono-Regular / Consolas / Liberation Mono / Menlo
+- Page title: 32px / 1.14 / 620, tracking -0.035em. Mobile: 27px.
+- Person or recipient name: 20px / 1.25 / 620.
+- Message subject: 17px / 1.35 / 600.
+- Body and editable message: 15px / 1.62 / 400, maximum 68ch.
+- Metadata: 12px / 1.4 / 500. It never carries decision-critical content.
+- Use the system sans stack. Monospace is reserved for System diagnostics and never appears in normal daily work.
 
-**Character:** The sans-serif hierarchy is direct and contemporary. Monospace is limited to compact state or evidence labels; it must never make the product feel like an operator console.
+## Spacing
 
-### Hierarchy
+Use one rhythm: 4, 8, 12, 16, 24, 32, 48px. Daily surfaces use 24–32px section gaps; related controls use 8–12px. Do not invent intermediate gaps to patch composition.
 
-- **Display** (770, fluid 30–42px, 0.98): Page and selected-person names.
-- **Title** (750, 21px, 1.15): Workspace sections and message subjects.
-- **Body** (400, 14px, 1.55): Message copy, explanations, and evidence summaries; keep long prose near 72 characters per line.
-- **Label** (650, 10px, 0.05em): Short state and evidence labels only.
+## Color and depth
 
-### Named Rules
+- The canvas is soft neutral `#f7f7f5`; the sidebar is `#efefec`; writing surfaces are white.
+- Primary text is graphite `#20211f`. The deep teal accent `#315c52` is reserved for selected context, links, and recoverable progress—not every button.
+- The primary button is graphite, so the work remains human and editorial rather than status-green.
+- Amber and red are semantic only. Unverified employer uses amber; destructive or failed states use red.
+- Borders organize fixed regions. Shadows appear only on drawers, dialogs, and transient feedback.
 
-**The Read Before Density Rule.** Decision-critical text is normal body size; tiny uppercase or monospace labels are strictly tertiary.
+## Controls and states
 
-## Layout
+- Primary button: graphite fill, white text, 44px minimum height, 10px radius. Hover lightens by one tonal step; pressed translates 1px; pending keeps width and replaces its label with an inline progress mark.
+- Secondary button: paper background, graphite text, one-pixel neutral border. It may never compete with the primary action.
+- Text action: no container; underline appears on hover. Use for Details, Back, and low-risk navigation.
+- Selected navigation: tinted surface plus an inset accent marker; never color alone.
+- Focus: 3px `#8eb5aa` outline with 2px offset on every interactive control.
+- Success: update the action region immediately, announce through `role=status`, and keep the next action adjacent.
+- Blocked: keep the action region and replace the action with a clear label, one-sentence reason, and best recovery control.
+- Disabled controls are used only when the reason is visible beside them. Otherwise render explanatory text instead.
 
-Desktop uses a fixed 52px command bar and 68px primary rail, with page-local recipient filters beneath the shell. Drafts, Candidates, Sent, and Resumes use list/detail or queue/message compositions so the active person stays contextualized. Main panes may scroll independently, but the identity and current action remain visible.
+## Density and progressive disclosure
 
-At 860px and below, the rail becomes a 58px bottom navigation, page-local filters collapse to one select, and detail views become focused overlays or review routes. Primary controls are at least 44px high, safe-area insets are honored, and no workflow may rely on hover. Layouts must remain readable at 360×800, 390×844, 1280×800, 1440×900, and 125% effective scale.
+Permanent visibility is limited to identity, role/company, lifecycle state when it changes the action, the message, the selected resume, and the current next action.
 
-**The One Context Control Rule.** Mobile exposes at most one compact page-context control above daily work.
+Why-this-person evidence, employer trust evidence, classification detail, provider provenance, and diagnostics live behind Details or in System. Internal IDs, hashes, algorithms, catalog versions, evidence paths, and repetitive safe-state badges never appear in the normal work surface.
 
-## Elevation & Depth
+## Surface rules
 
-The system is flat by default. Tonal layering and hairline dividers establish structure; small ambient shadows appear only on overlays, focused message cards, and temporary menus.
+### Today
 
-### Shadow Vocabulary
+Today answers only “What should I do next?” It leads with a greeting, one sentence describing the highest-value task, one primary Continue action, and a short task list. No dashboard cards, charts, or healthy infrastructure content.
 
-- **Ambient Card** (`0 10px 28px #17211d0c`): A focused message or review surface above its canvas.
-- **Floating Panel** (`0 18px 44px #10171420`): Temporary filters and anchored menus.
+### Drafts
 
-**The Flat-By-Default Rule.** A permanent panel does not need a shadow merely to announce its boundary.
+Desktop is two regions: a 280px people queue and a flexible message workspace. The message, subject, resume, and lifecycle action dominate. Details opens on demand as an overlay or inline disclosure. Mobile shows the active draft first with the queue behind a single People control.
 
-## Shapes
+The local draft → Gmail draft → send lifecycle updates in the same action region. Approving may create a Gmail draft, but never sends. Send remains an explicit confirmed external action.
 
-Controls use gently curved 8px corners, message cards use 12px corners, and compact status treatments may use a pill. Dividers and tonal shifts carry most grouping; repeated bordered cards are avoided. The circular brand mark and relationship avatars are the intentional exceptions.
+### Candidates
 
-## Components
+Candidate rows show name, role/company, and one useful state. The selected candidate has a stable primary-action region: Create draft, Open draft, Review employer, Review eligibility, Already contacted, or Available in N days. The control does not disappear when blocked.
 
-### Buttons
+Create draft is a single-person local action. Add drafts uses only the existing actionable pool. Find more is visually separated, explicitly says it may use Apollo, and requires its own confirmation.
 
-- **Shape:** Gently curved (8px), with a 44–48px minimum height.
-- **Primary:** Private Green on white, reserved for the current safe next action.
-- **Hover / Focus:** A modest tonal darkening and a visible 3px sage focus outline; active state may move by one pixel.
-- **Secondary:** Paper or transparent surface, green or ink text, and a quiet border.
+### Sent
 
-### Chips
+Sent reads as relationship history: person, company, date, message, and outcome. Sourcing and provider mechanics stay hidden.
 
-- **Style:** Soft Sage background with deep green text for selected page-local filters.
-- **State:** Keep counts secondary; the label must remain readable without the count.
+## Add Drafts feedback contract
 
-### Cards / Containers
+Every Add Drafts invocation updates within the existing action region:
 
-- **Corner Style:** 12px for focused cards; broad workspace panes stay mostly square.
-- **Background:** Writing Paper over Work Canvas.
-- **Shadow Strategy:** Flat at rest; ambient shadow only for focused or floating layers.
-- **Border:** Hairline dividers rather than full borders wherever possible.
-- **Internal Padding:** Usually 16–32px, responsive to the pane.
+- Success: “3 drafts added” and the queue updates immediately.
+- Partial: “2 of 5 drafts added” plus the highest-value reason supply stopped.
+- Zero: “No drafts could be added” plus grouped reasons and one best CTA such as Review employers or Find more people.
 
-### Inputs / Fields
+The feedback is announced and persists until Dylan acts or dismisses it. Navigation may follow only after the result is visible and understandable.
 
-- **Style:** White or paper surface, 8px radius, quiet hairline stroke, 44px minimum control height.
-- **Focus:** 3px sage-green outline with a 2px offset.
-- **Error / Disabled:** Plain-language reason near the action; disabled state remains legible and never appears actionable.
+## Motion
 
-### Navigation
+- State transitions run 140–180ms with standard easing.
+- The next-move thread may cross-fade and move up 2px when state changes; no entrance choreography.
+- Press feedback appears within one frame when safe.
+- Respect `prefers-reduced-motion`; state remains fully legible without animation.
 
-Primary navigation stays stable across Today, Drafts, Sent, and Candidates. Recipient buckets are page-local filters, not nested application navigation. Desktop uses a compact dark rail; mobile uses a persistent four-item bottom bar.
+## Responsive behavior
 
-### Message Review
+- Test 1440×900, 1280×800, 390×844, and 360×800.
+- At 920px, queue widths contract and secondary copy hides before controls wrap.
+- At 760px, the shell becomes mobile; two-pane surfaces become one active pane with a deliberate back/people control.
+- Touch targets are at least 44px. Bottom actions include safe-area inset. No workflow relies on hover.
 
-The recipient, attachment, subject, message, and current lifecycle action form one focused composition. Evidence and methodology live under a clearly named disclosure. Approval and Gmail-draft creation may share a button; sending remains a separate explicitly confirmed action.
+## Explicitly rejected patterns
 
-## Do's and Don'ts
-
-### Do:
-
-- **Do** keep the selected person and exact next action visible while evidence scrolls.
-- **Do** write blocked and uncertain states in plain language beside the blocked action.
-- **Do** preserve keyboard focus when opening or closing mobile detail and review views.
-- **Do** use progressive disclosure for evidence, methodology, and infrastructure health.
-
-### Don't:
-
-- **Don't** infer trust, qualification, responsibility, or actionability through visual optimism.
-- **Don't** make bucket taxonomy, provider credits, or lifecycle mechanics dominate daily work.
-- **Don't** truncate a message subject, attachment identity, or blocker without a full-text affordance.
-- **Don't** make Send look like the natural continuation of approval; it is a distinct external consequence.
+- Cards around every statistic or sentence.
+- Giant page headers, permanent inspectors, dense filter bars, and expanded bucket trees.
+- Gradients, AI sparkles, decorative charts, glass effects, and neon accents.
+- Tiny uppercase metadata, operator-console language, or badges for healthy default state.
+- Hiding blocked actions or silently returning zero results.

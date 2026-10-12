@@ -1,109 +1,99 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-12T18:18:03Z",
+  "generatedAt": "2026-10-12T20:31:00Z",
   "title": "Design System: NetworkPilot",
   "extensions": {
     "colorMeta": {
-      "ink": { "role": "neutral", "displayName": "Deep Ink", "canonical": "#17211d", "tonalRamp": ["#101713", "#17211d", "#26372f", "#42574e", "#687970", "#9ba8a1", "#d0d7d3", "#f1f4f2"] },
-      "green": { "role": "primary", "displayName": "Private Green", "canonical": "#205f48", "tonalRamp": ["#0d241b", "#12382a", "#1a4c39", "#205f48", "#3f8067", "#72a891", "#b3d0c2", "#e8f3ed"] },
-      "sage": { "role": "neutral", "displayName": "Soft Sage", "canonical": "#dce9df", "tonalRamp": ["#17211b", "#314239", "#52675a", "#758b7e", "#9bb0a3", "#bed0c4", "#dce9df", "#f1f7f3"] },
-      "canvas": { "role": "neutral", "displayName": "Work Canvas", "canonical": "#f3f5f1", "tonalRamp": ["#20231f", "#444942", "#6b7168", "#949a90", "#bdc2b9", "#d9ddd5", "#eef0eb", "#f8f9f6"] },
-      "paper": { "role": "neutral", "displayName": "Writing Paper", "canonical": "#fbfcfa", "tonalRamp": ["#232522", "#4a4d48", "#72766f", "#9ca099", "#c5c9c2", "#e1e4de", "#f3f5f1", "#fbfcfa"] }
+      "ink": { "role": "neutral", "displayName": "Graphite", "canonical": "#20211f", "tonalRamp": ["#171816", "#20211f", "#343532", "#51524f", "#777873", "#a5a6a0", "#d2d2cd", "#f1f1ee"] },
+      "canvas": { "role": "neutral", "displayName": "Work Canvas", "canonical": "#f7f7f5", "tonalRamp": ["#20211f", "#484944", "#73746f", "#9d9e98", "#c5c5c0", "#dfdfda", "#efefec", "#f7f7f5"] },
+      "accent": { "role": "primary", "displayName": "Quiet Teal", "canonical": "#315c52", "tonalRamp": ["#172d28", "#23443c", "#315c52", "#4d786e", "#759b91", "#a8c2bb", "#d1e1dc", "#eef5f2"] },
+      "warning": { "role": "warning", "displayName": "Review Amber", "canonical": "#9a641d", "tonalRamp": ["#4c300c", "#704811", "#9a641d", "#bd8639", "#d6aa68", "#ead0a3", "#f6e8cf", "#fbf1df"] }
     },
     "typographyMeta": {
-      "display": { "displayName": "Workspace Display", "purpose": "Page and selected-person names." },
-      "title": { "displayName": "Editorial Title", "purpose": "Message subjects and section titles." },
-      "body": { "displayName": "Reading Body", "purpose": "Message copy and plain-language explanations." },
-      "label": { "displayName": "Evidence Label", "purpose": "Short tertiary state and evidence labels only." }
+      "pageTitle": { "displayName": "Page Title", "purpose": "Names the current daily-work surface without competing with the work." },
+      "person": { "displayName": "Person", "purpose": "Names the active recipient or candidate." },
+      "body": { "displayName": "Message Body", "purpose": "Carries editable message copy and decision explanations." },
+      "metadata": { "displayName": "Supporting Metadata", "purpose": "Carries role, company, and secondary state only." }
     },
     "shadows": [
-      { "name": "ambient-card", "value": "0 10px 28px #17211d0c", "purpose": "Focused message and review surfaces." },
-      { "name": "floating-panel", "value": "0 18px 44px #10171420", "purpose": "Temporary filters, menus, and overlays." }
+      { "name": "transient-overlay", "value": "0 14px 36px #20211f1a", "purpose": "Temporary feedback and overlays only." }
     ],
     "motion": [
-      { "name": "state-fast", "value": "100ms ease", "purpose": "Selection and background-state changes." },
-      { "name": "reduced-motion", "value": "0.01ms", "purpose": "Effective removal of nonessential motion when requested." }
+      { "name": "state", "value": "150ms ease", "purpose": "Selection, hover, and next-action state changes." },
+      { "name": "press", "value": "100ms ease", "purpose": "One-frame acknowledgement of direct controls." },
+      { "name": "reduced-motion", "value": "0.01ms", "purpose": "Effective removal of nonessential motion." }
     ],
     "breakpoints": [
-      { "name": "mobile", "value": "860px" },
+      { "name": "mobile-shell", "value": "760px" },
       { "name": "compact-mobile", "value": "390px" },
-      { "name": "wide-compact", "value": "1120px" }
+      { "name": "compact-desktop", "value": "980px" }
     ]
   },
   "components": [
     {
       "name": "Primary Action",
       "kind": "button",
-      "refersTo": "button-primary",
+      "refersTo": "buttonPrimary",
       "description": "The single current safe next action.",
-      "html": "<button class=\"ds-primary\">CREATE DRAFT</button>",
-      "css": ".ds-primary { min-height:48px; padding:10px 16px; border:0; border-radius:8px; background:var(--green,#205f48); color:#fff; font:750 13px Arial,Helvetica,sans-serif; transition:background-color 100ms ease,transform 100ms ease; } .ds-primary:hover { background:#174c39; } .ds-primary:active { transform:translateY(1px); } .ds-primary:focus-visible { outline:3px solid #7fa58f; outline-offset:2px; }"
+      "html": "<button class=\"np-primary\">Create draft</button>",
+      "css": ".np-primary{min-height:44px;padding:10px 16px;border:1px solid #20211f;border-radius:10px;background:#20211f;color:#fff;font:620 14px Inter,ui-sans-serif,sans-serif}.np-primary:hover{background:#343532}.np-primary:active{transform:translateY(1px)}.np-primary:focus-visible{outline:3px solid #8eb5aa;outline-offset:2px}"
     },
     {
       "name": "Secondary Action",
       "kind": "button",
-      "refersTo": "button-secondary",
-      "description": "A reversible supporting action.",
-      "html": "<button class=\"ds-secondary\">REVIEW EMPLOYER</button>",
-      "css": ".ds-secondary { min-height:44px; padding:9px 12px; border:1px solid #bdc6bf; border-radius:8px; background:#fbfcfa; color:#205f48; font:700 12px Arial,Helvetica,sans-serif; } .ds-secondary:hover { background:#edf3ee; } .ds-secondary:focus-visible { outline:3px solid #7fa58f; outline-offset:2px; }"
+      "refersTo": "buttonSecondary",
+      "description": "A reversible supporting action with visibly lower weight.",
+      "html": "<button class=\"np-secondary\">Add drafts</button>",
+      "css": ".np-secondary{min-height:44px;padding:10px 14px;border:1px solid #d3d3ce;border-radius:10px;background:#fff;color:#20211f;font:620 14px Inter,ui-sans-serif,sans-serif}.np-secondary:hover{background:#f0f0ed}.np-secondary:focus-visible{outline:3px solid #8eb5aa;outline-offset:2px}"
     },
     {
-      "name": "Text Field",
-      "kind": "input",
-      "refersTo": "input",
-      "description": "A readable message or filter field.",
-      "html": "<label class=\"ds-field\"><span>SUBJECT</span><input value=\"A question about your path\" /></label>",
-      "css": ".ds-field { display:grid; gap:7px; color:#69736e; font:650 10px SFMono-Regular,Consolas,monospace; letter-spacing:.05em; } .ds-field input { min-height:44px; padding:10px 12px; border:1px solid #c4d0c4; border-radius:8px; background:#fff; color:#17211d; font:14px Arial,Helvetica,sans-serif; } .ds-field input:focus-visible { outline:3px solid #7fa58f; outline-offset:2px; }"
-    },
-    {
-      "name": "Recipient Filter",
-      "kind": "chip",
-      "description": "A page-local selected recipient group.",
-      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">PEERS &amp; PRACTITIONERS <small>5</small></button>",
-      "css": ".ds-chip { min-height:38px; display:inline-flex; align-items:center; gap:6px; padding:0 10px; border:0; border-radius:8px; background:#dce9df; color:#174c39; font:750 10px Arial,Helvetica,sans-serif; } .ds-chip small { color:#718078; font:9px SFMono-Regular,Consolas,monospace; } .ds-chip:focus-visible { outline:3px solid #7fa58f; outline-offset:2px; }"
-    },
-    {
-      "name": "Message Card",
-      "kind": "card",
-      "refersTo": "card",
-      "description": "Focused message content over the work canvas.",
-      "html": "<article class=\"ds-message\"><small>MESSAGE</small><h3>Your path into data and analytics</h3><p>Hi Avery, I saw your work in data and analytics…</p></article>",
-      "css": ".ds-message { max-width:620px; padding:24px; border:0; border-radius:12px; background:#fbfcfa; color:#17211d; box-shadow:0 10px 28px #17211d0c; font-family:Arial,Helvetica,sans-serif; } .ds-message small { color:#69736e; font:650 10px SFMono-Regular,Consolas,monospace; letter-spacing:.05em; } .ds-message h3 { margin:9px 0 16px; font-size:21px; } .ds-message p { margin:0; max-width:72ch; font-size:14px; line-height:1.65; }"
-    },
-    {
-      "name": "Primary Navigation Item",
+      "name": "Selected Navigation",
       "kind": "nav",
-      "description": "A stable daily-work destination.",
-      "html": "<nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">DRAFTS</a><a href=\"#\">SENT</a></nav>",
-      "css": ".ds-nav { display:flex; gap:4px; padding:8px; background:#18221e; font-family:Arial,Helvetica,sans-serif; } .ds-nav a { min-height:48px; display:grid; place-items:center; padding:0 12px; color:#9ca7a1; text-decoration:none; font-size:10px; } .ds-nav a:hover { color:#d8eee2; } .ds-nav a[aria-current=\"page\"] { color:#d8eee2; background:#24352e; box-shadow:inset 3px 0 #8dbea4; } .ds-nav a:focus-visible { outline:3px solid #7fa58f; outline-offset:2px; }"
+      "description": "Quiet location context using a tonal surface instead of badge or stripe noise.",
+      "html": "<button class=\"np-nav\" aria-current=\"page\">Drafts</button>",
+      "css": ".np-nav{min-height:44px;padding:8px 11px;border:0;border-radius:10px;background:#deded9;color:#20211f;font:500 14px Inter,ui-sans-serif,sans-serif}"
+    },
+    {
+      "name": "Next Move",
+      "kind": "card",
+      "description": "A stable state, explanation, and action region at the end of the active context.",
+      "html": "<section class=\"np-next\"><span><strong>Ready for a thoughtful introduction</strong><small>Create one local draft · no provider call</small></span><button>Create draft</button></section>",
+      "css": ".np-next{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:15px 16px;border-radius:12px;background:#f1f1ee;color:#20211f}.np-next small{display:block;color:#6f706c;font-size:12px}"
+    },
+    {
+      "name": "Zero-result Feedback",
+      "kind": "status",
+      "description": "Persistent Add Drafts outcome with reasons and the best recovery action.",
+      "html": "<section class=\"np-zero\" role=\"status\"><strong>No drafts could be added.</strong><p>Two employers need review.</p><button>Review employers</button></section>",
+      "css": ".np-zero{padding:15px;border:1px solid #e5d0ac;border-radius:12px;background:#fbf1df;color:#5e451f}.np-zero strong{color:#3c3428}"
     }
   ],
   "narrative": {
-    "northStar": "The Private Editorial Desk",
-    "overview": "NetworkPilot should feel like a quiet, well-made writing and relationship workspace: private, evidence-aware, and purposeful. The interface uses a restrained editorial hierarchy, warm neutral surfaces, and deep green actions so people and messages dominate while provider mechanics recede. Density is useful only when it shortens daily work. The system favors two-pane review, one visible next action, progressive disclosure for methodology, and clear recovery states.",
+    "northStar": "The Conversational Workbench",
+    "overview": "NetworkPilot behaves like a thoughtful exchange between Dylan and a capable networking assistant. A quiet shell surrounds one dominant work surface; the active person, message, and decision stay central while provider and diagnostic mechanics recede.",
     "keyCharacteristics": [
-      "Calm warm-neutral surfaces with a rare deep-green action color.",
-      "People, message copy, and relationship state precede implementation metadata.",
-      "Compact desktop workspaces recompose into focused mobile review flows.",
-      "Safety and uncertainty remain explicit without overwhelming normal work."
+      "One quiet sidebar and one dominant content surface.",
+      "People and writing carry more visual weight than system state.",
+      "The next-move region keeps state, explanation, and action in one stable place.",
+      "Desktop and mobile recompose structurally instead of shrinking the same layout."
     ],
     "rules": [
-      { "name": "The One Action Rule", "body": "Deep green identifies the current safe next action; do not scatter equally weighted green controls across a workspace.", "section": "colors" },
-      { "name": "The Meaningful Warning Rule", "body": "Amber and red communicate review, uncertainty, suppression, or danger only. They are not decorative accents.", "section": "colors" },
-      { "name": "The Read Before Density Rule", "body": "Decision-critical text is normal body size; tiny uppercase or monospace labels are strictly tertiary.", "section": "typography" },
-      { "name": "The Flat-By-Default Rule", "body": "A permanent panel does not need a shadow merely to announce its boundary.", "section": "elevation" }
+      { "name": "The One Next Move Rule", "body": "Every active context ends with one plain-language state and one obvious next action.", "section": "controls" },
+      { "name": "The Existing Pool Rule", "body": "Add drafts always says it uses the existing pool and makes no provider call.", "section": "copy" },
+      { "name": "The Provider Boundary Rule", "body": "Find more is visually separate and explicitly says it may use Apollo.", "section": "copy" },
+      { "name": "The Persistent Result Rule", "body": "Add Drafts success, partial, and zero outcomes remain visible with the best recovery action.", "section": "states" }
     ],
     "dos": [
-      "Do keep the selected person and exact next action visible while evidence scrolls.",
-      "Do write blocked and uncertain states in plain language beside the blocked action.",
-      "Do preserve keyboard focus when opening or closing mobile detail and review views.",
-      "Do use progressive disclosure for evidence, methodology, and infrastructure health."
+      "Do keep the person, message, and next action visible in the same working context.",
+      "Do keep blocked actions in place with a reason and recovery control.",
+      "Do use local state for selection and bucket switching when the required data is already loaded.",
+      "Do keep external consequences explicit and separately confirmed."
     ],
     "donts": [
-      "Don't infer trust, qualification, responsibility, or actionability through visual optimism.",
-      "Don't make bucket taxonomy, provider credits, or lifecycle mechanics dominate daily work.",
-      "Don't truncate a message subject, attachment identity, or blocker without a full-text affordance.",
-      "Don't make Send look like the natural continuation of approval; it is a distinct external consequence."
+      "Don't expose healthy provider, accounting, or evidence machinery in daily work.",
+      "Don't use permanent third columns, expanded bucket trees, or dashboard card walls.",
+      "Don't make zero-result actions look like no-ops.",
+      "Don't copy ChatGPT assets, exact layout, or brand treatment."
     ]
   }
 }
