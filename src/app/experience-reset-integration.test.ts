@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { recipientBucketHref } from "./recipient-bucket-navigation";
 import { draftsForBucket, normalizedDraftAdditionState } from "./drafts/drafts-workspace";
-import { initialDraftAdditionActionState } from "./today/actions";
+import { initialDraftAdditionActionState } from "./drafts/draft-addition-state";
 import { matchesCandidateBucket } from "./candidates/candidates-workspace";
 import { draftAdditionFeedback } from "@/application/daily-refresh/addition-feedback";
 
@@ -38,5 +40,12 @@ describe("real-data experience reset contracts", () => {
     expect(normalizedDraftAdditionState(undefined)).toEqual(initialDraftAdditionActionState);
     expect(normalizedDraftAdditionState(null)).toEqual(initialDraftAdditionActionState);
     expect(normalizedDraftAdditionState({ status: "success", message: "1 draft added", reasons: [], recovery: null })).toMatchObject({ status: "success" });
+  });
+
+  it("keeps the initial action-state value outside the use-server boundary", () => {
+    const actions = readFileSync(join(process.cwd(), "src/app/today/actions.ts"), "utf8");
+    const workspace = readFileSync(join(process.cwd(), "src/app/drafts/drafts-workspace.tsx"), "utf8");
+    expect(actions).not.toContain("export const initialDraftAdditionActionState");
+    expect(workspace).toContain('from "./draft-addition-state"');
   });
 });

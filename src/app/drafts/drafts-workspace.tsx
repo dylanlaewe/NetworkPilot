@@ -16,15 +16,17 @@ import {
   confirmAlreadySent,
   createGmailDraft,
   generateMoreDraftsInline,
-  initialDraftAdditionActionState,
   permanentlyExcludeDraft,
   reconcileGmailSendStatus,
   replaceDraft,
   resolveBucketCorrection,
   sendGmailDraft,
   skipDraft,
-  type DraftAdditionActionState,
 } from "@/app/today/actions";
+import {
+  initialDraftAdditionActionState,
+  type DraftAdditionActionState,
+} from "./draft-addition-state";
 import {
   workspacePrimaryBlockReason,
   type WorkspaceDraft,

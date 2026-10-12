@@ -1,5 +1,6 @@
 import {afterEach,describe,expect,it,vi} from "vitest";
-import {generateMoreDrafts,generateMoreDraftsInline,initialDraftAdditionActionState} from "./today/actions";
+import {generateMoreDrafts,generateMoreDraftsInline} from "./today/actions";
+import {initialDraftAdditionActionState} from "./drafts/draft-addition-state";
 
 const mocks=vi.hoisted(()=>({run:vi.fn(),revalidate:vi.fn(),redirect:vi.fn((path:string)=>{throw new Error(`redirect:${path}`);})}));
 vi.mock("@/infrastructure/sqlite/daily-refresh",()=>({runNextDraftBatchFromReserve:mocks.run}));
