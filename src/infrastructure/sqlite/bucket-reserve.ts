@@ -16,6 +16,7 @@ import {
 import {
   localCampaignDate,
   planNextDraftBatch,
+  type DraftAdditionBlockCounts,
   type DailyRefreshResult,
 } from "@/application/daily-refresh";
 import { CONTACT_IMPACTING_EVENT_TYPES } from "@/domain/outreach";
@@ -28,110 +29,113 @@ import {
 import { bucketProjection } from "@/domain/recipient-buckets";
 import { resolveManualOutreachDatabaseSelection } from "./manual-outreach-operator";
 
-/** Injected repository boundary: no provider, credentials or default database construction. */
-export function bucketReserve(
-  repository: SqliteSimulationRepository,
-  scope: BucketScope,
-  at: Date,
-  options: {
-    includeSecondary?: boolean;
-    replacementId?: string;
-    requestId?: string;
-  } = {},
-) {
-  assertFiveBucketEnabled();
+export type BucketReserveBlockCounts = DraftAdditionBlockCounts;
+
+interface BucketReserveContext {
+  repository: SqliteSimulationRepository;
+  at: Date;
+  candidates: ReturnType<typeof readCurrentQueueCandidates>;
+  active: ReturnType<typeof loadQueueReviews>;
+  operations: ReturnType<typeof readQueueOperations>;
+  planned: Set<string>;
+  suppressed: Set<string>;
+  events: ReturnType<SqliteSimulationRepository["listOutreachEvents"]>;
+  date: string;
+  today: string;
+}
+
+const emptyBlockCounts = (): BucketReserveBlockCounts => ({
+  reviewRequired: 0,
+  alreadyDraftedOrContacted: 0,
+  companyCooldown: 0,
+  suppressed: 0,
+  unresolvedEvidence: 0,
+  noQualifiedReserve: 0,
+});
+
+function loadBucketReserveContext(repository: SqliteSimulationRepository, at: Date): BucketReserveContext {
   // Bucket classification and reserve are canonical application state. The
-  // legacy recruiter database is evidence-only and must never participate in
-  // five-bucket persistence or capacity calculations.
-  const canonicalOnly = { includeSecondary: false } as const,
-    candidates = readCurrentQueueCandidates(repository, canonicalOnly),
-    active = loadQueueReviews(repository, at, canonicalOnly).filter(
-      (r) =>
-        r.operation?.sendState !== "sent" &&
-        !repository.findManualOutreach(r.snapshotId),
-    ),
-    operations = readQueueOperations(repository),
-    generations = readDraftGenerations(repository.native);
-  const suppressed = new Set(
-    (
-      repository.native
-        .prepare("SELECT candidate_id FROM candidate_suppression_entries")
-        .all() as { candidate_id: string }[]
-    ).map((r) => r.candidate_id),
+  // legacy recruiter database is evidence-only and never participates here.
+  const canonicalOnly = { includeSecondary: false } as const;
+  const active = loadQueueReviews(repository, at, canonicalOnly).filter(
+    (row) => row.operation?.sendState !== "sent" && !repository.findManualOutreach(row.snapshotId),
   );
-  const planned = new Set(
-    generations.flatMap((g) => [
-      ...g.candidateIds,
-      ...(g.carriedDraftReviews ?? []).map((r) => r.candidateId),
-    ]),
-  );
-  const occupied = new Set(
-    active
-      .filter((r) => r.candidateId !== options.replacementId)
-      .map((r) => r.companyId),
-  );
+  const generations = readDraftGenerations(repository.native);
+  return {
+    repository,
+    at,
+    candidates: readCurrentQueueCandidates(repository, canonicalOnly),
+    active,
+    operations: readQueueOperations(repository),
+    planned: new Set(generations.flatMap((generation) => [
+      ...generation.candidateIds,
+      ...(generation.carriedDraftReviews ?? []).map((row) => row.candidateId),
+    ])),
+    suppressed: new Set((repository.native.prepare("SELECT candidate_id FROM candidate_suppression_entries").all() as { candidate_id: string }[]).map((row) => row.candidate_id)),
+    events: repository.listOutreachEvents().filter((event) => CONTACT_IMPACTING_EVENT_TYPES.has(event.type) || event.type === "operator-reported-hard-bounce"),
+    date: localCampaignDate(at),
+    today: at.toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+  };
+}
+
+function projectBucketReserve(
+  context: BucketReserveContext,
+  scope: BucketScope,
+  options: { replacementId?: string } = {},
+) {
+  const { repository, at, candidates, active, operations, planned, suppressed, events, date, today } = context;
+  const occupied = new Set(active.filter((row) => row.candidateId !== options.replacementId).map((row) => row.companyId));
   for (const operation of operations)
-    if (operation.sendState !== "sent" && operation.snapshot.companyId)
-      occupied.add(operation.snapshot.companyId);
-  const events = repository
-    .listOutreachEvents()
-    .filter(
-      (e) =>
-        CONTACT_IMPACTING_EVENT_TYPES.has(e.type) ||
-        e.type === "operator-reported-hard-bounce",
-    );
-  const date = localCampaignDate(at),
-    today = at.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const matching = candidates.filter((c) =>
-    matchesBucketScope(c.recipientBucket, scope),
-  );
-  const eligible = matching.filter((c) => {
-    const company = c.strategyCompanyMatch?.companyId;
-    return (
-      c.state === "eligible" &&
-      !c.gateFailures.length &&
-      !c.source.consent.suppressed &&
-      !c.source.consent.optedOut &&
-      c.source.email.verificationStatus === "verified" &&
-      company &&
-      !occupied.has(company) &&
-      !suppressed.has(c.id) &&
-      !planned.has(c.id) &&
-      !operations.some((op) => op.snapshot.candidateId === c.id) &&
-      !draftIsDismissed(repository.native, c.id, date) &&
-      !events.some(
-        (e) =>
-          e.prospectId === c.id ||
-          e.prospectId === `authorized:${c.source.providerRecordId}` ||
-          (e.companyId === company &&
-            (e.type === "operator-reported-hard-bounce"
-              ? e.occurredAt.toLocaleDateString("en-CA", {
-                  timeZone: "America/New_York",
-                }) === today
-              : e.occurredAt.getTime() >= at.getTime() - 7 * 86400000)),
-      ) &&
-      renderQueueReview(c, 0, at) !== null
-    );
+    if (operation.sendState !== "sent" && operation.snapshot.companyId) occupied.add(operation.snapshot.companyId);
+  const matching = candidates.filter((candidate) => matchesBucketScope(candidate.recipientBucket, scope));
+  const blockCounts = emptyBlockCounts();
+  if (!matching.length) blockCounts.noQualifiedReserve = 1;
+  const eligible = matching.filter((candidate) => {
+    const company = candidate.strategyCompanyMatch?.companyId;
+    const contacted = events.some((event) => event.prospectId === candidate.id || event.prospectId === `authorized:${candidate.source.providerRecordId}`);
+    const coolingDown = Boolean(company && events.some((event) => event.companyId === company && (event.type === "operator-reported-hard-bounce" ? event.occurredAt.toLocaleDateString("en-CA", { timeZone: "America/New_York" }) === today : event.occurredAt.getTime() >= at.getTime() - 7 * 86400000)));
+    if (candidate.source.consent.suppressed || candidate.source.consent.optedOut || suppressed.has(candidate.id)) {
+      blockCounts.suppressed += 1;
+      return false;
+    }
+    if (planned.has(candidate.id) || operations.some((operation) => operation.snapshot.candidateId === candidate.id) || draftIsDismissed(repository.native, candidate.id, date) || contacted || Boolean(company && occupied.has(company))) {
+      blockCounts.alreadyDraftedOrContacted += 1;
+      return false;
+    }
+    if (coolingDown) {
+      blockCounts.companyCooldown += 1;
+      return false;
+    }
+    if (candidate.state === "review-required" || candidate.recipientBucket?.reviewState !== "accepted") {
+      blockCounts.reviewRequired += 1;
+      return false;
+    }
+    if (candidate.state !== "eligible" || candidate.gateFailures.length || candidate.source.email.verificationStatus !== "verified" || !company || renderQueueReview(candidate, 0, at) === null) {
+      blockCounts.unresolvedEvidence += 1;
+      return false;
+    }
+    return true;
   });
   return {
     active,
     eligible,
-    totalReserve: matching.filter(
-      (c) =>
-        !planned.has(c.id) &&
-        !operations.some((op) => op.snapshot.candidateId === c.id),
-    ).length,
-    actionableCapacity: new Set(
-      eligible.map((c) => c.strategyCompanyMatch!.companyId),
-    ).size,
+    totalReserve: matching.filter((candidate) => !planned.has(candidate.id) && !operations.some((operation) => operation.snapshot.candidateId === candidate.id)).length,
+    actionableCapacity: new Set(eligible.map((candidate) => candidate.strategyCompanyMatch!.companyId)).size,
+    blockCounts,
   };
+}
+
+/** Injected repository boundary: no provider, credentials or default database construction. */
+export function bucketReserve(repository: SqliteSimulationRepository, scope: BucketScope, at: Date, options: { includeSecondary?: boolean; replacementId?: string; requestId?: string } = {}) {
+  assertFiveBucketEnabled();
+  return projectBucketReserve(loadBucketReserveContext(repository, at), scope, options);
 }
 
 /** Authoritative, provider-free capacity projection used by operator surfaces. */
 export function loadBucketReserveMetrics(
   scope: BucketScope,
   at = new Date(),
-): { totalReserve: number; actionableCapacity: number } {
+): { totalReserve: number; actionableCapacity: number; blockCounts: BucketReserveBlockCounts } {
   assertFiveBucketEnabled();
   const repository = new SqliteSimulationRepository(
     resolveManualOutreachDatabaseSelection().path,
@@ -139,21 +143,37 @@ export function loadBucketReserveMetrics(
   );
   try {
     repository.assertRuntimeSchema();
-    const state = bucketReserve(repository, scope, at);
+    const state = projectBucketReserve(loadBucketReserveContext(repository, at), scope);
     return {
       totalReserve: state.totalReserve,
       actionableCapacity: state.actionableCapacity,
+      blockCounts: state.blockCounts,
     };
   } finally {
     repository.close();
   }
 }
 
-/** One datastore read for the unfiltered Drafts view across accepted buckets. */
-export function hasActionableBucketReserve(
-  scopes: readonly BucketScope[],
-  at = new Date(),
-): boolean {
+/** One canonical datastore projection shared by every recipient scope. */
+export function bucketReserveMetricsForScopes(repository: SqliteSimulationRepository, scopes: readonly BucketScope[], at: Date) {
+    const context = loadBucketReserveContext(repository, at);
+    const projected = scopes.map((scope) => ({ scope, state: projectBucketReserve(context, scope) }));
+    const baseProjected = projected.filter(({ scope }) => !scope.earlyCareerOnly);
+    const byBucket = Object.fromEntries(baseProjected.map(({ scope, state }) => [scope.bucket, {
+      totalReserve: state.totalReserve,
+      actionableCapacity: state.actionableCapacity,
+      blockCounts: state.blockCounts,
+    }])) as Partial<Record<BucketScope["bucket"], { totalReserve: number; actionableCapacity: number; blockCounts: BucketReserveBlockCounts }>>;
+    const byScope = Object.fromEntries(projected.map(({ scope, state }) => [`${scope.bucket}${scope.earlyCareerOnly ? ":early-career" : ""}`, { totalReserve: state.totalReserve, actionableCapacity: state.actionableCapacity, blockCounts: state.blockCounts }]));
+    const eligibleCompanies = new Set(baseProjected.flatMap(({ state }) => state.eligible.map((candidate) => candidate.strategyCompanyMatch!.companyId)));
+    const blockCounts = baseProjected.reduce((all, { state }) => {
+      for (const key of Object.keys(all) as Array<keyof BucketReserveBlockCounts>) all[key] += state.blockCounts[key];
+      return all;
+    }, emptyBlockCounts());
+    return { byBucket, byScope, actionableCapacity: eligibleCompanies.size, blockCounts };
+}
+
+export function loadBucketReserveMetricsForScopes(scopes: readonly BucketScope[], at = new Date()) {
   assertFiveBucketEnabled();
   const repository = new SqliteSimulationRepository(
     resolveManualOutreachDatabaseSelection().path,
@@ -161,12 +181,15 @@ export function hasActionableBucketReserve(
   );
   try {
     repository.assertRuntimeSchema();
-    return scopes.some(
-      (scope) => bucketReserve(repository, scope, at).actionableCapacity > 0,
-    );
+    return bucketReserveMetricsForScopes(repository, scopes, at);
   } finally {
     repository.close();
   }
+}
+
+/** Compatibility wrapper for callers that only need a yes/no union projection. */
+export function hasActionableBucketReserve(scopes: readonly BucketScope[], at = new Date()): boolean {
+  return loadBucketReserveMetricsForScopes(scopes, at).actionableCapacity > 0;
 }
 
 export function addBucketDraftsFromRepository(
@@ -277,6 +300,7 @@ export function addBucketDraftsFromRepository(
           reviews.length -
           (replaced && reviews.length ? 1 : 0),
         eligibleReserveRemaining: remaining,
+        blockCounts: reserve.blockCounts,
         shortfallCode:
           reviews.length < requested ? "scoped-reserve-exhausted" : null,
       },
@@ -427,6 +451,7 @@ export function createExactCandidateDraftFromRepository(
         activeBefore: reserve.active.length,
         activeAfter: reserve.active.length + 1,
         eligibleReserveRemaining: Math.max(0, reserve.actionableCapacity - 1),
+        blockCounts: reserve.blockCounts,
         shortfallCode: null,
       },
       professionalCount: review.outreachTrack === "professional" ? 1 : 0,

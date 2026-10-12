@@ -14,6 +14,7 @@ import { buildReviewedBucketCorrection } from "@/application/ingestion/review-bu
 import {
   addBucketDraftsFromRepository,
   bucketReserve,
+  bucketReserveMetricsForScopes,
   createExactCandidateDraftFromRepository,
   resolveBucketDraftCorrectionInRepository,
 } from "./bucket-reserve";
@@ -73,6 +74,20 @@ afterEach(() => {
 });
 
 describe("bucket persistence and reserve integration", () => {
+  it("projects multiple scopes from one canonical context and deduplicates actionable company capacity", () => {
+    const r = repo();
+    add(r, "peers", 71);
+    add(r, "managers", 72);
+    const scopes = [{ bucket: "peers" }, { bucket: "managers" }] as const;
+    const initial = bucketReserveMetricsForScopes(r, scopes, FIXTURE_AT);
+    expect(initial.byBucket.peers).toMatchObject({ totalReserve: 1, actionableCapacity: 1 });
+    expect(initial.byBucket.managers).toMatchObject({ totalReserve: 1, actionableCapacity: 1 });
+    expect(initial.actionableCapacity).toBe(2);
+    addBucketDraftsFromRepository(r, 1, { bucket: "peers" }, FIXTURE_AT, { requestId: "multi-scope-fixture" });
+    const after = bucketReserveMetricsForScopes(r, scopes, FIXTURE_AT);
+    expect(after.actionableCapacity).toBe(1);
+    expect(after.byBucket.peers?.blockCounts.alreadyDraftedOrContacted).toBeGreaterThan(0);
+  });
   it("creates only the selected eligible candidate, replays by request id, and blocks duplicates", () => {
     const r = repo();
     const selected = add(r, "peers", 91, true);
