@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-12 after the approved ChatGPT-inspired experience reset was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-12 after the empty-candidate first-run workflow was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `9198d15086d0d82dca27724a999eba4a576f2caf` (`fix: align candidate sourcing availability`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `6da384f2406df8a55b12c00a4c5fd4545cfccabe` (`fix: clarify empty candidate sourcing`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 67856 (parent `npm run app:start` PID 67840), started 2026-10-12 at 18:22:58 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 87709 (parent `npm run app:start` PID 87693), started 2026-10-12 at 18:55:31 America/New_York.
 
 ## Product-experience deployment
 
@@ -33,6 +33,15 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 - Candidate bucket switching and candidate selection visibly completed client-locally in approximately 155 ms and 104 ms respectively in the acceptance browser. Five warm local production fetches measured median end-to-end times of approximately 117 ms for Drafts and 98 ms for Candidates; no obvious deployment regression was observed.
 - Zero-capacity Add Drafts now gives a truthful no-actionable-reserve explanation and keeps the separately labeled, potentially Apollo-backed Find More path distinct. Find More was not executed.
 - No new blocking polish was found. The mobile Resumes view now exposes an explicit Back to resumes affordance. Populated mobile Draft action density remains a non-blocking follow-up only if normal use reveals friction; do not start another UI task automatically.
+
+## Empty-candidate first-run deployment
+
+- The empty-pool and zero-actionable recovery workflow became live at 2026-10-12 18:55:31 EDT from exact code revision `6da384f2406df8a55b12c00a4c5fd4545cfccabe`.
+- Production read-only diagnosis confirmed zero current five-bucket candidates and zero actionable capacity in every bucket, with 127 explicitly separated Legacy records. No Legacy record was reclassified or moved.
+- A zero pool now presents `No candidates yet`, makes provider-backed `Find people` the primary next step, discloses that Apollo credits may be used, and keeps `View Legacy` secondary. A populated but non-actionable pool instead summarizes authoritative blocker counts and points to review or sourcing. `Add drafts` appears only when truthful actionable capacity exists.
+- Browser acceptance passed at 1440×900, 1280×800, 390×844, and 360×800. The first click opens the scoped confirmation without provider activity; the confirmation shows its maximum credit exposure and has one unambiguous submit. The mobile panel participates in normal layout flow and remains clear of fixed navigation.
+- This was a code/UI-only deployment. No migration ran. The initial restart exposed a missing local `better-sqlite3` native binding; rebuilding the already-installed dependency and restarting the same validated revision resolved it without code, schema, or data changes.
+- Deployment and read-only acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends. Canonical provider, refresh, Gmail, outreach, trust, and logical database fingerprints remained unchanged.
 
 ## Datastore topology
 
@@ -134,7 +143,7 @@ The separately authorized October 4 staged validation then moved account usage f
 
 ## Current blocker
 
-There is no activation blocker. Controlled production activation completed without provider or Gmail work. Another Apollo call, Gmail call/draft, or real email still requires separate task-specific authorization.
+The empty-state workflow is live. The only next product gate is explicit authorization for initial production candidate sourcing. Another Apollo call, Gmail call/draft, or real email still requires separate task-specific authorization.
 
 ## Production state
 
@@ -148,6 +157,7 @@ There is no activation blocker. Controlled production activation completed witho
 - The operator-targeting incident and guard are documented in `docs/explicit-migration-boundary.md`; `db:migrate` now requires and prints an explicit absolute target and rejects missing, nonexistent, or conflicting configuration.
 - Production dependency audit is zero after patching `sharp@0.35.5` and `source-map-js@1.2.2`; the exact accepted dev-only `braces` exception remains enforced.
 - The 2026-10-12 experience-reset deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
+- The 2026-10-12 first-run workflow deployment likewise made zero Apollo calls, Gmail calls, Gmail drafts, or emails. The canonical logical database fingerprint remained `0ebcbb9f03b32019184451fee6909c569f09c9d2382a4cfd4ba48db1ab3d356f`; provider operations remained 130 with 130 total attempts, candidate refresh events remained 5, and daily refresh runs remained 8.
 
 ## Engineering invariants
 
@@ -162,4 +172,4 @@ There is no activation blocker. Controlled production activation completed witho
 
 ## Next recommended task
 
-Dylan should use the redesigned production workflow himself before further engineering. Do not call Apollo or Gmail, create Gmail drafts, or send email without new task-specific authorization.
+After Dylan explicitly authorizes provider spend, run a conservative sequential initial sourcing seed: at most one enrichment attempt per bucket, validate the full canonical pipeline after each attempt, and stop immediately on any safety anomaly. Maximum Apollo enrichment exposure: five credits total. Do not call Gmail, create Gmail drafts, or send email.
