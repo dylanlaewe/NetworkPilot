@@ -3,7 +3,7 @@ import "./globals.css";
 import "./product.css";
 
 export const metadata: Metadata = {
-  title: "NetworkPilot — Private Outreach Dashboard",
+  title: "NetworkPilot — Thoughtful networking workspace",
   description: "A private workspace for thoughtful professional outreach planning.",
 };
 

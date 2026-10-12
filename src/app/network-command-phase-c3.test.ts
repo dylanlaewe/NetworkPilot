@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const source = (path: string) =>
   readFileSync(join(process.cwd(), path), "utf8");
 
-describe("Network Command Phase C.3", () => {
+describe("Network Command supporting surfaces", () => {
   it("unifies all six surfaces without changing the four primary destinations", () => {
     const shell = source("src/app/network-command-shell.tsx");
     for (const value of [
@@ -16,7 +16,11 @@ describe("Network Command Phase C.3", () => {
       "system",
     ])
       expect(shell).toContain(value);
-    expect(shell.match(/\["(today|drafts|sent|candidates)"/g)).toHaveLength(4);
+    expect(shell).toContain("const primaryDestinations = [");
+    expect(shell).toContain('{ id: "today", label: "Today" }');
+    expect(shell).toContain('{ id: "drafts", label: "Drafts" }');
+    expect(shell).toContain('{ id: "candidates", label: "Candidates" }');
+    expect(shell).toContain('{ id: "sent", label: "Sent" }');
   });
   it("treats Sent as relationship memory with truthful message, timeline, and outcomes", () => {
     const view = source("src/app/sent/relationship-workspace.tsx");
@@ -63,7 +67,7 @@ describe("Network Command Phase C.3", () => {
   it("makes System quiet, progressive, and free of provider actions or secrets", () => {
     const page = source("src/app/page.tsx");
     for (const value of [
-      "Quiet operational diagnostics",
+      "Settings and operational health",
       "Health",
       "Gmail",
       "Apollo",
@@ -86,9 +90,9 @@ describe("Network Command Phase C.3", () => {
       system = source("src/app/system-command.module.css");
     expect(shell).toContain(":focus-visible");
     expect(shell).toContain("prefers-reduced-motion:reduce");
-    expect(sent).toContain("@media(max-width:800px)");
-    expect(resumes).toContain(".selection .detail");
-    expect(system).toContain("@media(max-width:700px)");
+    expect(sent).toContain("@media(max-width:760px)");
+    expect(resumes).toContain(".mobileBack");
+    expect(system).toContain("@media(max-width:760px)");
   });
   it("keeps every mobile surface usable with compact widths and long content", () => {
     const shell = source("src/app/network-command.module.css"),
@@ -97,13 +101,13 @@ describe("Network Command Phase C.3", () => {
       system = source("src/app/system-command.module.css"),
       view = source("src/app/sent/relationship-workspace.tsx");
     expect(view).toContain('aria-label="Filter relationships by outcome"');
-    expect(sent).toContain(".mobileFilter{display:grid");
+    expect(sent).toContain(".mobileFilter");
     expect(sent).toContain("overflow-wrap:anywhere");
-    expect(resumes).toContain("env(safe-area-inset-right)");
-    expect(resumes).toContain(".detail dl{grid-template-columns:1fr}");
-    expect(system).toContain("overflow-x:hidden");
+    expect(resumes).toContain("env(safe-area-inset-bottom)");
+    expect(resumes).toContain(".detail>dl{grid-template-columns:1fr}");
     expect(system).toContain("overflow-wrap:anywhere");
-    expect(shell).toContain("height:calc(58px + env(safe-area-inset-bottom))");
-    expect(shell).toContain("grid-template-columns:repeat(4,minmax(0,1fr))");
+    expect(shell).toContain("overflow-x: clip");
+    expect(shell.replaceAll(" ", "")).toContain("height:calc(64px+env(safe-area-inset-bottom))");
+    expect(shell.replaceAll(" ", "")).toContain("grid-template-columns:repeat(4,minmax(0,1fr))");
   });
 });

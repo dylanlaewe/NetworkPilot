@@ -7,7 +7,7 @@ import {DraftAdditionFeedback} from "./drafts/addition-feedback";
 import {draftAdditionDestination} from "@/application/daily-refresh/addition-feedback";
 vi.mock("./candidates/actions",()=>({refreshCandidates:vi.fn()}));
 describe("offline operator controls",()=>{
-  it.each([[10,10,4,"10 drafts added."],[6,10,0,"6 drafts added. Your available candidate reserve is exhausted."],[0,10,0,"No eligible candidates are available right now."]])("keeps Add feedback on Drafts (%i added / %i requested)",(added,requested,remaining,message)=>{
+  it.each([[10,10,4,"10 drafts added."],[6,10,0,"6 of 10 drafts added. The actionable reserve is exhausted."],[0,10,0,"No drafts could be added. No eligible candidates are available right now."]])("keeps Add feedback on Drafts (%i added / %i requested)",(added,requested,remaining,message)=>{
     const html=renderToStaticMarkup(createElement(DraftAdditionFeedback,{added,requested,remaining}));
     expect(html).toContain('role="status"');expect(html).toContain(message);
     expect(draftAdditionDestination({addedCount:added,additionalDraftCount:requested,activeBefore:5,activeAfter:5+added,eligibleReserveRemaining:remaining})).toMatch(/^\/drafts\?/);

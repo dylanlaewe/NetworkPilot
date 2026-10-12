@@ -18,12 +18,12 @@ describe("v1 daily workflow UX", () => {
     expect(css).toContain(":focus-visible");
     expect(css).toContain("content:attr(data-label)");
     expect(workspaceCss).toContain(":focus-visible");
-    expect(workspaceCss).toContain("@media(max-width:860px)");
+    expect(workspaceCss).toContain("@media(max-width:760px)");
     expect(workspace).toContain("setSelectedId");
     expect(workspace).toContain("window.history.replaceState");
     expect(workspace).toContain('key === "j" || key === "k"');
   });
-  it("keeps dialogs keyboard-contained and implements only the four approved motion families", () => {
+  it("keeps dialogs keyboard-contained and respects reduced motion", () => {
     const workspace = source("src/app/drafts/drafts-workspace.tsx"),
       css = source("src/app/drafts/drafts-workspace.module.css");
     expect(workspace).toContain('input:not([type="hidden"]):not(:disabled)');
@@ -31,21 +31,14 @@ describe("v1 daily workflow UX", () => {
     expect(workspace).toContain("returnFocus");
     expect(workspace).toContain("closeMobileReview");
     expect(workspace).toContain('document.getElementById(`queue-${candidateId}`)?.focus()');
-    expect(css.match(/@keyframes/g)).toHaveLength(4);
-    for (const motion of [
-      "selectionTracking",
-      "queueReflow",
-      "commandResponse",
-      "lifecycleTransfer",
-    ])
-      expect(css).toContain(`@keyframes ${motion}`);
+    expect(css).not.toContain("@keyframes");
     expect(css).toContain("prefers-reduced-motion:reduce");
   });
   it("keeps the four primary destinations and a secondary system destination", () => {
-    const nav = source("src/app/product-nav.tsx");
+    const nav = source("src/app/network-command-shell.tsx");
     for (const value of ["Today", "Drafts", "Sent", "Candidates"])
       expect(nav).toContain(value);
-    expect(nav).toContain('className="secondary-nav"');
+    expect(nav).toContain("secondaryDestinations");
     expect(nav).toContain("aria-current");
   });
   it("keeps sent work out of Drafts and maps one primary action per draft state", () => {
@@ -106,8 +99,8 @@ describe("v1 daily workflow UX", () => {
     expect(actions).toContain("buildReviewedBucketCorrection");
     expect(correction).toContain('reviewedBy: "local-operator"');
     expect(drafts).toContain('name="requestId"');
-    expect(screen).toContain("loadBucketReserveMetrics");
-    expect(screen).toContain("hasActionableBucketReserve");
+    expect(screen).toContain("loadBucketReserveMetricsForScopes");
+    expect(screen).not.toContain("hasActionableBucketReserve");
   });
   it("uses stable candidate lookup and the newest immutable operation after a failed attempt", () => {
     const screen = source("src/app/drafts/drafts-screen.tsx"),
@@ -154,7 +147,7 @@ describe("v1 daily workflow UX", () => {
   it("exposes bounded draft controls and keeps System secondary", () => {
     const drafts = source("src/app/drafts/drafts-workspace.tsx"),
       today = source("src/app/today/page.tsx"),
-      nav = source("src/app/product-nav.tsx");
+      nav = source("src/app/network-command-shell.tsx");
     expect(drafts).toContain("Add drafts");
     expect(drafts).toContain("Add 5");
     expect(drafts).toContain("Add 10");
@@ -163,7 +156,8 @@ describe("v1 daily workflow UX", () => {
     expect(drafts).toContain("Skip");
     expect(drafts).toContain("Don&apos;t show this person again");
     expect(drafts).toContain("Replace");
-    expect(today).toContain("AddDraftsControl");
-    expect(nav).toContain('className="secondary-nav"');
+    expect(today).not.toContain("AddDraftsControl");
+    expect(today).toContain("loadBucketReserveMetricsForScopes");
+    expect(nav).toContain("secondaryDestinations");
   });
 });

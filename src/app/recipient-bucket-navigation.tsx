@@ -27,7 +27,7 @@ export interface BucketNavigationData {
   preservedQuery?: Record<string, string | undefined>;
 }
 
-function withBucket(path: BucketSection, bucket: BucketSelection, query: BucketNavigationData["preservedQuery"]) {
+export function recipientBucketHref(path: BucketSection, bucket: BucketSelection, query: BucketNavigationData["preservedQuery"]) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {}))
     if (key !== "bucket" && key !== "earlyCareerOnly" && value !== undefined)
@@ -38,37 +38,43 @@ function withBucket(path: BucketSection, bucket: BucketSelection, query: BucketN
   return `/${path}${suffix ? `?${suffix}` : ""}`;
 }
 
-export function RecipientBucketNavigation({ data }: { data: BucketNavigationData }) {
+export function RecipientBucketNavigation({ data, selected, earlyCareerOnly, onSelect }: { data: BucketNavigationData; selected?: BucketSelection; earlyCareerOnly?: boolean; onSelect?: (bucket: BucketSelection, earlyCareerOnly: boolean) => void }) {
   const [pending, setPending] = useState(false);
+  const active = selected ?? data.selected;
+  const earlyCareer = earlyCareerOnly ?? Boolean(data.earlyCareerOnly);
   const count = (bucket: BucketSelection) => bucket === "all" ? data.total : bucket === "legacy" ? (data.legacyCount ?? 0) : (data.counts[bucket] ?? 0);
-  const navigate = (bucket: BucketSelection, earlyCareerOnly = data.earlyCareerOnly) => {
-    const query = { ...data.preservedQuery, earlyCareerOnly: bucket === "peers" && earlyCareerOnly ? "true" : undefined };
+  const navigate = (bucket: BucketSelection, nextEarlyCareer = earlyCareer) => {
+    if (onSelect) {
+      onSelect(bucket, bucket === "peers" && nextEarlyCareer);
+      return;
+    }
+    const query = { ...data.preservedQuery, earlyCareerOnly: bucket === "peers" && nextEarlyCareer ? "true" : undefined };
     setPending(true);
-    const href = withBucket(data.current, bucket, query);
+    const href = recipientBucketHref(data.current, bucket, query);
     document.querySelector<HTMLAnchorElement>(`a[data-bucket-href="${CSS.escape(href)}"]`)?.click();
   };
   return (
-    <div className={styles.navigation} aria-busy={pending}>
+    <div id="recipient-bucket-navigation" className={styles.navigation} aria-busy={pending}>
       <div className={styles.heading}>
         <strong>Recipient view</strong>
-        <span role="status">{pending ? "Updating…" : `${count(data.selected)} shown`}</span>
+        <span role="status">{pending ? "Updating…" : `${count(active)} shown`}</span>
       </div>
       <nav className={styles.desktop} aria-label="Filter by recipient group">
-        <Link data-bucket-href={withBucket(data.current, "all", data.preservedQuery)} href={withBucket(data.current, "all", data.preservedQuery)} aria-current={data.selected === "all" ? "page" : undefined}>All <small>{data.total}</small></Link>
+        <Link onClick={onSelect ? (event) => { event.preventDefault(); navigate("all"); } : undefined} data-bucket-href={recipientBucketHref(data.current, "all", data.preservedQuery)} href={recipientBucketHref(data.current, "all", data.preservedQuery)} aria-current={active === "all" ? "page" : undefined}>All <small>{data.total}</small></Link>
         {recipientBuckets.map((bucket) => (
-          <Link data-bucket-href={withBucket(data.current, bucket.id, data.preservedQuery)} key={bucket.id} href={withBucket(data.current, bucket.id, data.preservedQuery)} aria-current={data.selected === bucket.id ? "page" : undefined}>{bucket.label} <small>{data.counts[bucket.id] ?? 0}</small></Link>
+          <Link onClick={onSelect ? (event) => { event.preventDefault(); navigate(bucket.id); } : undefined} data-bucket-href={recipientBucketHref(data.current, bucket.id, data.preservedQuery)} key={bucket.id} href={recipientBucketHref(data.current, bucket.id, data.preservedQuery)} aria-current={active === bucket.id ? "page" : undefined}>{bucket.label} <small>{data.counts[bucket.id] ?? 0}</small></Link>
         ))}
-        {(data.legacyCount ?? 0) > 0 ? <Link data-bucket-href={withBucket(data.current, "legacy", data.preservedQuery)} href={withBucket(data.current, "legacy", data.preservedQuery)} aria-current={data.selected === "legacy" ? "page" : undefined}>Legacy <small>{data.legacyCount}</small></Link> : null}
+        {(data.legacyCount ?? 0) > 0 ? <Link onClick={onSelect ? (event) => { event.preventDefault(); navigate("legacy"); } : undefined} data-bucket-href={recipientBucketHref(data.current, "legacy", data.preservedQuery)} href={recipientBucketHref(data.current, "legacy", data.preservedQuery)} aria-current={active === "legacy" ? "page" : undefined}>Legacy <small>{data.legacyCount}</small></Link> : null}
       </nav>
       <label className={styles.mobile}>
         <span>Recipient group</span>
-        <select value={data.selected} onChange={(event) => navigate(event.currentTarget.value as BucketSelection)} disabled={pending}>
+        <select value={active} onChange={(event) => navigate(event.currentTarget.value as BucketSelection)} disabled={pending}>
           <option value="all">All · {data.total}</option>
           {recipientBuckets.map((bucket) => <option key={bucket.id} value={bucket.id}>{bucket.label} · {data.counts[bucket.id] ?? 0}</option>)}
           {(data.legacyCount ?? 0) > 0 ? <option value="legacy">Legacy / unclassified · {data.legacyCount}</option> : null}
         </select>
       </label>
-      {data.selected === "peers" ? <label className={styles.earlyCareer}><input type="checkbox" checked={Boolean(data.earlyCareerOnly)} onChange={(event) => navigate("peers", event.currentTarget.checked)} disabled={pending} /><span>Early-career only</span></label> : null}
+      {active === "peers" ? <label className={styles.earlyCareer}><input type="checkbox" checked={earlyCareer} onChange={(event) => navigate("peers", event.currentTarget.checked)} disabled={pending} /><span>Early-career only</span></label> : null}
     </div>
   );
 }

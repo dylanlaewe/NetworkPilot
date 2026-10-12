@@ -136,6 +136,7 @@ async function renderResumesPage({
             </section>
             {selected ? (
               <aside className={styles.detail}>
+                <Link className={styles.mobileBack} href="/resumes">Back to resumes</Link>
                 <header>
                   <div className={styles.document} aria-hidden="true">
                     <span>PDF</span>
@@ -165,10 +166,6 @@ async function renderResumesPage({
                   <div>
                     <dt>Uploaded</dt>
                     <dd>{when(selected.uploadedAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Version</dt>
-                    <dd>{selected.sha256.slice(0, 12)}</dd>
                   </div>
                   <div>
                     <dt>Historical use</dt>

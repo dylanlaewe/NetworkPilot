@@ -15,7 +15,7 @@ export function RelationshipWorkspace({rows,total,hasAny=total>0,outcome,initial
   const [pending,setPending]=useState(false);
   const [selectedId,setSelectedId]=useState<string|null>(initialSelectedId??null),selected=useMemo(()=>rows.find(row=>row.operatorId===selectedId)??rows[0]??null,[rows,selectedId]);
   const filterHref=(value:string)=>{const params=new URLSearchParams();if(value)params.set("outcome",value);if(bucket!=="all")params.set("bucket",bucket);const query=params.toString();return `/sent${query?`?${query}`:""}`;};
-  return <div className={styles.page} data-detail-open={Boolean(selected)}>
+  return <div className={styles.page} data-detail-open={Boolean(selectedId)}>
     <header className={styles.header}><div><p>Relationship memory</p><h1>Sent</h1><span>Who you contacted, what you sent, and what happened next.</span></div><strong>{total} contacted</strong></header>
     <div className={styles.filterBar}>
       <nav className={styles.filters} aria-label="Outcome filters"><Link data-outcome-href={filterHref("")} aria-current={!outcome?"page":undefined} href={filterHref("")}>All</Link>{filters.map(filter=><Link data-outcome-href={filterHref(filter)} aria-current={outcome===filter?"page":undefined} key={filter} href={filterHref(filter)}>{labels[filter]}</Link>)}</nav>

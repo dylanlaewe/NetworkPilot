@@ -15,7 +15,7 @@ import type {
   ReserveStage,
 } from "@/application/daily-command-center";
 import styles from "./candidates-command.module.css";
-import type { BucketNavigationData } from "@/app/recipient-bucket-navigation";
+import { RecipientBucketNavigation, type BucketNavigationData, type BucketSelection, type RecipientBucket } from "@/app/recipient-bucket-navigation";
 import { createCandidateDraft, reviewCandidateCompanyTrust } from "./actions";
 
 export type CandidateWorkspaceRow = ReserveCandidate & {
@@ -51,7 +51,7 @@ const initialFilters: Filters = {
   role: "all",
   industry: "all",
   geography: "all",
-  status: "qualified-available",
+  status: "all",
 };
 
 function relevance(candidate: ReserveCandidate) {
@@ -94,15 +94,18 @@ function history(candidate: ReserveCandidate) {
   return "No prior contact is recorded in the current planning state.";
 }
 function planningBlockMessage(code:string){const evidence=code.match(/^bucket-copy-evidence-required:(.+)$/)?.[1]?.replaceAll("-"," ");return evidence?`Drafting needs reviewed ${evidence} evidence before this person is actionable.`:"Draft copy could not be prepared from the reviewed evidence. Review this candidate before planning.";}
-function matchesBucket(
+export function matchesCandidateBucket(
   row: ReserveCandidate,
   navigation: BucketNavigationData | undefined,
+  selected = navigation?.selected ?? "all",
+  earlyCareerOnly = Boolean(navigation?.earlyCareerOnly),
 ) {
-  if (!navigation || navigation.selected === "all") return true;
-  if (navigation.selected === "legacy") return !row.recipientBucket?.bucket;
+  if (!navigation) return true;
+  if (selected === "all") return Boolean(row.recipientBucket?.bucket);
+  if (selected === "legacy") return !row.recipientBucket?.bucket;
   return (
-    row.recipientBucket?.bucket === navigation.selected &&
-    (!navigation.earlyCareerOnly || row.recipientBucket.earlyCareer)
+    row.recipientBucket?.bucket === selected &&
+    (!earlyCareerOnly || row.recipientBucket.earlyCareer)
   );
 }
 
@@ -250,6 +253,11 @@ export function CandidatesWorkspace({
   refreshResult,
   bucketNavigation,
   actionableCapacity,
+  actionableCapacityByBucket,
+  unionActionableCapacity,
+  earlyCareerPeerCapacity,
+  refreshScope,
+  refreshEarlyCareerOnly = false,
 }: {
   candidates: CandidateWorkspaceRow[];
   initialSelectedId?: string;
@@ -258,8 +266,15 @@ export function CandidatesWorkspace({
   refreshResult: string | null;
   bucketNavigation?: BucketNavigationData;
   actionableCapacity?: number;
+  actionableCapacityByBucket?: Partial<Record<RecipientBucket, number>>;
+  unionActionableCapacity?: number;
+  earlyCareerPeerCapacity?: number;
+  refreshScope?: RecipientBucket;
+  refreshEarlyCareerOnly?: boolean;
 }) {
-  const [selectedId, setSelectedId] = useState(
+  const [bucketSelection, setBucketSelection] = useState<BucketSelection>(bucketNavigation?.selected ?? "all"),
+    [earlyCareerOnly, setEarlyCareerOnly] = useState(Boolean(bucketNavigation?.earlyCareerOnly)),
+    [selectedId, setSelectedId] = useState(
       initialSelectedId ?? candidates[0]?.id ?? "",
     ),
     [mobileDetail, setMobileDetail] = useState(false),
@@ -289,15 +304,13 @@ export function CandidatesWorkspace({
       [candidates],
     );
   const employerReviewCount = candidates.filter(
-    (row) => matchesBucket(row, bucketNavigation) && employerReviewRequired(row),
+    (row) => matchesCandidateBucket(row, bucketNavigation, bucketSelection, earlyCareerOnly) && employerReviewRequired(row),
   ).length;
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return candidates.filter(
       (row) =>
-        matchesBucket(row, bucketNavigation) &&
-        (!bucketNavigation?.earlyCareerOnly ||
-          bucketNavigation.selected === "peers") &&
+        matchesCandidateBucket(row, bucketNavigation, bucketSelection, earlyCareerOnly) &&
         (filters.track === "all" ||
           (row.track ?? "professional") === filters.track) &&
         (filters.role === "all" || row.functionName === filters.role) &&
@@ -312,20 +325,20 @@ export function CandidatesWorkspace({
             .toLowerCase()
             .includes(query)),
     );
-  }, [bucketNavigation, candidates, filters, search]);
+  }, [bucketNavigation, bucketSelection, candidates, earlyCareerOnly, filters, search]);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
   const active = [
-    bucketNavigation && bucketNavigation.selected !== "all"
-      ? bucketNavigation.selected === "legacy"
+    bucketNavigation && bucketSelection !== "all"
+      ? bucketSelection === "legacy"
         ? "Legacy / unclassified"
-        : roleLabel(bucketNavigation.selected)
+        : roleLabel(bucketSelection)
       : null,
-    bucketNavigation?.earlyCareerOnly ? "Early-career only" : null,
+    earlyCareerOnly ? "Early-career only" : null,
     filters.track !== "all" ? roleLabel(filters.track) : null,
     filters.role !== "all" ? roleLabel(filters.role) : null,
     filters.industry !== "all" ? filters.industry : null,
     filters.geography !== "all" ? filters.geography : null,
-    filters.status !== "qualified-available"
+    filters.status !== "all"
       ? filters.status === "employer-review-required"
         ? "Employer review required"
         : (stageLabel[filters.status as ReserveStage] ?? filters.status)
@@ -333,7 +346,7 @@ export function CandidatesWorkspace({
   ].filter(Boolean) as string[];
   const select = (id: string) => {
     setSelectedId(id);
-    if (window.matchMedia("(max-width: 860px)").matches) {
+    if (window.matchMedia("(max-width: 760px)").matches) {
       returnFocusRef.current =
         document.activeElement instanceof HTMLElement
           ? document.activeElement
@@ -344,6 +357,20 @@ export function CandidatesWorkspace({
     url.searchParams.set("selected", id);
     window.history.replaceState(null, "", url);
   };
+  const selectBucket = useCallback((next: BucketSelection, nextEarlyCareer: boolean) => {
+    setBucketSelection(next);
+    setEarlyCareerOnly(nextEarlyCareer);
+    const nextRows = candidates.filter((row) => matchesCandidateBucket(row, bucketNavigation, next, nextEarlyCareer));
+    const nextSelected = nextRows.some((row) => row.id === selectedId) ? selectedId : (nextRows[0]?.id ?? "");
+    setSelectedId(nextSelected);
+    setMobileDetail(false);
+    const url = new URL(window.location.href);
+    if (next === "all") url.searchParams.delete("bucket"); else url.searchParams.set("bucket", next);
+    if (next === "peers" && nextEarlyCareer) url.searchParams.set("earlyCareerOnly", "true"); else url.searchParams.delete("earlyCareerOnly");
+    if (nextSelected) url.searchParams.set("selected", nextSelected); else url.searchParams.delete("selected");
+    url.searchParams.delete("findMore");
+    window.history.replaceState(null, "", url);
+  }, [bucketNavigation, candidates, selectedId]);
   const closeDetail = useCallback(() => {
     setMobileDetail(false);
     requestAnimationFrame(() => returnFocusRef.current?.focus());
@@ -387,20 +414,31 @@ export function CandidatesWorkspace({
     setSearch("");
     setFilters(initialFilters);
   };
+  const visibleActionable = !bucketNavigation
+    ? (actionableCapacity ?? rows.filter((row) => row.stage === "qualified-available" && row.bucketReviewState !== "review-required").length)
+    : bucketSelection === "all"
+      ? (unionActionableCapacity ?? 0)
+      : bucketSelection === "legacy"
+        ? 0
+        : (bucketSelection === "peers" && earlyCareerOnly ? earlyCareerPeerCapacity : actionableCapacityByBucket?.[bucketSelection]) ?? 0;
+  const selectedScope = bucketSelection !== "all" && bucketSelection !== "legacy" ? bucketSelection : null;
+  const findMoreControl = !bucketNavigation
+    ? refreshControl
+    : !selectedScope
+      ? <p className={styles.findMorePrompt}>Choose a recipient group to find more people.</p>
+      : refreshScope === selectedScope && refreshEarlyCareerOnly === earlyCareerOnly
+        ? refreshControl
+        : <Link className={styles.findMoreLink} href={`/candidates?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`}>Find more <small>May use Apollo</small></Link>;
   return (
     <div className={styles.candidates} data-density={density}>
+      {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}
       <header className={styles.header}>
         <div>
           <h1>Candidates</h1>
           <p>
             <strong>{rows.length}</strong> people in this view ·{" "}
             <span>
-              {actionableCapacity ??
-                rows.filter(
-                  (row) =>
-                    row.stage === "qualified-available" &&
-                    row.bucketReviewState !== "review-required",
-                ).length}{" "}
+              {visibleActionable}{" "}
               actionable draft slots
             </span>
           </p>
@@ -438,7 +476,8 @@ export function CandidatesWorkspace({
               Compact
             </button>
           </div>
-          {refreshControl}
+          {selectedScope ? <Link className={styles.addDraftsLink} href={`/drafts?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&add=true`}>Add drafts <small>No provider call</small></Link> : null}
+          {findMoreControl}
         </div>
         <div className={styles.summary}>
           <span>
@@ -540,13 +579,13 @@ export function CandidatesWorkspace({
             <Filter
               label="Availability"
               value={filters.status}
-              active={filters.status !== "qualified-available"}
+              active={filters.status !== "all"}
               onChange={(status) =>
                 setFilters((current) => ({ ...current, status }))
               }
               options={[
-                ["qualified-available", "Available"],
                 ["all", "All states"],
+                ["qualified-available", "Available"],
                 ["employer-review-required", "Employer review required"],
                 ["in-draft-queue", "In Drafts"],
                 ["cooldown", "Available later"],
@@ -735,7 +774,9 @@ export function CandidatesWorkspace({
                   <EmployerReviewForm candidate={selected} />
                 </section>
               ) : null}
-              <div className={styles.evidenceGroups}>
+              <details className={styles.evidenceDisclosure}>
+                <summary>Details</summary>
+                <div className={styles.evidenceGroups}>
                 <section>
                   <h3>Bucket evidence</h3>
                   <p>
@@ -770,7 +811,8 @@ export function CandidatesWorkspace({
                   <h3>History</h3>
                   <p>{history(selected)}</p>
                 </section>
-              </div>
+                </div>
+              </details>
               <section
                 className={
                   selected.stage === "qualified-available" &&

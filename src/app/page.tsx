@@ -21,8 +21,8 @@ export default async function Home({searchParams}:{searchParams?:Promise<{fixtur
   const apollo=readApolloConfig(process.env);
   const gmailReady=daily.safety.gmailState==="connected",apolloExhausted=daily.safety.apolloExposure>=20,databaseReady=simulation.simulationReady;
   const overall=gmailReady&&databaseReady&&!migrationRequired?"Operational":"Action required";
-  return <NetworkCommandShell current="system" status={`System · ${overall}`}><div className={styles.page}>
-    <header className={styles.header}><div><p>Quiet operational diagnostics</p><h1>System</h1><span>Healthy systems recede. Exceptions stay visible and actionable.</span></div><strong className={tone(overall==="Operational")}>{overall}</strong></header>
+  return <NetworkCommandShell current="system" status={`Settings · ${overall}`}><div className={styles.page}>
+    <header className={styles.header}><div><p>Settings and operational health</p><h1>Settings</h1><span>Healthy systems recede. Exceptions stay visible and actionable.</span></div><strong className={tone(overall==="Operational")}>{overall}</strong></header>
     <section className={styles.summary} aria-labelledby="health-summary"><header><h2 id="health-summary">Health</h2><span>Local production</span></header><dl>
       <div className={tone(gmailReady)}><dt><i/>Gmail</dt><dd><strong>{gmailReady?"Ready":"Connection needs attention"}</strong><span>{gmailReady?"Compose access is connected.":"Reconnect before creating or sending approved drafts."}</span></dd></div>
       <div className={tone(!apolloExhausted)}><dt><i/>Apollo</dt><dd><strong>{apolloExhausted?"Available tomorrow":`${Math.max(0,20-daily.safety.apolloExposure)} refresh credits available`}</strong><span>{apolloExhausted?"Candidate refresh is paused; other workflows remain available.":"Bounded read-only sourcing is available when explicitly requested."}</span></dd></div>

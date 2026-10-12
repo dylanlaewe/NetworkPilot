@@ -19,8 +19,7 @@ import type {
   RecipientBucketCounts,
 } from "@/app/recipient-bucket-navigation";
 import {
-  hasActionableBucketReserve,
-  loadBucketReserveMetrics,
+  loadBucketReserveMetricsForScopes,
 } from "@/infrastructure/sqlite/bucket-reserve";
 
 export interface DraftsSearchParams {
@@ -39,6 +38,7 @@ export interface DraftsSearchParams {
   bucket?: string;
   earlyCareerOnly?: string;
   gmailStatus?: string;
+  add?: string;
 }
 
 function feedback(params: DraftsSearchParams) {
@@ -161,29 +161,10 @@ export async function DraftsScreen({
         draft.recipientBucket?.bucket === "peers" &&
         draft.recipientBucket.earlyCareer,
     ).length;
-  const scopedReserve = commandCenter.reserve.filter((candidate) => {
-    if (!bucketEnabled || selectedBucket === "all")
-      return candidate.stage === "qualified-available";
-    if (selectedBucket === "legacy") return false;
-    return (
-      candidate.stage === "qualified-available" &&
-      candidate.recipientBucket?.reviewState === "accepted" &&
-      candidate.recipientBucket.bucket === selectedBucket &&
-      (!earlyCareerOnly || candidate.recipientBucket.earlyCareer)
-    );
-  });
-  const hasReserve = !bucketEnabled
-    ? scopedReserve.length > 0
-    : selectedBucket === "legacy"
-      ? false
-      : selectedBucket === "all"
-        ? hasActionableBucketReserve(
-            RECIPIENT_BUCKETS.map((bucket) => ({ bucket })),
-          )
-        : loadBucketReserveMetrics({
-            bucket: selectedBucket,
-            ...(earlyCareerOnly ? { earlyCareerOnly: true } : {}),
-          }).actionableCapacity > 0;
+  const scopedReserve = !bucketEnabled ? commandCenter.reserve.filter((candidate) => candidate.stage === "qualified-available") : [];
+  const reserveMetrics = bucketEnabled ? loadBucketReserveMetricsForScopes([...RECIPIENT_BUCKETS.map((bucket) => ({ bucket })), { bucket: "peers", earlyCareerOnly: true }]) : null;
+  const reserveCapacity = reserveMetrics ? Object.fromEntries(RECIPIENT_BUCKETS.map((bucket) => [bucket, reserveMetrics.byBucket[bucket]?.actionableCapacity ?? 0])) : undefined;
+  const hasReserve = !bucketEnabled ? scopedReserve.length > 0 : selectedBucket === "legacy" ? false : selectedBucket === "all" ? Boolean(reserveMetrics?.actionableCapacity) : Boolean(reserveCapacity?.[selectedBucket]);
   const bucketNavigation = bucketEnabled
     ? {
         enabled: true as const,
@@ -210,11 +191,14 @@ export async function DraftsScreen({
           : null
       }
       hasReserve={hasReserve}
+      reserveCapacity={reserveCapacity}
+      earlyCareerPeerCapacity={reserveMetrics?.byScope["peers:early-career"]?.actionableCapacity}
       initialCandidateId={candidateId}
-      initialMobileReview={reviewMode}
+      initialMobileReview={reviewMode || drafts.length > 0}
       feedback={feedback(params)}
       bucketNavigation={bucketNavigation}
       addRequestId={crypto.randomUUID()}
+      initialAddOpen={params.add === "true"}
     />
   );
 }

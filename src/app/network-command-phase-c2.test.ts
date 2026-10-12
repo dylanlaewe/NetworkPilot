@@ -5,31 +5,28 @@ import { describe, expect, it } from "vitest";
 const source = (path: string) =>
   readFileSync(join(process.cwd(), path), "utf8");
 
-describe("Network Command Phase C.2", () => {
-  it("uses a work-first Today hierarchy with a quiet live-state rail", () => {
+describe("Network Command experience reset", () => {
+  it("uses a work-first Today hierarchy and reveals live state only for exceptions", () => {
     const page = source("src/app/today/page.tsx"),
       styles = source("src/app/today/today-command.module.css");
     for (const text of [
       "One clear next step.",
       "Continue",
-      "Operational state",
-      "Queue",
-      "Relationships",
-      "Supply",
-      "Gmail",
-      "Apollo",
     ])
+      expect(page).toContain(text);
+    for (const text of ["Operational state", "Queue", "Relationships", "Supply", "Gmail", "Apollo"])
       expect(page).toContain(text);
     expect(page).not.toMatch(/Good morning|Good afternoon|Good evening|KPI/i);
     expect(styles).toContain(".primaryTask");
-    expect(styles).toContain("grid-template-columns:minmax(0,1fr) minmax(250px,300px)");
+    expect(page).toContain("uncertain>0||!gmailReady?<details");
+    expect(styles).toContain("max-width:760px");
   });
 
-  it("reuses existing bounded actions without introducing provider logic", () => {
+  it("keeps Today read-only while retaining the explicit bounded candidate refresh", () => {
     const page = source("src/app/today/page.tsx"),
       candidates = source("src/app/candidates/page.tsx");
-    expect(page).toContain("AddDraftsControl");
-    expect(page).toContain("CandidateRefreshControl");
+    expect(page).not.toContain("AddDraftsControl");
+    expect(page).not.toContain("CandidateRefreshControl");
     expect(candidates).toContain("CandidateRefreshControl");
     expect(`${page}\n${candidates}`).not.toMatch(
       /ApolloAdapter|GmailDraftAdapter|FetchGmailTransport|replenish\(/,
@@ -64,9 +61,8 @@ describe("Network Command Phase C.2", () => {
     );
     expect(workspace).toContain("/drafts/review?candidate=");
     expect(workspace).toContain('data-active={active ? "true" : undefined}');
-    expect(styles).toContain(
-      '.row[aria-selected="true"]{background:linear-gradient',
-    );
+    expect(styles).toContain('.row[aria-selected="true"]');
+    expect(styles).not.toContain("linear-gradient");
     expect(styles).toContain('.filter[data-active="true"]');
     expect(projection).toContain("candidatePresentationName(c)");
     expect(projection).not.toContain("recipient:redact(");
@@ -100,10 +96,9 @@ describe("Network Command Phase C.2", () => {
       today = source("src/app/today/today-command.module.css"),
       candidates = source("src/app/candidates/candidates-command.module.css");
     expect(shell).toContain(".mobileNav");
-    expect(today).toContain("grid-template-columns:1fr");
-    expect(today).toContain("grid-template-columns:repeat(2,minmax(0,1fr))");
-    expect(candidates).toContain(".detailOpen{display:block}");
-    expect(candidates).toContain("inset:auto 0 58px");
-    expect(shell).toContain("min-height:44px");
+    expect(today).toContain("@media(max-width:760px)");
+    expect(candidates).toContain(".detailOpen { display: block; }");
+    expect(candidates).toContain("inset: 56px 0 calc(64px + env(safe-area-inset-bottom))");
+    expect(shell.replaceAll(" ", "")).toContain("min-height:44px");
   });
 });

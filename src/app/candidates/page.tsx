@@ -11,7 +11,7 @@ import type {
   RecipientBucketCounts,
 } from "@/app/recipient-bucket-navigation";
 import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
-import {loadBucketReserveMetrics} from "@/infrastructure/sqlite/bucket-reserve";
+import {loadBucketReserveMetricsForScopes} from "@/infrastructure/sqlite/bucket-reserve";
 import {loadScopedDiscoveryReadiness} from "@/infrastructure/sqlite/candidate-refresh";
 import {migrationRequiredView} from "@/app/migration-required";
 
@@ -37,6 +37,7 @@ async function renderCandidatesPage({
     refreshError?: string;
     bucket?: string;
     earlyCareerOnly?: string;
+    findMore?: string;
   }>;
 }) {
   const data = loadDailyCommandCenter(),
@@ -53,10 +54,11 @@ async function renderCandidatesPage({
         : "all",
     earlyCareerOnly =
       selectedBucket === "peers" && params.earlyCareerOnly === "true",
+    classifiedRows=data.reserve.filter((row)=>row.recipientBucket?.bucket),
     counts = Object.fromEntries(
       RECIPIENT_BUCKETS.map((bucket) => [
         bucket,
-        data.reserve.filter((row) => row.recipientBucket?.bucket === bucket)
+        classifiedRows.filter((row) => row.recipientBucket?.bucket === bucket)
           .length,
       ]),
     ) as RecipientBucketCounts,
@@ -81,13 +83,14 @@ async function renderCandidatesPage({
         )
       : selectedBucket === "legacy"
         ? []
-        : data.reserve,
+        : classifiedRows,
     scopedAvailable = scopeRows.filter(
       (row) =>
         row.stage === "qualified-available" &&
         (!bucketEnabled || row.recipientBucket?.reviewState === "accepted"),
     ),
-    metrics=bucketEnabled&&scopedBucket?loadBucketReserveMetrics({bucket:scopedBucket,...earlyCareerOnly?{earlyCareerOnly:true}:{}}):null,
+    allMetrics=bucketEnabled?loadBucketReserveMetricsForScopes([...RECIPIENT_BUCKETS.map((bucket)=>({bucket})),{bucket:"peers",earlyCareerOnly:true}]):null,
+    metrics=bucketEnabled&&scopedBucket?(earlyCareerOnly?allMetrics?.byScope["peers:early-career"]??null:allMetrics?.byBucket[scopedBucket]??null):null,
     sourcingReadiness=bucketEnabled&&scopedBucket?loadScopedDiscoveryReadiness({bucket:scopedBucket,...earlyCareerOnly?{earlyCareerOnly:true}:{}}):undefined,
     showResult = params.added !== undefined;
   const refreshRequestId = crypto.randomUUID(),
@@ -107,10 +110,10 @@ async function renderCandidatesPage({
   const health =
     data.safety.apolloExposure >= apolloConfig.maxEnrichmentsPerDay
       ? "Candidate refresh available tomorrow"
-      : `${data.pipeline.available} candidates available · ${Math.max(0, apolloConfig.maxEnrichmentsPerDay - data.safety.apolloExposure)} refresh credits available`;
+      : `${allMetrics?.actionableCapacity ?? scopedAvailable.length} actionable candidates · ${Math.max(0, apolloConfig.maxEnrichmentsPerDay - data.safety.apolloExposure)} refresh credits available`;
   const refresh = (
     <CandidateRefreshControl
-      available={metrics?.actionableCapacity??scopedAvailable.length}
+      available={metrics?.actionableCapacity??allMetrics?.actionableCapacity??scopedAvailable.length}
       totalReserve={metrics?.totalReserve??scopeRows.length}
       exposure={data.safety.apolloExposure}
       maximumPerBatch={apolloConfig.maxEnrichmentsPerBatch}
@@ -121,6 +124,7 @@ async function renderCandidatesPage({
       legacyView={bucketEnabled && selectedBucket === "legacy"}
       requestId={bucketEnabled && scopedBucket ? refreshRequestId : undefined}
       readiness={sourcingReadiness}
+      open={params.findMore === "true"}
     />
   );
   const result =
@@ -137,7 +141,7 @@ async function renderCandidatesPage({
         current: "candidates" as const,
         selected: selectedBucket,
         counts,
-        total: data.reserve.length,
+      total: classifiedRows.length,
         legacyCount,
         earlyCareerOnly,
         preservedQuery: {
@@ -149,7 +153,6 @@ async function renderCandidatesPage({
     <NetworkCommandShell
       current="candidates"
       status={health}
-      bucketNavigation={bucketNavigation}
     >
       <CandidatesWorkspace
         candidates={workspaceCandidates}
@@ -159,8 +162,13 @@ async function renderCandidatesPage({
         refreshResult={result}
         bucketNavigation={bucketNavigation}
         actionableCapacity={metrics?.actionableCapacity}
+        actionableCapacityByBucket={allMetrics?Object.fromEntries(RECIPIENT_BUCKETS.map((bucket)=>[bucket,allMetrics.byBucket[bucket]?.actionableCapacity??0])):undefined}
+        unionActionableCapacity={allMetrics?.actionableCapacity}
+        earlyCareerPeerCapacity={allMetrics?.byScope["peers:early-career"]?.actionableCapacity}
+        refreshScope={scopedBucket}
+        refreshEarlyCareerOnly={earlyCareerOnly}
       />
     </NetworkCommandShell>
   );
 }
-export default async function CandidatesPage(input:{searchParams:Promise<{selected?:string;filters?:string;added?:string;searched?:string;enriched?:string;qualified?:string;rejected?:string;professional?:string;recruiter?:string;companies?:string;credits?:string;requested?:string;shortfallCode?:string;refreshError?:string;bucket?:string;earlyCareerOnly?:string}>}){try{return await renderCandidatesPage(input);}catch(error){return migrationRequiredView(error);}}
+export default async function CandidatesPage(input:{searchParams:Promise<{selected?:string;filters?:string;added?:string;searched?:string;enriched?:string;qualified?:string;rejected?:string;professional?:string;recruiter?:string;companies?:string;credits?:string;requested?:string;shortfallCode?:string;refreshError?:string;bucket?:string;earlyCareerOnly?:string;findMore?:string}>}){try{return await renderCandidatesPage(input);}catch(error){return migrationRequiredView(error);}}

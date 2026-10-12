@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useActionState,
   useCallback,
   useEffect,
   useMemo,
@@ -14,7 +15,8 @@ import {
   approveAndCreateGmailDraft,
   confirmAlreadySent,
   createGmailDraft,
-  generateMoreDrafts,
+  generateMoreDraftsInline,
+  initialDraftAdditionActionState,
   permanentlyExcludeDraft,
   reconcileGmailSendStatus,
   replaceDraft,
@@ -31,8 +33,10 @@ import {
 import {
   RecipientBucketNavigation,
   type BucketNavigationData,
+  type BucketSelection,
 } from "@/app/recipient-bucket-navigation";
 import { hasResumeAttachmentClaim } from "@/application/resumes/attachment-claims";
+import { NetworkNavigation } from "@/app/network-command-shell";
 import styles from "./drafts-workspace.module.css";
 
 const stateOrder: WorkspaceDraftState[] = [
@@ -82,6 +86,12 @@ const bucketLabel = (bucket: string | null | undefined) =>
   bucket
     ? ((recipientBucketLabels as Record<string, string>)[bucket] ?? bucket)
     : "Legacy / unclassified";
+
+export function draftsForBucket(drafts: WorkspaceDraft[], selection: BucketSelection, earlyCareerOnly = false) {
+  if (selection === "all") return drafts.filter((draft) => Boolean(draft.recipientBucket?.bucket));
+  if (selection === "legacy") return drafts.filter((draft) => !draft.recipientBucket?.bucket);
+  return drafts.filter((draft) => draft.recipientBucket?.bucket === selection && (!earlyCareerOnly || draft.recipientBucket.earlyCareer));
+}
 
 function isTypingTarget(target: EventTarget | null) {
   return (
@@ -186,47 +196,48 @@ export function DraftsWorkspace({
   gmailAvailable,
   gmailReason,
   hasReserve,
+  reserveCapacity,
+  earlyCareerPeerCapacity,
   initialCandidateId,
-  initialMobileReview = false,
+  initialMobileReview = true,
   feedback,
   bucketNavigation,
   addRequestId,
+  initialAddOpen = false,
 }: {
   drafts: WorkspaceDraft[];
   resumes: WorkspaceResume[];
   gmailAvailable: boolean;
   gmailReason: string | null;
   hasReserve: boolean;
+  reserveCapacity?: Partial<Record<Exclude<BucketSelection, "all" | "legacy">, number>>;
+  earlyCareerPeerCapacity?: number;
   initialCandidateId?: string;
   initialMobileReview?: boolean;
   feedback: Feedback;
   bucketNavigation?: BucketNavigationData;
   addRequestId: string;
+  initialAddOpen?: boolean;
 }) {
+  const [bucketSelection, setBucketSelection] = useState<BucketSelection>(bucketNavigation?.selected ?? "all");
+  const [earlyCareerOnly, setEarlyCareerOnly] = useState(Boolean(bucketNavigation?.earlyCareerOnly));
   const viewDrafts = useMemo(() => {
-    if (!bucketNavigation || bucketNavigation.selected === "all") return drafts;
-    if (bucketNavigation.selected === "legacy")
-      return drafts.filter((draft) => !draft.recipientBucket?.bucket);
-    return drafts.filter(
-      (draft) =>
-        draft.recipientBucket?.bucket === bucketNavigation.selected &&
-        (!bucketNavigation.earlyCareerOnly ||
-          draft.recipientBucket.earlyCareer),
-    );
-  }, [bucketNavigation, drafts]);
+    if (!bucketNavigation) return drafts;
+    return draftsForBucket(drafts, bucketSelection, earlyCareerOnly);
+  }, [bucketNavigation, bucketSelection, drafts, earlyCareerOnly]);
   const initial =
     viewDrafts.find((draft) => draft.candidateId === initialCandidateId) ??
     viewDrafts[0] ??
     null;
   const [selectedId, setSelectedId] = useState(initial?.candidateId ?? "");
   const [mobileReview, setMobileReview] = useState(initialMobileReview);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, DraftEdit>>({});
   const [editsLoaded, setEditsLoaded] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [additionState, additionAction, additionPending] = useActionState(generateMoreDraftsInline, initialDraftAdditionActionState);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const approveRef = useRef<HTMLFormElement>(null);
@@ -234,12 +245,10 @@ export function DraftsWorkspace({
   const replaceRef = useRef<HTMLFormElement>(null);
   const createRef = useRef<HTMLFormElement>(null);
   const addRef = useRef<HTMLDetailsElement>(null);
-  const commandTriggerRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const closePalette = useCallback(() => {
-    setPaletteOpen(false);
-    requestAnimationFrame(() => commandTriggerRef.current?.focus());
-  }, []);
+  useEffect(() => {
+    if (initialAddOpen && addRef.current) addRef.current.open = true;
+  }, [initialAddOpen]);
   const closeSend = useCallback(() => {
     setSendOpen(false);
     requestAnimationFrame(() => primaryRef.current?.focus());
@@ -314,6 +323,19 @@ export function DraftsWorkspace({
     url.searchParams.set("candidate", candidateId);
     window.history.replaceState(null, "", url);
   }, []);
+  const selectBucket = useCallback((next: BucketSelection, nextEarlyCareer: boolean) => {
+    setBucketSelection(next);
+    setEarlyCareerOnly(nextEarlyCareer);
+    const nextDrafts = draftsForBucket(drafts, next, nextEarlyCareer);
+    const nextSelected = nextDrafts.some((draft) => draft.candidateId === selectedId) ? selectedId : (nextDrafts[0]?.candidateId ?? "");
+    setSelectedId(nextSelected);
+    setMobileReview(false);
+    const url = new URL(window.location.href);
+    if (next === "all") url.searchParams.delete("bucket"); else url.searchParams.set("bucket", next);
+    if (next === "peers" && nextEarlyCareer) url.searchParams.set("earlyCareerOnly", "true"); else url.searchParams.delete("earlyCareerOnly");
+    if (nextSelected) url.searchParams.set("candidate", nextSelected); else url.searchParams.delete("candidate");
+    window.history.replaceState(null, "", url);
+  }, [drafts, selectedId]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       try {
@@ -382,16 +404,10 @@ export function DraftsWorkspace({
       if (event.key === "Escape") {
         if (sendOpen) closeSend();
         else if (reconcileOpen) closeReconcile();
-        else if (paletteOpen) closePalette();
         else if (mobileReview) closeMobileReview();
         return;
       }
-      if (sendOpen || reconcileOpen || paletteOpen) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setPaletteOpen(true);
-        return;
-      }
+      if (sendOpen || reconcileOpen) return;
       if (
         isTypingTarget(event.target) ||
         event.metaKey ||
@@ -422,8 +438,7 @@ export function DraftsWorkspace({
         key === "r" &&
         selected?.state !== "needs-send-verification" &&
         (!bucketNavigation ||
-          (bucketNavigation.selected !== "all" &&
-            bucketNavigation.selected !== "legacy"))
+          (bucketSelection !== "all" && bucketSelection !== "legacy"))
       ) {
         event.preventDefault();
         replaceRef.current?.requestSubmit();
@@ -439,13 +454,12 @@ export function DraftsWorkspace({
     return () => document.removeEventListener("keydown", onKey);
   }, [
     bucketNavigation,
-    closePalette,
+    bucketSelection,
     closeReconcile,
     closeSend,
     closeMobileReview,
     mobileReview,
     move,
-    paletteOpen,
     primaryBlocked,
     reconcileOpen,
     selected,
@@ -469,16 +483,17 @@ export function DraftsWorkspace({
 
   const scopeBucket =
     bucketNavigation &&
-    bucketNavigation.selected !== "all" &&
-    bucketNavigation.selected !== "legacy"
-      ? bucketNavigation.selected
+    bucketSelection !== "all" &&
+    bucketSelection !== "legacy"
+      ? bucketSelection
       : "";
-  const scopedLegacy = bucketNavigation?.selected === "legacy";
-  const chooseBucketFirst = Boolean(bucketNavigation?.selected === "all");
+  const scopedLegacy = bucketSelection === "legacy";
+  const chooseBucketFirst = Boolean(bucketNavigation && bucketSelection === "all");
   const replacementBlocked = scopedLegacy || chooseBucketFirst;
   const scopeEarlyCareer = Boolean(
-    bucketNavigation?.selected === "peers" && bucketNavigation.earlyCareerOnly,
+    bucketSelection === "peers" && earlyCareerOnly,
   );
+  const activeHasReserve = scopeBucket ? Boolean(scopeBucket === "peers" && scopeEarlyCareer ? earlyCareerPeerCapacity : reserveCapacity?.[scopeBucket]) : hasReserve;
   const resumeOptions = resumes;
   return (
     <main
@@ -489,49 +504,11 @@ export function DraftsWorkspace({
       <a className={styles.skipLink} href="#draft-message">
         Skip to selected message
       </a>
-      <header className={styles.commandBar}>
-        <Link className={styles.brand} href="/today">
-          <span>N</span>
-          <strong>NetworkPilot</strong>
-          <em>Command</em>
-        </Link>
-        <button
-          ref={commandTriggerRef}
-          className={styles.commandTrigger}
-          onClick={() => setPaletteOpen(true)}
-        >
-          Jump or run a command <kbd>⌘ K</kbd>
-        </button>
-        <span className={styles.gmailState}>
-          {gmailAvailable ? "Gmail ready" : "Gmail unavailable"}
-        </span>
-        <Link className={styles.supportLink} href="/">
-          System
-        </Link>
-      </header>
-      <nav className={styles.rail} aria-label="Primary navigation">
-          <Link href="/today">
-            <span>○</span>
-            <b>Today</b>
-          </Link>
-          <Link href="/drafts" aria-current="page">
-            <span>⌁</span>
-            <small>{drafts.length}</small>
-            <b>Drafts</b>
-          </Link>
-          <Link href="/sent">
-            <span>✓</span>
-            <b>Sent</b>
-          </Link>
-          <Link href="/candidates">
-            <span>◇</span>
-            <b>Candidates</b>
-          </Link>
-        </nav>
+      <NetworkNavigation current="drafts" status={gmailAvailable ? `${drafts.length} active drafts · Gmail ready` : `${drafts.length} active drafts · Gmail unavailable`} />
       <section id="workspace-content" className={styles.workspace}>
         {bucketNavigation ? (
           <div className={styles.bucketNavigation}>
-            <RecipientBucketNavigation data={bucketNavigation} />
+            <RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} />
           </div>
         ) : null}
         <header className={styles.contextBar}>
@@ -539,8 +516,8 @@ export function DraftsWorkspace({
             <h1>Drafts</h1>
             <span>
               {viewDrafts.length} active · {counts.ready} need review
-              {bucketNavigation && bucketNavigation.selected !== "all"
-                ? ` · ${bucketNavigation.selected === "legacy" ? "Legacy / unclassified" : bucketNavigation.selected}`
+              {bucketNavigation && bucketSelection !== "all"
+                ? ` · ${bucketSelection === "legacy" ? "Legacy / unclassified" : bucketSelection}`
                 : ""}
             </span>
           </div>
@@ -584,13 +561,10 @@ export function DraftsWorkspace({
                   Choose a bucket to add scoped drafts.
                 </p>
               ) : chooseBucketFirst ? (
-                <p role="status">
-                  Choose a recipient bucket to add drafts from its qualified
-                  reserve.
-                </p>
-              ) : hasReserve ? (
+                <div className={styles.chooseBucket} role="status"><p>Choose a recipient group to add drafts from its qualified reserve.</p><button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button></div>
+              ) : activeHasReserve ? (
                 <>
-                  <form action={generateMoreDrafts}>
+                  <form action={additionAction} aria-busy={additionPending}>
                     <input type="hidden" name="requestId" value={addRequestId} />
                     <input
                       type="hidden"
@@ -607,14 +581,14 @@ export function DraftsWorkspace({
                         value="true"
                       />
                     ) : null}
-                    <button name="additionalDraftCount" value="5">
-                      Add 5
+                    <button name="additionalDraftCount" value="5" disabled={additionPending}>
+                      {additionPending ? "Adding…" : "Add 5"}
                     </button>
-                    <button name="additionalDraftCount" value="10">
+                    <button name="additionalDraftCount" value="10" disabled={additionPending}>
                       Add 10
                     </button>
                   </form>
-                  <form action={generateMoreDrafts}>
+                  <form action={additionAction} aria-busy={additionPending}>
                     <input type="hidden" name="requestId" value={addRequestId} />
                     <input
                       type="hidden"
@@ -642,12 +616,12 @@ export function DraftsWorkspace({
                         required
                       />
                     </label>
-                    <button>Add custom</button>
+                    <button disabled={additionPending}>Add custom</button>
                   </form>
                 </>
               ) : (
                 <p role="status">
-                  There are no available drafts in this reserve view.{" "}
+                  There are no actionable people in this reserve view.{" "}
                   <Link
                     href={
                       scopeBucket
@@ -662,6 +636,7 @@ export function DraftsWorkspace({
                   for more supply.
                 </p>
               )}
+              {additionState.status !== "idle" ? <div className={styles.additionResult} data-status={additionState.status} role={additionState.status === "error" ? "alert" : "status"}><strong>{additionState.message}</strong>{additionState.reasons.length ? <ul>{additionState.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}{additionState.recovery ? <Link href={additionState.recovery.href}>{additionState.recovery.label}</Link> : null}</div> : null}
             </div>
           </details>
         </header>
@@ -678,18 +653,18 @@ export function DraftsWorkspace({
           <div className={styles.empty}>
             <span>—</span>
             <h2>
-              {bucketNavigation?.selected === "legacy"
+              {bucketSelection === "legacy"
                 ? "No legacy drafts in this view"
                 : "No drafts waiting for review"}
             </h2>
             <p>
-              {bucketNavigation?.selected === "legacy"
+              {bucketSelection === "legacy"
                 ? "Legacy / unclassified records remain visible in their historical workspace and are not relabeled."
-                : hasReserve
+                : activeHasReserve
                   ? "Add another bounded batch from the qualified reserve."
                   : "The queue and qualified reserve are both empty for this view."}
             </p>
-            {bucketNavigation?.selected !== "legacy" && !hasReserve ? (
+            {bucketSelection !== "legacy" && !activeHasReserve ? (
               <Link href="/candidates">Review Candidates</Link>
             ) : null}
           </div>
@@ -1264,14 +1239,6 @@ export function DraftsWorkspace({
           </>
         )}
       </section>
-      <nav className={styles.mobileNav} aria-label="Mobile navigation">
-        <Link href="/today">Today</Link>
-        <Link href="/drafts" aria-current="page">
-          Drafts
-        </Link>
-        <Link href="/sent">Sent</Link>
-        <Link href="/candidates">Candidates</Link>
-      </nav>
       <SafeDialog
         open={sendOpen}
         onClose={closeSend}
@@ -1379,23 +1346,6 @@ export function DraftsWorkspace({
           </div>
         </form>
       </SafeDialog>
-      <CommandPalette
-        open={paletteOpen}
-        onClose={closePalette}
-        returnFocus={commandTriggerRef}
-        selected={selected}
-        primaryBlocked={primaryBlocked}
-        primaryReason={primaryReason}
-        replacementBlocked={replacementBlocked}
-        chooseBucketFirst={chooseBucketFirst}
-        runPrimary={runPrimary}
-        onSkip={() => skipRef.current?.requestSubmit()}
-        onReplace={() => replaceRef.current?.requestSubmit()}
-        onAdd={() => {
-          if (addRef.current) addRef.current.open = true;
-          closePalette();
-        }}
-      />
     </main>
   );
 }
@@ -1491,161 +1441,6 @@ function Inspector({
         <span>Methodology</span>
         <b>{draft.catalogVersion}</b>
         <small>{draft.factCount} approved evidence references</small>
-      </section>
-    </div>
-  );
-}
-
-function CommandPalette({
-  open,
-  onClose,
-  returnFocus,
-  selected,
-  primaryBlocked,
-  primaryReason,
-  replacementBlocked,
-  chooseBucketFirst,
-  runPrimary,
-  onSkip,
-  onReplace,
-  onAdd,
-}: {
-  open: boolean;
-  onClose: () => void;
-  returnFocus: RefObject<HTMLElement | null>;
-  selected: WorkspaceDraft | null;
-  primaryBlocked: boolean;
-  primaryReason: string | null | undefined;
-  replacementBlocked: boolean;
-  chooseBucketFirst: boolean;
-  runPrimary: () => void;
-  onSkip: () => void;
-  onReplace: () => void;
-  onAdd: () => void;
-}) {
-  const ref = useDialogFocus(open, onClose, returnFocus);
-  if (!open) return null;
-  const commands = [
-    ["Today", "Open today’s command center", "G T", "/today"],
-    ["Drafts", "Current workspace", "G D", "/drafts"],
-    ["Sent", "Open sent outreach", "G S", "/sent"],
-    ["Candidates", "Open candidate supply", "G C", "/candidates"],
-  ] as const;
-  return (
-    <div
-      className={styles.backdrop}
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onClose();
-      }}
-    >
-      <section
-        ref={ref}
-        className={styles.palette}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Network command palette"
-      >
-        <header>
-          <strong>Network command</strong>
-          <span>Drafts / {selected?.recipient ?? "No selection"}</span>
-        </header>
-        <label>
-          <span className={styles.srOnly}>Search commands</span>
-          <input autoFocus placeholder="Where do you want to work?" />
-          <kbd>Esc</kbd>
-        </label>
-        <div>
-          <section>
-            <h2>Navigation</h2>
-            {commands.map(([name, description, key, href]) => (
-              <Link
-                key={href}
-                href={href}
-                aria-current={href === "/drafts" ? "page" : undefined}
-              >
-                <span>
-                  <strong>{name}</strong>
-                  <small>{description}</small>
-                </span>
-                <kbd>{key}</kbd>
-              </Link>
-            ))}
-          </section>
-          <section>
-            <h2>Selected work</h2>
-            <button
-              onClick={() => {
-                runPrimary();
-                onClose();
-              }}
-              disabled={!selected || primaryBlocked}
-            >
-              <span>
-                <strong>
-                  {selected
-                    ? actionLabels[selected.state]
-                    : "No draft selected"}
-                </strong>
-                <small>
-                  {primaryBlocked
-                    ? primaryReason
-                    : selected
-                      ? stateLabels[selected.state]
-                      : "Select a draft first"}
-                </small>
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                onSkip();
-                onClose();
-              }}
-              disabled={
-                !selected || selected.state === "needs-send-verification"
-              }
-            >
-              <span>
-                <strong>Skip selected draft</strong>
-                <small>
-                  {selected?.state === "needs-send-verification"
-                    ? "Resolve the uncertain send first"
-                    : "Remove without contact or cooldown"}
-                </small>
-              </span>
-              <kbd>X</kbd>
-            </button>
-            <button
-              onClick={() => {
-                onReplace();
-                onClose();
-              }}
-              disabled={
-                !selected ||
-                selected.state === "needs-send-verification" ||
-                replacementBlocked
-              }
-            >
-              <span>
-                <strong>Replace selected person</strong>
-                <small>
-                  {chooseBucketFirst
-                    ? "Choose a recipient bucket to replace within its reserve"
-                    : "Use the qualified reserve without a provider call"}
-                </small>
-              </span>
-              <kbd>R</kbd>
-            </button>
-            <button onClick={onAdd}>
-              <span>
-                <strong>Add drafts from reserve</strong>
-                <small>Choose 5, 10, or a custom bounded count</small>
-              </span>
-              <kbd>N</kbd>
-            </button>
-          </section>
-        </div>
-        <footer>↑↓ choose · Enter run · Esc close</footer>
       </section>
     </div>
   );

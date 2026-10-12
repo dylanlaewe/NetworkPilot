@@ -22,4 +22,10 @@ describe("five-bucket workspace navigation",()=>{
     expect(html).toContain("Early-career only");
     expect(html).not.toContain("bucket=recruiters&amp;earlyCareerOnly=true");
   });
+  it("accepts an immediate controlled selection while retaining real link fallbacks",()=>{
+    const html=renderToStaticMarkup(<RecipientBucketNavigation data={data} selected="managers" earlyCareerOnly={false} onSelect={()=>undefined}/>);
+    expect(html).toContain('href="/drafts?bucket=managers" aria-current="page"');
+    expect(html).not.toContain("Early-career only");
+    expect(html).toContain('href="/drafts?bucket=peers&amp;earlyCareerOnly=true"');
+  });
 });
