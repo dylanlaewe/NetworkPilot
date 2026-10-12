@@ -7,6 +7,32 @@ type Section = "today" | "drafts" | "candidates" | "sent";
 type IconName = Section | "resume" | "settings" | "people" | "close" | "check" | "arrow" | "search" | "info";
 type DraftStage = "local" | "pending" | "gmail" | "confirm" | "sent";
 type CandidateState = "ready" | "employer-review" | "has-draft";
+type Bucket = (typeof buckets)[number];
+
+export interface SyntheticDraft {
+  id: string;
+  candidateId?: string;
+  name: string;
+  initials: string;
+  company: string;
+  role: string;
+  bucket: Bucket;
+  stage: DraftStage;
+  subject: string;
+  body: string;
+  why: string;
+}
+
+export interface SyntheticCandidate {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  company: string;
+  bucket: Bucket;
+  state: CandidateState;
+  why: string;
+}
 
 const nav: Array<{ id: Section; label: string }> = [
   { id: "today", label: "Today" },
@@ -15,18 +41,20 @@ const nav: Array<{ id: Section; label: string }> = [
   { id: "sent", label: "Sent" },
 ];
 
-const buckets = ["All", "Recruiters", "Peers", "Managers", "Executives", "CEOs"];
+const buckets = ["All", "Recruiters", "Peers", "Managers", "Executives", "CEOs"] as const;
 
-const drafts = [
+export const INITIAL_SYNTHETIC_DRAFTS: SyntheticDraft[] = [
   {
     id: "maya",
     name: "Maya Chen",
     initials: "MC",
     company: "Northwind Health",
     role: "Technical Talent Partner",
-    status: "Ready to review",
+    bucket: "Recruiters",
+    stage: "local",
     subject: "Your path into health technology recruiting",
     body: "Hi Maya,\n\nI came across your work supporting technical teams at Northwind Health. I’m exploring product and data opportunities where thoughtful systems work has a visible impact, and your perspective on what makes candidates stand out would be genuinely useful.\n\nIf you have fifteen minutes in the next couple of weeks, I’d value hearing how you evaluate people moving into health technology.\n\nBest,\nDylan",
+    why: "Relevant recruiting experience and a verified operating employer. The message asks for perspective without claiming a prior relationship.",
   },
   {
     id: "aisha",
@@ -34,9 +62,11 @@ const drafts = [
     initials: "AB",
     company: "Common Thread",
     role: "Senior Recruiter",
-    status: "Local draft",
+    bucket: "Recruiters",
+    stage: "local",
     subject: "A quick question about product roles at Common Thread",
     body: "Hi Aisha,\n\nYour work with product and analytics teams at Common Thread caught my attention. I’m exploring roles where I can bring together strategy, research, and technical delivery.\n\nI’d appreciate your perspective on the experiences that tend to translate best on your teams. Would you be open to a short conversation?\n\nBest,\nDylan",
+    why: "Product and analytics recruiting experience makes Aisha a relevant source of practical hiring perspective.",
   },
   {
     id: "leo",
@@ -44,22 +74,28 @@ const drafts = [
     initials: "LM",
     company: "Harbor Systems",
     role: "Engineering Manager",
-    status: "Gmail draft",
+    bucket: "Managers",
+    stage: "gmail",
     subject: "Your transition into engineering leadership",
     body: "Hi Leo,\n\nI enjoyed reading about your progression from hands-on engineering into team leadership at Harbor Systems. I’m interested in how strong individual contributors can broaden their impact without losing touch with the work.\n\nWould you be open to a brief conversation about what helped you make that transition well?\n\nBest,\nDylan",
+    why: "Leo's progression from individual contributor to engineering manager directly matches the leadership transition Dylan wants to understand.",
+  },
+  {
+    id: "elena",
+    candidateId: "elena",
+    name: "Elena Rossi",
+    initials: "ER",
+    company: "Fieldnote",
+    role: "Staff Data Engineer",
+    bucket: "Peers",
+    stage: "local",
+    subject: "Data infrastructure and product analytics at Fieldnote",
+    body: "Hi Elena,\n\nYour work spanning data infrastructure and product analytics at Fieldnote caught my attention. I’m exploring how experienced individual contributors can stay close to technical work while shaping broader product decisions.\n\nWould you be open to a short conversation about the choices that helped you build that range?\n\nBest,\nDylan",
+    why: "Elena is an experienced individual contributor whose work connects technical systems with product decisions.",
   },
 ];
 
-const candidates: Array<{
-  id: string;
-  name: string;
-  initials: string;
-  role: string;
-  company: string;
-  bucket: string;
-  state: CandidateState;
-  why: string;
-}> = [
+export const SYNTHETIC_CANDIDATES: SyntheticCandidate[] = [
   {
     id: "amara",
     name: "Amara Patel",
@@ -92,6 +128,55 @@ const candidates: Array<{
   },
 ];
 
+const CANDIDATE_DRAFTS: Record<string, SyntheticDraft> = {
+  amara: {
+    id: "amara",
+    candidateId: "amara",
+    name: "Amara Patel",
+    initials: "AP",
+    company: "Vela Labs",
+    role: "Director, Product Strategy",
+    bucket: "Executives",
+    stage: "local",
+    subject: "A question about product strategy at Vela Labs",
+    body: "Hi Amara,\n\nYour work leading product strategy for data-intensive tools at Vela Labs stood out to me. I’m exploring roles that combine systems thinking, research, and hands-on delivery, and I’d value your perspective on how those skills translate into product leadership.\n\nWould you be open to a short conversation in the next couple of weeks?\n\nBest,\nDylan",
+    why: "Amara leads product strategy for data-intensive tools and has a relevant history of mentoring operators moving into product leadership.",
+  },
+  marcus: {
+    id: "marcus",
+    candidateId: "marcus",
+    name: "Marcus Reed",
+    initials: "MR",
+    company: "Northstar Auto",
+    role: "Engineering Director",
+    bucket: "Managers",
+    stage: "local",
+    subject: "Engineering leadership at Northstar Auto",
+    body: "Hi Marcus,\n\nYour engineering leadership work at Northstar Auto caught my attention. I’m exploring how technical leaders create broader organizational impact while staying grounded in the systems and teams doing the work.\n\nWould you be open to a short conversation about what has mattered most in your transition into engineering leadership?\n\nBest,\nDylan",
+    why: "Marcus has a relevant engineering leadership path at a synthetic employer that Dylan explicitly reviewed in the prototype.",
+  },
+  elena: INITIAL_SYNTHETIC_DRAFTS.find((draft) => draft.id === "elena")!,
+};
+
+export function candidateDraftFor(candidateId: string) {
+  const draft = CANDIDATE_DRAFTS[candidateId];
+  return draft ? { ...draft } : null;
+}
+
+export function filterDraftsForBucket(drafts: SyntheticDraft[], bucket: Bucket) {
+  return bucket === "All" ? drafts : drafts.filter((draft) => draft.bucket === bucket);
+}
+
+export function filterCandidatesForBucket(candidates: SyntheticCandidate[], bucket: Bucket) {
+  return bucket === "All" ? candidates : candidates.filter((candidate) => candidate.bucket === bucket);
+}
+
+export function draftHeaderLabel(stage: DraftStage) {
+  if (stage === "gmail" || stage === "confirm") return "Gmail draft";
+  if (stage === "sent") return "Sent";
+  return "Local draft";
+}
+
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     today: <><path d="M4 5.5h16M7 3v5M17 3v5M5 9.5h14v10H5z" /><path d="M8 13h3M8 16h6" /></>,
@@ -116,11 +201,12 @@ function Avatar({ initials }: { initials: string }) {
 
 export function ExperiencePrototype() {
   const [section, setSection] = useState<Section>("today");
-  const [bucket, setBucket] = useState("All");
+  const [bucket, setBucket] = useState<Bucket>("All");
+  const [syntheticDrafts, setSyntheticDrafts] = useState<SyntheticDraft[]>(INITIAL_SYNTHETIC_DRAFTS);
   const [selectedDraft, setSelectedDraft] = useState("maya");
   const [selectedCandidate, setSelectedCandidate] = useState("amara");
-  const [subject, setSubject] = useState(drafts[0].subject);
-  const [message, setMessage] = useState(drafts[0].body);
+  const [subject, setSubject] = useState(INITIAL_SYNTHETIC_DRAFTS[0].subject);
+  const [message, setMessage] = useState(INITIAL_SYNTHETIC_DRAFTS[0].body);
   const [draftStage, setDraftStage] = useState<DraftStage>("local");
   const [addResult, setAddResult] = useState(false);
   const [findMoreResult, setFindMoreResult] = useState(false);
@@ -128,29 +214,66 @@ export function ExperiencePrototype() {
   const [trustedSyntheticEmployer, setTrustedSyntheticEmployer] = useState(false);
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [createdCandidateDrafts, setCreatedCandidateDrafts] = useState<string[]>(["elena"]);
 
   const activeDraft = useMemo(
-    () => drafts.find((draft) => draft.id === selectedDraft) ?? drafts[0],
-    [selectedDraft],
+    () => syntheticDrafts.find((draft) => draft.id === selectedDraft) ?? syntheticDrafts[0],
+    [selectedDraft, syntheticDrafts],
   );
   const activeCandidate = useMemo(
-    () => candidates.find((candidate) => candidate.id === selectedCandidate) ?? candidates[0],
+    () => SYNTHETIC_CANDIDATES.find((candidate) => candidate.id === selectedCandidate) ?? SYNTHETIC_CANDIDATES[0],
     [selectedCandidate],
+  );
+  const visibleDrafts = useMemo(
+    () => filterDraftsForBucket(syntheticDrafts, bucket),
+    [bucket, syntheticDrafts],
+  );
+  const visibleCandidates = useMemo(
+    () => filterCandidatesForBucket(SYNTHETIC_CANDIDATES, bucket),
+    [bucket],
   );
 
   function navigate(next: Section) {
+    if (next === "drafts") {
+      const scopedDrafts = filterDraftsForBucket(syntheticDrafts, bucket);
+      if (scopedDrafts.length > 0 && !scopedDrafts.some((draft) => draft.id === selectedDraft)) {
+        chooseDraft(scopedDrafts[0].id);
+      }
+    }
+    if (next === "candidates") {
+      const scopedCandidates = filterCandidatesForBucket(SYNTHETIC_CANDIDATES, bucket);
+      if (scopedCandidates.length > 0 && !scopedCandidates.some((candidate) => candidate.id === selectedCandidate)) {
+        setSelectedCandidate(scopedCandidates[0].id);
+      }
+    }
     setSection(next);
     setMobileQueueOpen(false);
     setNotice(null);
   }
 
   function chooseDraft(id: string) {
-    const draft = drafts.find((item) => item.id === id) ?? drafts[0];
+    const draft = syntheticDrafts.find((item) => item.id === id) ?? syntheticDrafts[0];
+    if (!draft) return;
     setSelectedDraft(id);
     setSubject(draft.subject);
     setMessage(draft.body);
-    setDraftStage(id === "leo" ? "gmail" : "local");
+    setDraftStage(draft.stage);
     setMobileQueueOpen(false);
+  }
+
+  function chooseBucket(nextBucket: Bucket) {
+    setBucket(nextBucket);
+    setAddResult(false);
+    setFindMoreResult(false);
+    setReviewOpen(false);
+    if (section === "drafts") {
+      const nextDraft = filterDraftsForBucket(syntheticDrafts, nextBucket)[0];
+      if (nextDraft) chooseDraft(nextDraft.id);
+    }
+    if (section === "candidates") {
+      const nextCandidate = filterCandidatesForBucket(SYNTHETIC_CANDIDATES, nextBucket)[0];
+      if (nextCandidate) setSelectedCandidate(nextCandidate.id);
+    }
   }
 
   function approveDraft() {
@@ -173,16 +296,36 @@ export function ExperiencePrototype() {
     setNotice("Northstar Auto is marked as a recruiting service in this synthetic prototype only. No production record changed.");
   }
 
-  function createCandidateDraft() {
-    setSelectedDraft("maya");
-    setSubject("A question about product strategy at Vela Labs");
-    setMessage("Hi Amara,\n\nYour work leading product strategy for data-intensive tools stood out to me. I’m exploring roles that combine systems thinking, research, and hands-on delivery, and I’d value your perspective on how those skills translate into product leadership.\n\nWould you be open to a short conversation in the next couple of weeks?\n\nBest,\nDylan");
-    setDraftStage("local");
+  function openCandidateDraft(candidateId: string) {
+    const draft = candidateDraftFor(candidateId);
+    if (!draft) return;
+    setSyntheticDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
+    setSelectedDraft(draft.id);
+    setSubject(draft.subject);
+    setMessage(draft.body);
+    setDraftStage(draft.stage);
     navigate("drafts");
   }
 
+  function createCandidateDraft(candidateId: string) {
+    setCreatedCandidateDrafts((current) => current.includes(candidateId) ? current : [...current, candidateId]);
+    openCandidateDraft(candidateId);
+  }
+
+  function chooseNextDraft() {
+    const currentIndex = visibleDrafts.findIndex((draft) => draft.id === selectedDraft);
+    const nextDraft = visibleDrafts[currentIndex + 1];
+    if (nextDraft) {
+      chooseDraft(nextDraft.id);
+      return;
+    }
+    setNotice(`No other drafts are waiting in ${bucket}. Choose another recipient group to continue.`);
+  }
+
   const activeCandidateState: CandidateState =
-    activeCandidate.id === "marcus" && trustedSyntheticEmployer
+    createdCandidateDrafts.includes(activeCandidate.id)
+      ? "has-draft"
+      : activeCandidate.id === "marcus" && trustedSyntheticEmployer
       ? "ready"
       : activeCandidate.state;
 
@@ -199,7 +342,7 @@ export function ExperiencePrototype() {
             <button key={item.id} onClick={() => navigate(item.id)} aria-current={section === item.id ? "page" : undefined}>
               <Icon name={item.id} />
               <span>{item.label}</span>
-              {item.id === "drafts" ? <small>3</small> : null}
+              {item.id === "drafts" ? <small>{syntheticDrafts.length}</small> : null}
             </button>
           ))}
         </nav>
@@ -235,24 +378,24 @@ export function ExperiencePrototype() {
             <PageHeader title="Drafts" subtitle="Review the person and message, then choose the next step.">
               <span className={styles.actionWithHint}><button className={styles.secondaryButton} onClick={() => setAddResult(true)}>Add drafts</button><small>Existing pool · no provider call</small></span>
             </PageHeader>
-            <BucketSwitcher value={bucket} onChange={setBucket} />
+            <BucketSwitcher value={bucket} onChange={chooseBucket} />
             {addResult ? (
               <ZeroDraftResult
-                onReview={() => { setAddResult(false); setSelectedCandidate("marcus"); navigate("candidates"); }}
+                onReview={() => { setAddResult(false); setBucket("Managers"); setSelectedCandidate("marcus"); navigate("candidates"); }}
                 onDismiss={() => setAddResult(false)}
               />
             ) : null}
-            <button className={styles.mobilePeopleButton} onClick={() => setMobileQueueOpen((open) => !open)} aria-expanded={mobileQueueOpen}>
+            {visibleDrafts.length > 0 && activeDraft ? <button className={styles.mobilePeopleButton} onClick={() => setMobileQueueOpen((open) => !open)} aria-expanded={mobileQueueOpen}>
               <Icon name="people" />
               <span>{activeDraft.name}</span>
-              <small>People · {drafts.length}</small>
-            </button>
-            <div className={styles.draftsLayout}>
+              <small>People · {visibleDrafts.length}</small>
+            </button> : null}
+            {visibleDrafts.length > 0 && activeDraft ? <div className={styles.draftsLayout}>
               <aside className={`${styles.queue} ${mobileQueueOpen ? styles.queueOpen : ""}`} aria-label="Draft queue">
                 <div className={styles.queueHeading}>
-                  <span>People</span><small>{drafts.length} ready</small>
+                  <span>People</span><small>{visibleDrafts.length} shown</small>
                 </div>
-                {drafts.map((draft) => (
+                {visibleDrafts.map((draft) => (
                   <button key={draft.id} onClick={() => chooseDraft(draft.id)} aria-current={selectedDraft === draft.id ? "true" : undefined}>
                     <Avatar initials={draft.initials} />
                     <span><strong>{draft.name}</strong><small>{draft.role}</small><em>{draft.company}</em></span>
@@ -262,7 +405,7 @@ export function ExperiencePrototype() {
               <article className={styles.messageWorkspace} aria-label={`Draft for ${activeDraft.name}`}>
                 <header className={styles.recipientHeader}>
                   <div><Avatar initials={activeDraft.initials} /><span><strong>{activeDraft.name}</strong><small>{activeDraft.role} · {activeDraft.company}</small></span></div>
-                  <span className={styles.quietState}>{draftStage === "gmail" ? "Gmail draft" : draftStage === "sent" ? "Sent" : "Local draft"}</span>
+                  <span className={styles.quietState}>{draftHeaderLabel(draftStage)}</span>
                 </header>
                 <label className={styles.messageField}>
                   <span>Subject</span>
@@ -278,11 +421,11 @@ export function ExperiencePrototype() {
                 </div>
                 <details className={styles.details}>
                   <summary>Details</summary>
-                  <div><strong>Why this person</strong><p>Relevant recruiting experience and a verified operating employer. The message asks for perspective without claiming a prior relationship.</p></div>
+                  <div><strong>Why this person</strong><p>{activeDraft.why}</p></div>
                 </details>
-                <DraftAction stage={draftStage} onApprove={approveDraft} onConfirm={() => setDraftStage("confirm")} onCancel={() => setDraftStage("gmail")} onSend={() => setDraftStage("sent")} onNext={() => chooseDraft("aisha")} />
+                <DraftAction stage={draftStage} onApprove={approveDraft} onConfirm={() => setDraftStage("confirm")} onCancel={() => setDraftStage("gmail")} onSend={() => setDraftStage("sent")} onNext={chooseNextDraft} />
               </article>
-            </div>
+            </div> : <EmptyBucket kind="drafts" bucket={bucket} onShowAll={() => chooseBucket("All")} />}
           </section>
         ) : null}
 
@@ -294,21 +437,21 @@ export function ExperiencePrototype() {
                 <span><button className={styles.secondaryButton} onClick={() => { setFindMoreResult(true); setAddResult(false); }}><Icon name="search" />Find more</button><small>New people · may use Apollo</small></span>
               </div>
             </PageHeader>
-            <BucketSwitcher value={bucket} onChange={setBucket} />
-            {addResult ? <ZeroDraftResult onReview={() => { setSelectedCandidate("marcus"); setAddResult(false); }} onDismiss={() => setAddResult(false)} /> : null}
+            <BucketSwitcher value={bucket} onChange={chooseBucket} />
+            {addResult ? <ZeroDraftResult onReview={() => { setBucket("Managers"); setSelectedCandidate("marcus"); setAddResult(false); }} onDismiss={() => setAddResult(false)} /> : null}
             {findMoreResult ? (
               <div className={styles.inlineNotice} role="status">
                 <Icon name="info" /><span><strong>Find more is disabled in this prototype.</strong> This action would open a scoped provider confirmation. No Apollo call was made.</span>
                 <button className={styles.iconButton} onClick={() => setFindMoreResult(false)} aria-label="Dismiss"><Icon name="close" /></button>
               </div>
             ) : null}
-            <div className={styles.candidateLayout}>
+            {visibleCandidates.length > 0 ? <div className={styles.candidateLayout}>
               <div className={styles.candidateList} role="listbox" aria-label="Candidates">
-                {candidates.map((candidate) => (
+                {visibleCandidates.map((candidate) => (
                   <button key={candidate.id} role="option" aria-selected={selectedCandidate === candidate.id} onClick={() => { setSelectedCandidate(candidate.id); setReviewOpen(false); }}>
                     <Avatar initials={candidate.initials} />
                     <span><strong>{candidate.name}</strong><small>{candidate.role}</small><em>{candidate.company}</em></span>
-                    <CandidateCue state={candidate.id === "marcus" && trustedSyntheticEmployer ? "ready" : candidate.state} />
+                    <CandidateCue state={createdCandidateDrafts.includes(candidate.id) ? "has-draft" : candidate.id === "marcus" && trustedSyntheticEmployer ? "ready" : candidate.state} />
                   </button>
                 ))}
               </div>
@@ -324,15 +467,15 @@ export function ExperiencePrototype() {
                 </details>
                 <CandidateAction
                   state={activeCandidateState}
-                  onCreate={createCandidateDraft}
-                  onOpen={() => navigate("drafts")}
+                  onCreate={() => createCandidateDraft(activeCandidate.id)}
+                  onOpen={() => openCandidateDraft(activeCandidate.id)}
                   onReview={openEmployerReview}
                 />
                 {reviewOpen ? (
                   <EmployerReview onTrust={trustSyntheticEmployer} onStaffing={markSyntheticStaffingService} onClose={() => setReviewOpen(false)} />
                 ) : null}
               </article>
-            </div>
+            </div> : <EmptyBucket kind="candidates" bucket={bucket} onShowAll={() => chooseBucket("All")} />}
           </section>
         ) : null}
 
@@ -357,13 +500,23 @@ function PageHeader({ title, subtitle, children }: { title: string; subtitle: st
   return <header className={styles.pageHeader}><div><h1 id={id}>{title}</h1><p>{subtitle}</p></div>{children}</header>;
 }
 
-function BucketSwitcher({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function BucketSwitcher({ value, onChange }: { value: Bucket; onChange: (value: Bucket) => void }) {
   return <div className={styles.bucketControl}>
     <div className={styles.bucketTabs} aria-label="Recipient group">
       {buckets.map((item) => <button key={item} aria-pressed={value === item} onClick={() => onChange(item)}>{item}</button>)}
     </div>
-    <label className={styles.mobileBucket}><span>Recipient group</span><select value={value} onChange={(event) => onChange(event.target.value)}>{buckets.map((item) => <option key={item}>{item}</option>)}</select></label>
+    <label className={styles.mobileBucket}><span>Recipient group</span><select value={value} onChange={(event) => onChange(event.target.value as Bucket)}>{buckets.map((item) => <option key={item}>{item}</option>)}</select></label>
   </div>;
+}
+
+function EmptyBucket({ kind, bucket, onShowAll }: { kind: "drafts" | "candidates"; bucket: Bucket; onShowAll: () => void }) {
+  const noun = kind === "drafts" ? "drafts" : "candidates";
+  return <section className={styles.emptyBucket} role="status">
+    <Icon name={kind === "drafts" ? "drafts" : "candidates"} />
+    <h2>No {noun} in {bucket}</h2>
+    <p>This synthetic recipient group is intentionally empty. Choose All to return to the full local prototype set.</p>
+    <button className={styles.secondaryButton} onClick={onShowAll}>Show all {noun}</button>
+  </section>;
 }
 
 function Today({ onNavigate }: { onNavigate: (section: Section) => void }) {
