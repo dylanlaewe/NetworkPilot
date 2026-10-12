@@ -137,9 +137,8 @@ describe("v1 daily workflow UX", () => {
     expect(actions).toContain("sendStatus=sent");
     expect(actions).not.toContain("/sent?sendStatus=sent");
     expect(sent).toContain("No outreach sent yet");
-    expect(source("src/app/candidates/candidates-workspace.tsx")).toContain(
-      "No candidates match this view",
-    );
+    expect(source("src/app/candidates/candidates-workspace.tsx")).toContain("No candidates match these filters");
+    expect(source("src/app/candidates/candidates-workspace.tsx")).toContain("Open Legacy candidates");
     expect(sent).toContain("aria-current={outcome===filter");
     for (const page of ["/today", "/drafts", "/sent", "/candidates"])
       expect(actions).toContain(`"${page}"`);

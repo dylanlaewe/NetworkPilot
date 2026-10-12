@@ -82,6 +82,12 @@ describe("Network Command supporting surfaces", () => {
       ">Send<",
     ])
       expect(page).not.toContain(forbidden);
+    expect(page).toContain("loadCommandCenterDraftReviews");
+    expect(page).toContain("gmailReadiness.available");
+    expect(page).toContain("daily.safety.apolloEnabled");
+    expect(page).toContain('gmailDisabled?"Disabled"');
+    expect(page).toContain('!apolloEnabled?"Disabled"');
+    expect(page).not.toContain('daily.safety.gmailState==="connected"');
   });
   it("supports responsive detail transitions, focus, and reduced motion", () => {
     const shell = source("src/app/network-command.module.css"),

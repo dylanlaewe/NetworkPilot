@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { recipientBucketHref } from "./recipient-bucket-navigation";
 import { draftsForBucket, normalizedDraftAdditionState } from "./drafts/drafts-workspace";
 import { initialDraftAdditionActionState } from "./drafts/draft-addition-state";
-import { matchesCandidateBucket } from "./candidates/candidates-workspace";
+import { candidateEmptyState, matchesCandidateBucket } from "./candidates/candidates-workspace";
 import { draftAdditionFeedback } from "@/application/daily-refresh/addition-feedback";
 
 describe("real-data experience reset contracts", () => {
@@ -27,6 +27,16 @@ describe("real-data experience reset contracts", () => {
     expect(matchesCandidateBucket(classified, navigation)).toBe(true);
     expect(matchesCandidateBucket(legacy, navigation)).toBe(false);
     expect(matchesCandidateBucket(legacy, navigation, "legacy")).toBe(true);
+  });
+
+  it("offers a truthful recovery from empty classified and filtered candidate views", () => {
+    expect(candidateEmptyState({ hasFilters: false, selection: "all", legacyCount: 117 })).toEqual({
+      title: "No classified candidates yet",
+      detail: "117 legacy or unclassified candidates are still available in the explicit Legacy view.",
+      action: "legacy",
+    });
+    expect(candidateEmptyState({ hasFilters: true, selection: "managers", legacyCount: 117 })).toMatchObject({ action: "clear" });
+    expect(candidateEmptyState({ hasFilters: false, selection: "managers", legacyCount: 0 })).toMatchObject({ action: "groups" });
   });
 
   it("returns reasoned full, partial and zero Add Drafts feedback", () => {

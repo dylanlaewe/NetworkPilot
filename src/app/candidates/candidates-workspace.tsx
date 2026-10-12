@@ -109,6 +109,14 @@ export function matchesCandidateBucket(
   );
 }
 
+export function candidateEmptyState(input: { hasFilters: boolean; selection: BucketSelection; legacyCount: number }) {
+  if (input.hasFilters)
+    return { title: "No candidates match these filters", detail: "Clear the active filters to restore this recipient view.", action: "clear" as const };
+  if (input.legacyCount > 0)
+    return { title: input.selection === "all" ? "No classified candidates yet" : "No candidates in this recipient group", detail: `${input.legacyCount} legacy or unclassified ${input.legacyCount === 1 ? "candidate is" : "candidates are"} still available in the explicit Legacy view.`, action: "legacy" as const };
+  return { title: input.selection === "all" ? "No classified candidates yet" : "No candidates in this recipient group", detail: "Choose another recipient group to review its candidate supply.", action: "groups" as const };
+}
+
 function draftBlockReason(candidate: CandidateWorkspaceRow) {
   if (candidate.bucketReviewState === "review-required")
     return employerReviewRequired(candidate)
@@ -421,6 +429,8 @@ export function CandidatesWorkspace({
       : bucketSelection === "legacy"
         ? 0
         : (bucketSelection === "peers" && earlyCareerOnly ? earlyCareerPeerCapacity : actionableCapacityByBucket?.[bucketSelection]) ?? 0;
+  const hasCandidateFilters = Boolean(search.trim() || Object.values(filters).some((value) => value !== "all"));
+  const emptyState = candidateEmptyState({ hasFilters: hasCandidateFilters, selection: bucketSelection, legacyCount: bucketNavigation?.legacyCount ?? 0 });
   const selectedScope = bucketSelection !== "all" && bucketSelection !== "legacy" ? bucketSelection : null;
   const findMoreControl = !bucketNavigation
     ? refreshControl
@@ -609,11 +619,9 @@ export function CandidatesWorkspace({
       {rows.length === 0 ? (
         <div className={styles.empty}>
           <span>—</span>
-          <h2>No candidates match this view</h2>
-          <p>Clear the filters to restore the opportunity pool.</p>
-          <button type="button" onClick={clear}>
-            Clear filters
-          </button>
+          <h2>{emptyState.title}</h2>
+          <p>{emptyState.detail}</p>
+          {emptyState.action === "clear" ? <button type="button" onClick={clear}>Clear filters</button> : emptyState.action === "legacy" ? <button type="button" onClick={() => selectBucket("legacy", false)}>Open Legacy candidates</button> : <button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button>}
         </div>
       ) : (
         <div className={styles.work}>
