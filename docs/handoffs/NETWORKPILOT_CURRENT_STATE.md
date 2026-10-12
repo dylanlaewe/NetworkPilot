@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-06 after controlled production activation completed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-12 after the approved product-experience overhaul was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,19 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `fbee75501c32d1b9c3b4bd203ce043e7b655e78c` (`fix: require explicit migration target`). The handoff itself is a later documentation-only commit.
+- Activated runtime build: `6d14998ebb855f40b17bdfe5dcf8d54d28158bc7` (`chore: finalize design system and security patch`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.6 production build is listening on port 3000 as PID 61698, started 2026-10-06 at 14:14:30 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 82550 (parent `npm run app:start` PID 82524), started 2026-10-12 at 14:40:40 America/New_York.
+
+## Product-experience deployment
+
+- The approved product-experience overhaul became live at 2026-10-12 14:40:40 EDT from exact code revision `6d14998ebb855f40b17bdfe5dcf8d54d28158bc7`.
+- This was a code/UI-only deployment. No migration command ran, the migration ledger remained at `0022_company_trust.sql`, and the five-bucket flag and recruiter resume preference were unchanged.
+- Deployment and read-only acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends. Canonical provider/Gmail/outreach counters and the logical database fingerprint were unchanged.
+- Today, Candidates, Sent, Resumes, System, and the zero-draft production state passed read-only browser acceptance at 1440×900, 1280×800, 390×844, and 360×800. The exact deployed UI was additionally exercised against an isolated populated fixture to verify draft selection, evidence disclosure, and candidate Create Draft behavior without production mutation.
+- Known non-blocking polish remains: the mobile Draft action dock is dense, and Resumes would benefit from a clearer mobile Back affordance. Do not start either change without a separate task.
 
 ## Datastore topology
 
@@ -121,7 +129,7 @@ There is no activation blocker. Controlled production activation completed witho
 ## Production state
 
 - Five-bucket flag: ON by deliberate local production configuration.
-- Canonical operational schema: `0022_company_trust.sql`. Final activated database SHA-256 after migration and recruiter-default configuration: `0ff7fb8905e2a739ead4c0366a4d88467869782f9278dee115128bbc3ed6489c`.
+- Canonical operational schema: `0022_company_trust.sql`. The historical post-activation SHA-256 after migration and recruiter-default configuration was `0ff7fb8905e2a739ead4c0366a4d88467869782f9278dee115128bbc3ed6489c`. The 2026-10-12 pre/post-deployment application-data fingerprint was `fc2003ab29fcf71ca578948a5fec647d98bb8de35dbc76305cb326bdaee2db24`; WAL was empty (`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`) and SHM was `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`.
 - Verified pre-0022 backup: `/Users/dylanlaewe/Backups/NetworkPilot/networkpilot-operational-pre-0022-20261006T175824Z.sqlite`, SHA-256 `6bd534bd25d4bd5db1ef73d166c0fd3c5df61687b347048ef5658e05b0f69b1d`.
 - Exact active `General Resume` (`resume-25b41a9d-f581-4e1a-bd35-a9bafdf54bb3`) is the recruiter default. Professional buckets still default to no attachment.
 - `company_trust_audit` and `company_trust_current` remain empty. No existing or provider-discovered company was silently trusted.
@@ -129,7 +137,7 @@ There is no activation blocker. Controlled production activation completed witho
 - `data/networkpilot.sqlite` remains the application/system datastore. Its accepted additive 0021/0022 schema drift does not change role ownership or capabilities. Do not restore or down-migrate it.
 - The operator-targeting incident and guard are documented in `docs/explicit-migration-boundary.md`; `db:migrate` now requires and prints an explicit absolute target and rejects missing, nonexistent, or conflicting configuration.
 - Production dependency audit is zero after patching `sharp@0.35.5` and `source-map-js@1.2.2`; the exact accepted dev-only `braces` exception remains enforced.
-- Activation made zero Apollo calls, Gmail calls, Gmail drafts, or emails.
+- The 2026-10-12 UI deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
 
 ## Engineering invariants
 
