@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-12 after the approved product-experience overhaul was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-12 after the approved ChatGPT-inspired experience reset was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `6d14998ebb855f40b17bdfe5dcf8d54d28158bc7` (`chore: finalize design system and security patch`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `9198d15086d0d82dca27724a999eba4a576f2caf` (`fix: align candidate sourcing availability`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 82550 (parent `npm run app:start` PID 82524), started 2026-10-12 at 14:40:40 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 67856 (parent `npm run app:start` PID 67840), started 2026-10-12 at 18:22:58 America/New_York.
 
 ## Product-experience deployment
 
@@ -22,7 +22,17 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 - This was a code/UI-only deployment. No migration command ran, the migration ledger remained at `0022_company_trust.sql`, and the five-bucket flag and recruiter resume preference were unchanged.
 - Deployment and read-only acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends. Canonical provider/Gmail/outreach counters and the logical database fingerprint were unchanged.
 - Today, Candidates, Sent, Resumes, System, and the zero-draft production state passed read-only browser acceptance at 1440×900, 1280×800, 390×844, and 360×800. The exact deployed UI was additionally exercised against an isolated populated fixture to verify draft selection, evidence disclosure, and candidate Create Draft behavior without production mutation.
-- Known non-blocking polish remains: the mobile Draft action dock is dense, and Resumes would benefit from a clearer mobile Back affordance. Do not start either change without a separate task.
+- At that deployment, mobile Draft action density and the Resumes Back affordance were recorded as non-blocking polish. The later experience-reset notes below supersede that status.
+
+## Experience-reset deployment
+
+- The approved ChatGPT-inspired experience reset became live at 2026-10-12 18:22:58 EDT from exact code revision `9198d15086d0d82dca27724a999eba4a576f2caf`.
+- This was a code/UI-only deployment. No migration command ran, the migration ledger remained at `0022_company_trust.sql`, and the five-bucket flag and exact recruiter `General Resume` preference were unchanged.
+- Deployment and read-only acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends. Canonical provider, Gmail, outreach, trust, and logical database fingerprints remained unchanged.
+- Today, Drafts, Candidates, Sent, Resumes, and Settings passed read-only browser acceptance at 1440×900, 1280×800, 390×844, and 360×800 with no horizontal overflow, action overlap, or browser console warnings/errors. Production has zero active drafts, so populated two-pane draft behavior remains covered by the reviewed candidate tests and pre-deployment isolated acceptance rather than manufactured production data.
+- Candidate bucket switching and candidate selection visibly completed client-locally in approximately 155 ms and 104 ms respectively in the acceptance browser. Five warm local production fetches measured median end-to-end times of approximately 117 ms for Drafts and 98 ms for Candidates; no obvious deployment regression was observed.
+- Zero-capacity Add Drafts now gives a truthful no-actionable-reserve explanation and keeps the separately labeled, potentially Apollo-backed Find More path distinct. Find More was not executed.
+- No new blocking polish was found. The mobile Resumes view now exposes an explicit Back to resumes affordance. Populated mobile Draft action density remains a non-blocking follow-up only if normal use reveals friction; do not start another UI task automatically.
 
 ## Datastore topology
 
@@ -137,7 +147,7 @@ There is no activation blocker. Controlled production activation completed witho
 - `data/networkpilot.sqlite` remains the application/system datastore. Its accepted additive 0021/0022 schema drift does not change role ownership or capabilities. Do not restore or down-migrate it.
 - The operator-targeting incident and guard are documented in `docs/explicit-migration-boundary.md`; `db:migrate` now requires and prints an explicit absolute target and rejects missing, nonexistent, or conflicting configuration.
 - Production dependency audit is zero after patching `sharp@0.35.5` and `source-map-js@1.2.2`; the exact accepted dev-only `braces` exception remains enforced.
-- The 2026-10-12 UI deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
+- The 2026-10-12 experience-reset deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
 
 ## Engineering invariants
 
@@ -152,4 +162,4 @@ There is no activation blocker. Controlled production activation completed witho
 
 ## Next recommended task
 
-Open NetworkPilot and use it yourself before any further engineering work. Do not call Apollo or Gmail, create Gmail drafts, or send email without new task-specific authorization.
+Dylan should use the redesigned production workflow himself before further engineering. Do not call Apollo or Gmail, create Gmail drafts, or send email without new task-specific authorization.
