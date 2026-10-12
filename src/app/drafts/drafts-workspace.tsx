@@ -23,6 +23,7 @@ import {
   resolveBucketCorrection,
   sendGmailDraft,
   skipDraft,
+  type DraftAdditionActionState,
 } from "@/app/today/actions";
 import {
   workspacePrimaryBlockReason,
@@ -91,6 +92,14 @@ export function draftsForBucket(drafts: WorkspaceDraft[], selection: BucketSelec
   if (selection === "all") return drafts.filter((draft) => Boolean(draft.recipientBucket?.bucket));
   if (selection === "legacy") return drafts.filter((draft) => !draft.recipientBucket?.bucket);
   return drafts.filter((draft) => draft.recipientBucket?.bucket === selection && (!earlyCareerOnly || draft.recipientBucket.earlyCareer));
+}
+
+export function normalizedDraftAdditionState(
+  state: DraftAdditionActionState | null | undefined,
+): DraftAdditionActionState {
+  return state && Array.isArray(state.reasons)
+    ? state
+    : initialDraftAdditionActionState;
 }
 
 function isTypingTarget(target: EventTarget | null) {
@@ -238,6 +247,7 @@ export function DraftsWorkspace({
   const [resumePrompt, setResumePrompt] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [additionState, additionAction, additionPending] = useActionState(generateMoreDraftsInline, initialDraftAdditionActionState);
+  const visibleAdditionState = normalizedDraftAdditionState(additionState);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const approveRef = useRef<HTMLFormElement>(null);
@@ -636,7 +646,7 @@ export function DraftsWorkspace({
                   for more supply.
                 </p>
               )}
-              {additionState.status !== "idle" ? <div className={styles.additionResult} data-status={additionState.status} role={additionState.status === "error" ? "alert" : "status"}><strong>{additionState.message}</strong>{additionState.reasons.length ? <ul>{additionState.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}{additionState.recovery ? <Link href={additionState.recovery.href}>{additionState.recovery.label}</Link> : null}</div> : null}
+              {visibleAdditionState.status !== "idle" ? <div className={styles.additionResult} data-status={visibleAdditionState.status} role={visibleAdditionState.status === "error" ? "alert" : "status"}><strong>{visibleAdditionState.message}</strong>{visibleAdditionState.reasons.length ? <ul>{visibleAdditionState.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}{visibleAdditionState.recovery ? <Link href={visibleAdditionState.recovery.href}>{visibleAdditionState.recovery.label}</Link> : null}</div> : null}
             </div>
           </details>
         </header>

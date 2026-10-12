@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { recipientBucketHref } from "./recipient-bucket-navigation";
-import { draftsForBucket } from "./drafts/drafts-workspace";
+import { draftsForBucket, normalizedDraftAdditionState } from "./drafts/drafts-workspace";
+import { initialDraftAdditionActionState } from "./today/actions";
 import { matchesCandidateBucket } from "./candidates/candidates-workspace";
 import { draftAdditionFeedback } from "@/application/daily-refresh/addition-feedback";
 
@@ -31,5 +32,11 @@ describe("real-data experience reset contracts", () => {
     expect(draftAdditionFeedback({ ...base, addedCount: 5 })).toMatchObject({ status: "success", message: "5 drafts added" });
     expect(draftAdditionFeedback({ ...base, addedCount: 2, blockCounts: { reviewRequired: 3, alreadyDraftedOrContacted: 0, companyCooldown: 0, suppressed: 0, unresolvedEvidence: 0, noQualifiedReserve: 0 } })).toMatchObject({ status: "partial", message: "2 of 5 drafts added", recovery: { label: "Review candidates" } });
     expect(draftAdditionFeedback({ ...base, addedCount: 0, blockCounts: { reviewRequired: 0, alreadyDraftedOrContacted: 0, companyCooldown: 0, suppressed: 0, unresolvedEvidence: 0, noQualifiedReserve: 1 } })).toMatchObject({ status: "zero", message: "No drafts could be added", recovery: { label: "Find more people" } });
+  });
+
+  it("keeps Drafts render-safe when a client navigation has no action state", () => {
+    expect(normalizedDraftAdditionState(undefined)).toEqual(initialDraftAdditionActionState);
+    expect(normalizedDraftAdditionState(null)).toEqual(initialDraftAdditionActionState);
+    expect(normalizedDraftAdditionState({ status: "success", message: "1 draft added", reasons: [], recovery: null })).toMatchObject({ status: "success" });
   });
 });
