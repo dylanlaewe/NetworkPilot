@@ -2,6 +2,7 @@ import { NetworkCommandShell } from "@/app/network-command-shell";
 import { loadDailyCommandCenter } from "@/infrastructure/sqlite/daily-command-center";
 import { CandidateRefreshControl } from "./refresh-control";
 import { CandidatesWorkspace } from "./candidates-workspace";
+import { candidateWorkspaceRouteKey } from "./workspace-route";
 import {
   fiveBucketEnabled,
   RECIPIENT_BUCKETS,
@@ -161,6 +162,7 @@ async function renderCandidatesPage({
       status={health}
     >
       <CandidatesWorkspace
+        key={candidateWorkspaceRouteKey(selectedBucket, earlyCareerOnly, params.findMore === "true")}
         candidates={workspaceCandidates}
         initialSelectedId={params.selected}
         initialFilterOpen={params.filters === "open"}
@@ -171,8 +173,12 @@ async function renderCandidatesPage({
         actionableCapacityByBucket={allMetrics?Object.fromEntries(RECIPIENT_BUCKETS.map((bucket)=>[bucket,allMetrics.byBucket[bucket]?.actionableCapacity??0])):undefined}
         unionActionableCapacity={allMetrics?.actionableCapacity}
         earlyCareerPeerCapacity={allMetrics?.byScope["peers:early-career"]?.actionableCapacity}
+        blockCounts={allMetrics?.blockCounts}
+        blockCountsByBucket={allMetrics?Object.fromEntries(RECIPIENT_BUCKETS.map((bucket)=>[bucket,allMetrics.byBucket[bucket]?.blockCounts])):undefined}
+        earlyCareerPeerBlockCounts={allMetrics?.byScope["peers:early-career"]?.blockCounts}
         refreshScope={scopedBucket}
         refreshEarlyCareerOnly={earlyCareerOnly}
+        findMoreOpen={params.findMore === "true"}
         apolloEnabled={data.safety.apolloEnabled}
         apolloReady={data.safety.apolloReady}
       />

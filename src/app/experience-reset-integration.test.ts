@@ -32,12 +32,12 @@ describe("real-data experience reset contracts", () => {
 
   it("offers a truthful recovery from empty classified and filtered candidate views", () => {
     expect(candidateEmptyState({ hasFilters: false, selection: "all", legacyCount: 117 })).toEqual({
-      title: "No classified candidates yet",
-      detail: "117 legacy or unclassified candidates are still available in the explicit Legacy view.",
-      action: "legacy",
+      title: "No candidates yet",
+      detail: "Find people to start building your networking queue.",
+      showLegacy: true,
     });
     expect(candidateEmptyState({ hasFilters: true, selection: "managers", legacyCount: 117 })).toMatchObject({ action: "clear" });
-    expect(candidateEmptyState({ hasFilters: false, selection: "managers", legacyCount: 0 })).toMatchObject({ action: "groups" });
+    expect(candidateEmptyState({ hasFilters: false, selection: "managers", legacyCount: 0 })).toMatchObject({ showLegacy: false });
   });
 
   it("only advertises candidate sourcing when Apollo is enabled and ready", () => {

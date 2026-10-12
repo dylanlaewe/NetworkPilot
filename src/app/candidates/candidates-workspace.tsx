@@ -14,6 +14,7 @@ import type {
   ReserveCandidate,
   ReserveStage,
 } from "@/application/daily-command-center";
+import type { DraftAdditionBlockCounts } from "@/application/daily-refresh";
 import styles from "./candidates-command.module.css";
 import { RecipientBucketNavigation, type BucketNavigationData, type BucketSelection, type RecipientBucket } from "@/app/recipient-bucket-navigation";
 import { createCandidateDraft, reviewCandidateCompanyTrust } from "./actions";
@@ -113,9 +114,63 @@ export function matchesCandidateBucket(
 export function candidateEmptyState(input: { hasFilters: boolean; selection: BucketSelection; legacyCount: number }) {
   if (input.hasFilters)
     return { title: "No candidates match these filters", detail: "Clear the active filters to restore this recipient view.", action: "clear" as const };
-  if (input.legacyCount > 0)
-    return { title: input.selection === "all" ? "No classified candidates yet" : "No candidates in this recipient group", detail: `${input.legacyCount} legacy or unclassified ${input.legacyCount === 1 ? "candidate is" : "candidates are"} still available in the explicit Legacy view.`, action: "legacy" as const };
-  return { title: input.selection === "all" ? "No classified candidates yet" : "No candidates in this recipient group", detail: "Choose another recipient group to review its candidate supply.", action: "groups" as const };
+  return {
+    title: "No candidates yet",
+    detail: "Find people to start building your networking queue.",
+    showLegacy: input.selection !== "legacy" && input.legacyCount > 0,
+  };
+}
+
+export interface CandidateBlockerSummary {
+  employerReview: number;
+  eligibilityReview: number;
+  companyCooldown: number;
+  alreadyContacted: number;
+  alreadyInDrafts: number;
+  suppressed: number;
+  notEligible: number;
+}
+
+export function candidateBlockerSummary(
+  candidates: CandidateWorkspaceRow[],
+): CandidateBlockerSummary {
+  return candidates.reduce<CandidateBlockerSummary>(
+    (summary, candidate) => {
+      if (employerReviewRequired(candidate)) summary.employerReview += 1;
+      else if (
+        candidate.bucketReviewState === "review-required" ||
+        candidate.stage === "search-only" ||
+        Boolean(candidate.planningBlockReason) ||
+        candidate.planningReady === false
+      )
+        summary.eligibilityReview += 1;
+      else if (candidate.stage === "cooldown") summary.companyCooldown += 1;
+      else if (candidate.stage === "already-contacted")
+        summary.alreadyContacted += 1;
+      else if (candidate.stage === "in-draft-queue")
+        summary.alreadyInDrafts += 1;
+      else if (candidate.stage === "suppressed") summary.suppressed += 1;
+      else if (candidate.stage === "enriched-unqualified")
+        summary.notEligible += 1;
+      return summary;
+    },
+    {
+      employerReview: 0,
+      eligibilityReview: 0,
+      companyCooldown: 0,
+      alreadyContacted: 0,
+      alreadyInDrafts: 0,
+      suppressed: 0,
+      notEligible: 0,
+    },
+  );
+}
+
+export function candidateSourcingHref(
+  bucket: RecipientBucket,
+  earlyCareerOnly = false,
+) {
+  return `/candidates?bucket=${encodeURIComponent(bucket)}${bucket === "peers" && earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`;
 }
 
 function draftBlockReason(candidate: CandidateWorkspaceRow) {
@@ -265,8 +320,12 @@ export function CandidatesWorkspace({
   actionableCapacityByBucket,
   unionActionableCapacity,
   earlyCareerPeerCapacity,
+  blockCounts,
+  blockCountsByBucket,
+  earlyCareerPeerBlockCounts,
   refreshScope,
   refreshEarlyCareerOnly = false,
+  findMoreOpen = false,
   apolloEnabled,
   apolloReady,
 }: {
@@ -280,8 +339,12 @@ export function CandidatesWorkspace({
   actionableCapacityByBucket?: Partial<Record<RecipientBucket, number>>;
   unionActionableCapacity?: number;
   earlyCareerPeerCapacity?: number;
+  blockCounts?: DraftAdditionBlockCounts;
+  blockCountsByBucket?: Partial<Record<RecipientBucket, DraftAdditionBlockCounts>>;
+  earlyCareerPeerBlockCounts?: DraftAdditionBlockCounts;
   refreshScope?: RecipientBucket;
   refreshEarlyCareerOnly?: boolean;
+  findMoreOpen?: boolean;
   apolloEnabled: boolean;
   apolloReady: boolean;
 }) {
@@ -293,6 +356,11 @@ export function CandidatesWorkspace({
     [mobileDetail, setMobileDetail] = useState(false),
     [density, setDensity] = useState<Density>("comfortable"),
     [filterOpen, setFilterOpen] = useState(initialFilterOpen),
+    [sourcingBucket, setSourcingBucket] = useState<RecipientBucket>(
+      bucketNavigation && bucketNavigation.selected !== "all" && bucketNavigation.selected !== "legacy"
+        ? bucketNavigation.selected
+        : "recruiters",
+    ),
     [search, setSearch] = useState(""),
     [filters, setFilters] = useState<Filters>(initialFilters);
   const inspectorRef = useRef<HTMLElement>(null);
@@ -316,6 +384,14 @@ export function CandidatesWorkspace({
         ].sort(),
       [candidates],
     );
+  const scopeCandidates = candidates.filter((row) =>
+    matchesCandidateBucket(
+      row,
+      bucketNavigation,
+      bucketSelection,
+      earlyCareerOnly,
+    ),
+  );
   const employerReviewCount = candidates.filter(
     (row) => matchesCandidateBucket(row, bucketNavigation, bucketSelection, earlyCareerOnly) && employerReviewRequired(row),
   ).length;
@@ -437,6 +513,24 @@ export function CandidatesWorkspace({
   const hasCandidateFilters = Boolean(search.trim() || Object.values(filters).some((value) => value !== "all"));
   const emptyState = candidateEmptyState({ hasFilters: hasCandidateFilters, selection: bucketSelection, legacyCount: bucketNavigation?.legacyCount ?? 0 });
   const selectedScope = bucketSelection !== "all" && bucketSelection !== "legacy" ? bucketSelection : null;
+  const blockers = candidateBlockerSummary(scopeCandidates);
+  const projectedBlockers = !bucketNavigation
+    ? blockCounts
+    : bucketSelection === "all"
+      ? blockCounts
+      : bucketSelection === "legacy"
+        ? undefined
+        : bucketSelection === "peers" && earlyCareerOnly
+          ? earlyCareerPeerBlockCounts
+          : blockCountsByBucket?.[bucketSelection];
+  const reviewableCount = projectedBlockers
+    ? projectedBlockers.reviewRequired + projectedBlockers.unresolvedEvidence
+    : blockers.employerReview + blockers.eligibilityReview;
+  const isFirstRun = scopeCandidates.length === 0 && !hasCandidateFilters;
+  const isBlockedPool =
+    bucketSelection !== "legacy" &&
+    scopeCandidates.length > 0 &&
+    visibleActionable === 0;
   const sourcingStatus = candidateSourcingStatus({
     enabled: apolloEnabled,
     ready: apolloReady,
@@ -450,6 +544,71 @@ export function CandidatesWorkspace({
         : !sourcingStatus.available
           ? <p className={styles.findMorePrompt}><strong>{sourcingStatus.label}</strong><small>{sourcingStatus.detail}</small></p>
           : <Link className={styles.findMoreLink} href={`/candidates?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`}>{sourcingStatus.label} <small>{sourcingStatus.detail}</small></Link>;
+  const sourcingHref = candidateSourcingHref(
+    selectedScope ?? sourcingBucket,
+    Boolean(selectedScope === "peers" && earlyCareerOnly),
+  );
+  const showScopedConfirmation = Boolean(
+    findMoreOpen &&
+      selectedScope &&
+      refreshScope === selectedScope &&
+      refreshEarlyCareerOnly === earlyCareerOnly,
+  );
+  const reviewCandidates = () => {
+    const candidate =
+      scopeCandidates.find(
+        (row) =>
+          employerReviewRequired(row) ||
+          row.bucketReviewState === "review-required" ||
+          row.stage === "search-only" ||
+          Boolean(row.planningBlockReason) ||
+          row.planningReady === false,
+      ) ?? scopeCandidates[0];
+    if (!candidate) return;
+    select(candidate.id);
+    requestAnimationFrame(() =>
+      document.getElementById(`candidate-${candidate.id}`)?.focus(),
+    );
+  };
+  const sourcingAction = showScopedConfirmation ? (
+    <div className={`${styles.sourcingDisclosure} ${styles.sourcingDisclosureStandalone}`}>
+      {refreshControl}
+    </div>
+  ) : (
+    <div className={styles.sourcingAction}>
+      {!selectedScope ? (
+        <label>
+          <span>Who do you want to meet?</span>
+          <select
+            value={sourcingBucket}
+            onChange={(event) =>
+              setSourcingBucket(event.currentTarget.value as RecipientBucket)
+            }
+          >
+            <option value="recruiters">Recruiters</option>
+            <option value="peers">Peers &amp; practitioners</option>
+            <option value="managers">Managers &amp; team leaders</option>
+            <option value="executives">Executives</option>
+            <option value="ceos">CEOs &amp; presidents</option>
+          </select>
+        </label>
+      ) : null}
+      {sourcingStatus.available ? (
+        <Link className={styles.findPeopleLink} href={sourcingHref}>
+          Find people
+        </Link>
+      ) : (
+        <button className={styles.findPeopleLink} disabled>
+          Find people
+        </button>
+      )}
+      <small>
+        {sourcingStatus.available
+          ? "Search may use Apollo credits. You’ll review people before drafting."
+          : sourcingStatus.detail}
+      </small>
+    </div>
+  );
   return (
     <div className={styles.candidates} data-density={density}>
       {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}
@@ -457,50 +616,63 @@ export function CandidatesWorkspace({
         <div>
           <h1>Candidates</h1>
           <p>
-            <strong>{rows.length}</strong> people in this view ·{" "}
-            <span>
-              {visibleActionable}{" "}
-              actionable draft slots
-            </span>
+            <strong>{rows.length}</strong> people in this view
+            {!isFirstRun ? (
+              <span>
+                {" "}· {visibleActionable} ready for drafts
+              </span>
+            ) : null}
           </p>
         </div>
-        <div className={styles.tools}>
-          <label className={styles.search}>
-            <span className={styles.srOnly}>Search candidates</span>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search people, roles, companies…"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => setFilterOpen((open) => !open)}
-            aria-expanded={filterOpen}
-          >
-            Filter{active.length ? ` (${active.length})` : ""}
-          </button>
-          <div className={styles.density} aria-label="Candidate density">
+        {!isFirstRun ? (
+          <div className={styles.tools}>
+            <label className={styles.search}>
+              <span className={styles.srOnly}>Search candidates</span>
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search people, roles, companies…"
+              />
+            </label>
             <button
               type="button"
-              aria-pressed={density === "comfortable"}
-              onClick={() => setDensity("comfortable")}
+              onClick={() => setFilterOpen((open) => !open)}
+              aria-expanded={filterOpen}
             >
-              Comfortable
+              Filter{active.length ? ` (${active.length})` : ""}
             </button>
-            <button
-              type="button"
-              aria-pressed={density === "compact"}
-              onClick={() => setDensity("compact")}
-            >
-              Compact
-            </button>
+            <div className={styles.density} aria-label="Candidate density">
+              <button
+                type="button"
+                aria-pressed={density === "comfortable"}
+                onClick={() => setDensity("comfortable")}
+              >
+                Comfortable
+              </button>
+              <button
+                type="button"
+                aria-pressed={density === "compact"}
+                onClick={() => setDensity("compact")}
+              >
+                Compact
+              </button>
+            </div>
+            {selectedScope && visibleActionable > 0 ? (
+              <Link
+                className={styles.addDraftsLink}
+                href={`/drafts?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&add=true`}
+              >
+                Add drafts
+                <small>
+                  {visibleActionable} ready · No provider call
+                </small>
+              </Link>
+            ) : null}
+            {visibleActionable > 0 ? findMoreControl : null}
           </div>
-          {selectedScope ? <Link className={styles.addDraftsLink} href={`/drafts?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&add=true`}>Add drafts <small>No provider call</small></Link> : null}
-          {findMoreControl}
-        </div>
-        <div className={styles.summary}>
+        ) : null}
+        {!isFirstRun ? <div className={styles.summary}>
           <span>
             {active.length
               ? active.join(" · ")
@@ -526,8 +698,8 @@ export function CandidatesWorkspace({
               {employerReviewCount === 1 ? "" : "s"} required
             </button>
           ) : null}
-        </div>
-        {filterOpen ? (
+        </div> : null}
+        {filterOpen && !isFirstRun ? (
           <div
             className={styles.sheet}
             role="dialog"
@@ -627,12 +799,87 @@ export function CandidatesWorkspace({
           {refreshResult}
         </p>
       ) : null}
+      {isBlockedPool && !hasCandidateFilters ? (
+        <section className={styles.blockedPool} aria-labelledby="blocked-pool-title">
+          <div>
+            <h2 id="blocked-pool-title">No candidates are ready for drafts</h2>
+            <p>
+              These people need attention or are unavailable before a draft can
+              be created.
+            </p>
+            {projectedBlockers ? (
+              <ul>
+                {projectedBlockers.reviewRequired > 0 ? (
+                  <li><strong>{projectedBlockers.reviewRequired}</strong> employer or eligibility review required</li>
+                ) : null}
+                {projectedBlockers.unresolvedEvidence > 0 ? (
+                  <li><strong>{projectedBlockers.unresolvedEvidence}</strong> missing required evidence</li>
+                ) : null}
+                {projectedBlockers.companyCooldown > 0 ? (
+                  <li><strong>{projectedBlockers.companyCooldown}</strong> in company cooldown</li>
+                ) : null}
+                {projectedBlockers.alreadyDraftedOrContacted > 0 ? (
+                  <li><strong>{projectedBlockers.alreadyDraftedOrContacted}</strong> already drafted or contacted</li>
+                ) : null}
+                {projectedBlockers.suppressed > 0 ? (
+                  <li><strong>{projectedBlockers.suppressed}</strong> suppressed</li>
+                ) : null}
+              </ul>
+            ) : (
+              <ul>
+                {blockers.employerReview > 0 ? (
+                  <li><strong>{blockers.employerReview}</strong> employer review required</li>
+                ) : null}
+                {blockers.eligibilityReview > 0 ? (
+                  <li><strong>{blockers.eligibilityReview}</strong> eligibility review required</li>
+                ) : null}
+                {blockers.companyCooldown > 0 ? (
+                  <li><strong>{blockers.companyCooldown}</strong> in company cooldown</li>
+                ) : null}
+                {blockers.alreadyContacted > 0 ? (
+                  <li><strong>{blockers.alreadyContacted}</strong> already contacted</li>
+                ) : null}
+                {blockers.alreadyInDrafts > 0 ? (
+                  <li><strong>{blockers.alreadyInDrafts}</strong> already in Drafts</li>
+                ) : null}
+                {blockers.suppressed > 0 ? (
+                  <li><strong>{blockers.suppressed}</strong> suppressed</li>
+                ) : null}
+                {blockers.notEligible > 0 ? (
+                  <li><strong>{blockers.notEligible}</strong> not eligible</li>
+                ) : null}
+              </ul>
+            )}
+          </div>
+          {reviewableCount > 0 ? (
+            <button className={styles.reviewCandidates} type="button" onClick={reviewCandidates}>
+              Review candidates
+            </button>
+          ) : sourcingAction}
+        </section>
+      ) : null}
       {rows.length === 0 ? (
-        <div className={styles.empty}>
-          <span>—</span>
+        <div
+          className={`${styles.empty} ${showScopedConfirmation ? styles.expandedSourcingEmpty : ""}`}
+        >
           <h2>{emptyState.title}</h2>
           <p>{emptyState.detail}</p>
-          {emptyState.action === "clear" ? <button type="button" onClick={clear}>Clear filters</button> : emptyState.action === "legacy" ? <button type="button" onClick={() => selectBucket("legacy", false)}>Open Legacy candidates</button> : <button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button>}
+          {hasCandidateFilters ? (
+            <button type="button" onClick={clear}>Clear filters</button>
+          ) : (
+            <>
+              {sourcingAction}
+              {emptyState.showLegacy ? (
+                <button
+                  className={styles.viewLegacy}
+                  type="button"
+                  onClick={() => selectBucket("legacy", false)}
+                >
+                  View Legacy
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       ) : (
         <div className={styles.work}>
