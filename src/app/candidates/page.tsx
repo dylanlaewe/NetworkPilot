@@ -14,6 +14,7 @@ import { readApolloConfig } from "@/infrastructure/providers/apollo/config";
 import {loadBucketReserveMetricsForScopes} from "@/infrastructure/sqlite/bucket-reserve";
 import {loadScopedDiscoveryReadiness} from "@/infrastructure/sqlite/candidate-refresh";
 import {migrationRequiredView} from "@/app/migration-required";
+import { candidateHealthStatus } from "./sourcing-status";
 
 export const dynamic = "force-dynamic";
 
@@ -107,10 +108,15 @@ async function renderCandidatesPage({
         }
       : {}),
   }));
-  const health =
-    data.safety.apolloExposure >= apolloConfig.maxEnrichmentsPerDay
-      ? "Candidate refresh available tomorrow"
-      : `${allMetrics?.actionableCapacity ?? scopedAvailable.length} actionable candidates · ${Math.max(0, apolloConfig.maxEnrichmentsPerDay - data.safety.apolloExposure)} refresh credits available`;
+  const actionableCapacity =
+    allMetrics?.actionableCapacity ?? scopedAvailable.length;
+  const health = candidateHealthStatus({
+    actionableCapacity,
+    enabled: data.safety.apolloEnabled,
+    ready: data.safety.apolloReady,
+    exposure: data.safety.apolloExposure,
+    maximumPerDay: apolloConfig.maxEnrichmentsPerDay,
+  });
   const refresh = (
     <CandidateRefreshControl
       available={metrics?.actionableCapacity??allMetrics?.actionableCapacity??scopedAvailable.length}
@@ -167,6 +173,8 @@ async function renderCandidatesPage({
         earlyCareerPeerCapacity={allMetrics?.byScope["peers:early-career"]?.actionableCapacity}
         refreshScope={scopedBucket}
         refreshEarlyCareerOnly={earlyCareerOnly}
+        apolloEnabled={data.safety.apolloEnabled}
+        apolloReady={data.safety.apolloReady}
       />
     </NetworkCommandShell>
   );

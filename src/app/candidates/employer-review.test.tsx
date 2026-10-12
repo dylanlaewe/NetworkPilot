@@ -58,6 +58,8 @@ describe("Candidates employer-trust review", () => {
         initialSelectedId={candidate.id}
         refreshControl={null}
         refreshResult={null}
+        apolloEnabled={false}
+        apolloReady={false}
       />,
     );
     expect(html).toContain("Employer review required");

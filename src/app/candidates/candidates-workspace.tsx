@@ -17,6 +17,7 @@ import type {
 import styles from "./candidates-command.module.css";
 import { RecipientBucketNavigation, type BucketNavigationData, type BucketSelection, type RecipientBucket } from "@/app/recipient-bucket-navigation";
 import { createCandidateDraft, reviewCandidateCompanyTrust } from "./actions";
+import { candidateSourcingStatus } from "./sourcing-status";
 
 export type CandidateWorkspaceRow = ReserveCandidate & {
   companyTrustReview?: { commandId: string; reviewedAt: string };
@@ -266,6 +267,8 @@ export function CandidatesWorkspace({
   earlyCareerPeerCapacity,
   refreshScope,
   refreshEarlyCareerOnly = false,
+  apolloEnabled,
+  apolloReady,
 }: {
   candidates: CandidateWorkspaceRow[];
   initialSelectedId?: string;
@@ -279,6 +282,8 @@ export function CandidatesWorkspace({
   earlyCareerPeerCapacity?: number;
   refreshScope?: RecipientBucket;
   refreshEarlyCareerOnly?: boolean;
+  apolloEnabled: boolean;
+  apolloReady: boolean;
 }) {
   const [bucketSelection, setBucketSelection] = useState<BucketSelection>(bucketNavigation?.selected ?? "all"),
     [earlyCareerOnly, setEarlyCareerOnly] = useState(Boolean(bucketNavigation?.earlyCareerOnly)),
@@ -432,13 +437,19 @@ export function CandidatesWorkspace({
   const hasCandidateFilters = Boolean(search.trim() || Object.values(filters).some((value) => value !== "all"));
   const emptyState = candidateEmptyState({ hasFilters: hasCandidateFilters, selection: bucketSelection, legacyCount: bucketNavigation?.legacyCount ?? 0 });
   const selectedScope = bucketSelection !== "all" && bucketSelection !== "legacy" ? bucketSelection : null;
+  const sourcingStatus = candidateSourcingStatus({
+    enabled: apolloEnabled,
+    ready: apolloReady,
+  });
   const findMoreControl = !bucketNavigation
     ? refreshControl
     : !selectedScope
       ? <p className={styles.findMorePrompt}>Choose a recipient group to find more people.</p>
       : refreshScope === selectedScope && refreshEarlyCareerOnly === earlyCareerOnly
         ? refreshControl
-        : <Link className={styles.findMoreLink} href={`/candidates?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`}>Find more <small>May use Apollo</small></Link>;
+        : !sourcingStatus.available
+          ? <p className={styles.findMorePrompt}><strong>{sourcingStatus.label}</strong><small>{sourcingStatus.detail}</small></p>
+          : <Link className={styles.findMoreLink} href={`/candidates?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`}>{sourcingStatus.label} <small>{sourcingStatus.detail}</small></Link>;
   return (
     <div className={styles.candidates} data-density={density}>
       {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}

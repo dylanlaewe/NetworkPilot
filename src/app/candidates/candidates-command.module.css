@@ -12,6 +12,9 @@
 .findMoreLink { border-color: #b7a782; color: #714d18; }
 .addDraftsLink small,.findMoreLink small { font-size: 12px; font-weight: 400; opacity: .78; }
 .findMorePrompt { max-width: 180px; margin: 0; color: var(--muted); font-size: 12px; }
+.findMorePrompt strong,.findMorePrompt small { display: block; }
+.findMorePrompt strong { color: var(--ink); font-size: 13px; }
+.findMorePrompt small { margin-top: 3px; font-size: 12px; }
 .search input { width: min(270px,24vw); min-height: 44px; padding: 10px 12px; border: 1px solid #d3d3ce; border-radius: 10px; background: var(--paper); color: var(--ink); font-size: 14px; }
 .density { display: flex; min-height: 44px; padding: 3px; border: 1px solid #d3d3ce; border-radius: 10px; background: var(--paper); }
 .density button { padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }

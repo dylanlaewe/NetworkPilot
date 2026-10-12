@@ -5,6 +5,7 @@ import { recipientBucketHref } from "./recipient-bucket-navigation";
 import { draftsForBucket, normalizedDraftAdditionState } from "./drafts/drafts-workspace";
 import { initialDraftAdditionActionState } from "./drafts/draft-addition-state";
 import { candidateEmptyState, matchesCandidateBucket } from "./candidates/candidates-workspace";
+import { candidateHealthStatus, candidateSourcingStatus } from "./candidates/sourcing-status";
 import { draftAdditionFeedback } from "@/application/daily-refresh/addition-feedback";
 
 describe("real-data experience reset contracts", () => {
@@ -37,6 +38,27 @@ describe("real-data experience reset contracts", () => {
     });
     expect(candidateEmptyState({ hasFilters: true, selection: "managers", legacyCount: 117 })).toMatchObject({ action: "clear" });
     expect(candidateEmptyState({ hasFilters: false, selection: "managers", legacyCount: 0 })).toMatchObject({ action: "groups" });
+  });
+
+  it("only advertises candidate sourcing when Apollo is enabled and ready", () => {
+    expect(candidateSourcingStatus({ enabled: false, ready: false })).toEqual({
+      available: false,
+      label: "Find more unavailable",
+      detail: "Apollo disabled",
+    });
+    expect(candidateSourcingStatus({ enabled: true, ready: false })).toEqual({
+      available: false,
+      label: "Find more unavailable",
+      detail: "Apollo configuration needed",
+    });
+    expect(candidateSourcingStatus({ enabled: true, ready: true })).toEqual({
+      available: true,
+      label: "Find more",
+      detail: "May use Apollo",
+    });
+    expect(candidateHealthStatus({ actionableCapacity: 0, enabled: false, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("0 actionable candidates · Apollo disabled");
+    expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("2 actionable candidates · Apollo unavailable — configuration needed");
+    expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: true, exposure: 3, maximumPerDay: 10 })).toBe("2 actionable candidates · 7 refresh credits available");
   });
 
   it("returns reasoned full, partial and zero Add Drafts feedback", () => {
