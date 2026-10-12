@@ -8,6 +8,7 @@ import {
   SYNTHETIC_CANDIDATES,
   ZeroDraftResult,
   candidateDraftFor,
+  candidateDraftNavigationFor,
   draftHeaderLabel,
   filterCandidatesForBucket,
   filterDraftsForBucket,
@@ -69,6 +70,33 @@ describe("experience reset prototype", () => {
     expect(draft).toMatchObject({ candidateId: id, id, name, company });
     expect(draft?.subject).toContain(company);
     expect(draft?.body).toContain(greeting);
+  });
+
+  it("preserves Marcus as the explicit draft target from the Managers candidate flow", () => {
+    const staleManagerDraft = INITIAL_SYNTHETIC_DRAFTS.find((draft) => draft.id === "leo");
+    expect(staleManagerDraft?.name).toBe("Leo Martins");
+
+    const target = candidateDraftNavigationFor("marcus", INITIAL_SYNTHETIC_DRAFTS);
+
+    expect(target?.section).toBe("drafts");
+    expect(target?.draft).toMatchObject({
+      id: "marcus",
+      candidateId: "marcus",
+      name: "Marcus Reed",
+      company: "Northstar Auto",
+    });
+    expect(target?.draft.body).toContain("Hi Marcus");
+    expect(target?.draft.body).toContain("Northstar Auto");
+    expect(target?.drafts.map((draft) => draft.id)).toContain("marcus");
+
+    const source = readFileSync(new URL("./experience-prototype.tsx", import.meta.url), "utf8");
+    const handler = source.slice(
+      source.indexOf("function openCandidateDraft"),
+      source.indexOf("function createCandidateDraft"),
+    );
+    expect(handler).toContain("candidateDraftNavigationFor(candidateId, syntheticDrafts)");
+    expect(handler).toContain("setSection(target.section)");
+    expect(handler).not.toContain('navigate("drafts")');
   });
 
   it("filters local draft and candidate queues by recipient group", () => {

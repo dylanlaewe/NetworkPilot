@@ -163,6 +163,16 @@ export function candidateDraftFor(candidateId: string) {
   return draft ? { ...draft } : null;
 }
 
+export function candidateDraftNavigationFor(candidateId: string, currentDrafts: SyntheticDraft[]) {
+  const draft = candidateDraftFor(candidateId);
+  if (!draft) return null;
+  return {
+    section: "drafts" as const,
+    draft,
+    drafts: currentDrafts.some((item) => item.id === draft.id) ? currentDrafts : [...currentDrafts, draft],
+  };
+}
+
 export function filterDraftsForBucket(drafts: SyntheticDraft[], bucket: Bucket) {
   return bucket === "All" ? drafts : drafts.filter((draft) => draft.bucket === bucket);
 }
@@ -297,14 +307,16 @@ export function ExperiencePrototype() {
   }
 
   function openCandidateDraft(candidateId: string) {
-    const draft = candidateDraftFor(candidateId);
-    if (!draft) return;
-    setSyntheticDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
-    setSelectedDraft(draft.id);
-    setSubject(draft.subject);
-    setMessage(draft.body);
-    setDraftStage(draft.stage);
-    navigate("drafts");
+    const target = candidateDraftNavigationFor(candidateId, syntheticDrafts);
+    if (!target) return;
+    setSyntheticDrafts(target.drafts);
+    setSelectedDraft(target.draft.id);
+    setSubject(target.draft.subject);
+    setMessage(target.draft.body);
+    setDraftStage(target.draft.stage);
+    setSection(target.section);
+    setMobileQueueOpen(false);
+    setNotice(null);
   }
 
   function createCandidateDraft(candidateId: string) {
