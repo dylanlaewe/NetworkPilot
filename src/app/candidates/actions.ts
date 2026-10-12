@@ -8,11 +8,22 @@ import {reviewCompanyTrust} from "@/application/company-trust";
 import {fiveBucketEnabled} from "@/domain/recipient-buckets";
 import {resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
 import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
+import {createExactCandidateDraft} from "@/infrastructure/sqlite/daily-refresh";
 
 const TRUST_DECISIONS = [
   "trusted-operating",
   "disallowed-recruiting-service",
 ] as const;
+
+export async function createCandidateDraft(formData: FormData) {
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
+  createExactCandidateDraft({ candidateId, requestId });
+  revalidatePath("/today");
+  revalidatePath("/drafts");
+  revalidatePath("/candidates");
+  redirect(`/drafts?candidate=${encodeURIComponent(candidateId)}`);
+}
 
 export async function reviewCandidateCompanyTrust(formData: FormData) {
   if (!fiveBucketEnabled()) throw new Error("five-bucket-disabled");

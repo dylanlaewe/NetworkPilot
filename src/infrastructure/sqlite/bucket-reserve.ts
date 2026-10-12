@@ -358,6 +358,104 @@ export function addBucketDraftsFromRepository(
   });
 }
 
+/** Add exactly the operator-selected candidate from the canonical reserve. */
+export function createExactCandidateDraftFromRepository(
+  repository: SqliteSimulationRepository,
+  input: { candidateId: string; requestId: string },
+  at: Date,
+): DailyRefreshResult {
+  assertFiveBucketEnabled();
+  if (!input.candidateId) throw new Error("candidate-draft-candidate-required");
+  if (!input.requestId) throw new Error("candidate-draft-request-required");
+  return repository.transaction(() => {
+    const generations = readDraftGenerations(repository.native);
+    const prior = generations.find(
+      (generation) => generation.addition?.requestId === input.requestId,
+    );
+    if (prior) {
+      if (prior.candidateIds[0] !== input.candidateId)
+        throw new Error("candidate-draft-request-conflict");
+      return prior;
+    }
+    const candidate = readCurrentQueueCandidates(repository, {
+      includeSecondary: false,
+    }).find((row) => row.id === input.candidateId);
+    const bucket = candidate?.recipientBucket?.bucket;
+    if (
+      !candidate ||
+      !bucket ||
+      candidate.recipientBucket?.reviewState !== "accepted"
+    )
+      throw new Error("candidate-draft-review-required");
+    const scope: BucketScope = { bucket };
+    const reserve = bucketReserve(repository, scope, at, {
+      requestId: input.requestId,
+    });
+    const eligible = reserve.eligible.find((row) => row.id === input.candidateId);
+    if (!eligible) throw new Error("candidate-draft-unavailable");
+    const review = renderQueueReview(
+      eligible,
+      reserve.active.length,
+      at,
+      initialResumeSelection(
+        eligible.outreachTrack ?? "professional",
+        repository,
+      ),
+    );
+    if (!review) throw new Error("candidate-draft-planning-blocked");
+    const date = localCampaignDate(at);
+    const generation =
+      Math.max(
+        0,
+        ...generations
+          .filter((item) => item.campaignDate === date)
+          .map((item) => item.generation),
+      ) + 1;
+    const result: DailyRefreshResult = {
+      id: `${date}:${generation}`,
+      campaignDate: date,
+      generation,
+      createdAt: at.toISOString(),
+      scope,
+      candidateIds: [review.candidateId],
+      draftReviews: [review],
+      addition: {
+        requestId: input.requestId,
+        scope,
+        additionalDraftCount: 1,
+        addedCount: 1,
+        activeBefore: reserve.active.length,
+        activeAfter: reserve.active.length + 1,
+        eligibleReserveRemaining: Math.max(0, reserve.actionableCapacity - 1),
+        shortfallCode: null,
+      },
+      professionalCount: review.outreachTrack === "professional" ? 1 : 0,
+      recruiterCount: review.outreachTrack === "recruiter" ? 1 : 0,
+      target: 1,
+      shortfall: 0,
+      reserveCount: reserve.totalReserve,
+      providerUsed: false,
+      enrichmentAttempts: 0,
+      creditBefore: null,
+      creditAfter: null,
+      warning: null,
+    };
+    repository.native
+      .prepare(
+        "INSERT INTO daily_refresh_runs(id,campaign_date,generation,created_at_utc,result_json,bucket_scope_json) VALUES(?,?,?,?,?,?)",
+      )
+      .run(
+        result.id,
+        date,
+        generation,
+        result.createdAt,
+        JSON.stringify(result),
+        JSON.stringify(scope),
+      );
+    return result;
+  });
+}
+
 export function resolveBucketDraftCorrectionInRepository(
   repository: SqliteSimulationRepository,
   input: {

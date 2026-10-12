@@ -94,6 +94,7 @@ async function renderCandidatesPage({
     apolloConfig = readApolloConfig(process.env);
   const workspaceCandidates = data.reserve.map((candidate) => ({
     ...candidate,
+    draftRequestId: `candidate-draft-ui:${crypto.randomUUID()}`,
     ...(candidate.employerTrust?.state === "unverified" && candidate.companyId
       ? {
           companyTrustReview: {

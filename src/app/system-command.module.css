@@ -2,3 +2,35 @@
 @media(max-width:700px){.page{padding:21px 18px 80px}.header h1{font-size:25px}.header span{display:none}.summary>dl>div{grid-template-columns:1fr;gap:5px}.summary dd span{line-height:1.5}.groups details dl{grid-template-columns:1fr}.groups summary{min-height:52px}}
 .summary dd,.groups details>div,.groups details dd{min-width:0}.summary dd span,.groups details>div,.groups details>div>p,.groups details dd{overflow-wrap:anywhere}
 @media(max-width:700px){.page{max-width:100vw;padding:21px max(18px,env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));overflow-x:hidden}.summary,.groups,.groups details,.groups summary{min-width:0;max-width:100%}.groups summary{grid-template-columns:minmax(0,1fr) auto}.groups summary span,.groups summary strong{min-width:0;overflow-wrap:anywhere}.groups summary::after{grid-column:auto;margin-left:10px}}
+
+/* Product experience refinement: operational detail stays quiet and usable. */
+.groups summary {
+  min-height: 48px;
+  border-radius: 8px;
+}
+
+.groups summary:hover {
+  background: #eef2ed;
+}
+
+.groups summary:active {
+  background: #e7ede7;
+}
+
+.groups summary:focus-visible,
+.groups a:focus-visible {
+  outline: 3px solid #87aa95;
+  outline-offset: 2px;
+}
+
+.groups summary,
+.groups a {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .groups summary,
+  .groups a {
+    transition: none;
+  }
+}

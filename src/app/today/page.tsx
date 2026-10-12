@@ -16,7 +16,7 @@ export const dynamic="force-dynamic";
 
 async function renderTodayPage(){
   if(isDemoMode())return <DemoToday/>;
-  const data=loadDailyCommandCenter(),workflow=await loadCommandCenterDraftReviews();
+  const workflowPromise=loadCommandCenterDraftReviews(),data=loadDailyCommandCenter(),workflow=await workflowPromise;
   const drafts=activeDrafts(workflow.items,data.drafts),uncertain=drafts.filter((item)=>item.state==="needs-send-verification").length;
   const reviewable=drafts.filter((item)=>item.state==="ready").length,o=data.outreach.outcomes,relationships=o.replied+o["no-response"];
   const gmailReady=workflow.gmail.readiness.available,apolloExhausted=data.safety.apolloExposure>=20,lowSupply=data.pipeline.available<10;
@@ -30,25 +30,26 @@ async function renderTodayPage(){
   if(relationships>0)tasks.push({href:"/sent",title:`${relationships} ${relationships===1?"relationship needs":"relationships need"} attention`,detail:"Review replies and follow-up decisions in Sent.",count:relationships});
   tasks.push({href:"/candidates",title:lowSupply?"Candidate supply needs attention":"Candidate supply is healthy",detail:`${data.pipeline.available} qualified candidates are available for future outreach.`,count:data.pipeline.available,attention:lowSupply});
   const hasWork=tasks.length>0;
+  const primary=tasks[0];
+  const later=tasks.slice(1).filter((task)=>task.attention||task.href!=="/candidates");
   return <NetworkCommandShell current="today" status={health}>
     <div className={styles.today}>
-      <section className={styles.now} data-task-count={Math.min(tasks.length,3)}>
-        <header><p>{date}</p><h1>{hasWork?"Now":"All caught up"}</h1><span>{hasWork?"Prepared work, ordered by consequence.":"No prepared work needs attention."}</span></header>
-        <div className={styles.tasks}>
-          {tasks.map((task,index)=><Link key={`${task.href}-${task.title}`} href={task.href} className={task.attention?styles.attention:undefined}><i>{String(index+1).padStart(2,"0")}</i><span><strong>{task.title}</strong><small>{task.detail}</small></span><b>{task.count}</b></Link>)}
-        </div>
-        <div className={styles.preview}>
-          <div><small>Next workspace</small><strong>{drafts.length?"Draft review":"Candidate supply"}</strong><p>{drafts.length?"Continue the active queue without losing your place.":"Review available people or replenish the bounded reserve."}</p>{drafts.length&&data.recommendation[0]?<div><span>{data.recommendation[0].recipient}</span><em>{data.recommendation[0].title}</em><b>{data.recommendation[0].company}</b></div>:null}</div>
-          <Link href={drafts.length?"/drafts":"/candidates"}>Open workspace ↗</Link>
-        </div>
-        <div className={styles.supplyActions}>
-          <div><small>Candidate supply</small><strong>{data.pipeline.available} usable · target 40</strong><p>Company protections are rechecked when drafts are added.</p></div>
-          {data.pipeline.available>0?<AddDraftsControl action={generateMoreDrafts}/>:null}
-          {lowSupply?<CandidateRefreshControl available={data.pipeline.available} exposure={data.safety.apolloExposure}/>:null}
-        </div>
+      <section className={styles.now}>
+        <header><p>{date}</p><h1>{hasWork?"Today":"All caught up"}</h1><span>{hasWork?"One clear next step.":"No prepared work needs attention."}</span></header>
+        {primary?<article className={styles.primaryTask}>
+          <div><span>{primary.count}</span><div><h2>{primary.title}</h2><p>{primary.detail}</p></div></div>
+          <Link href={primary.href}>Continue</Link>
+        </article>:null}
+        {later.length?<section className={styles.later}><h2>After that</h2>{later.map(task=><Link key={`${task.href}-${task.title}`} href={task.href}><span><strong>{task.title}</strong><small>{task.detail}</small></span><b>{task.count}</b></Link>)}</section>:null}
+        <details className={styles.supplyActions}>
+          <summary>Candidate supply · {data.pipeline.available} available</summary>
+          <div><small>Reserve mechanics</small><strong>{data.pipeline.available} usable · target 40</strong><p>Company protections are rechecked when drafts are added.</p></div>
+          <div className={styles.supplyControls}>{data.pipeline.available>0?<AddDraftsControl action={generateMoreDrafts}/>:null}{lowSupply?<CandidateRefreshControl available={data.pipeline.available} exposure={data.safety.apolloExposure}/>:null}</div>
+        </details>
       </section>
-      <aside className={styles.live}>
-        <header><h2>Live state</h2><span>Local production</span></header>
+      <details className={styles.live} open={uncertain>0||!gmailReady}>
+        <summary>{uncertain>0||!gmailReady?"System attention required":"Systems healthy"}</summary>
+        <header><h2>Operational state</h2><span>Local production</span></header>
         <dl>
           <div className={uncertain>0?styles.alert:undefined}><dt>Queue</dt><dd>{drafts.length} active</dd></div>
           <div className={relationships>0?styles.attentionState:undefined}><dt>Relationships</dt><dd>{data.outreach.replyEligible} awaiting</dd></div>
@@ -57,7 +58,7 @@ async function renderTodayPage(){
           <div className={apolloExhausted?styles.attentionState:undefined}><dt>Apollo</dt><dd>{apolloExhausted?"Available tomorrow":`${data.safety.apolloExposure} of 20 used`}</dd></div>
         </dl>
         <p>{apolloExhausted?"Candidate refresh is available again tomorrow. Drafts, Gmail, and relationship work remain available.":!gmailReady?"Review remains available. Gmail actions stay safely blocked until the connection is ready.":"Healthy systems recede until they need attention."}</p>
-      </aside>
+      </details>
     </div>
   </NetworkCommandShell>;
 }

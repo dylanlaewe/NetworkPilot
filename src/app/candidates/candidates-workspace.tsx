@@ -1,16 +1,26 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useFormStatus } from "react-dom";
 import type {
   ReserveCandidate,
   ReserveStage,
 } from "@/application/daily-command-center";
 import styles from "./candidates-command.module.css";
 import type { BucketNavigationData } from "@/app/recipient-bucket-navigation";
-import { reviewCandidateCompanyTrust } from "./actions";
+import { createCandidateDraft, reviewCandidateCompanyTrust } from "./actions";
 
 export type CandidateWorkspaceRow = ReserveCandidate & {
   companyTrustReview?: { commandId: string; reviewedAt: string };
+  draftRequestId?: string;
 };
 
 type Density = "comfortable" | "compact";
@@ -96,6 +106,87 @@ function matchesBucket(
   );
 }
 
+function draftBlockReason(candidate: CandidateWorkspaceRow) {
+  if (candidate.bucketReviewState === "review-required")
+    return employerReviewRequired(candidate)
+      ? "Review this employer before creating a draft."
+      : "Review the recipient evidence before creating a draft.";
+  if (!candidate.recipientBucket?.bucket)
+    return "Legacy or unclassified people cannot enter the five-bucket draft queue.";
+  if (candidate.planningBlockReason)
+    return planningBlockMessage(candidate.planningBlockReason);
+  if (!candidate.planningReady)
+    return "Reviewed evidence is not sufficient to prepare truthful copy.";
+  if (candidate.stage === "cooldown") return "Company cooldown is still active.";
+  if (candidate.stage === "suppressed")
+    return "This person is on the do-not-contact list.";
+  if (candidate.stage === "already-contacted")
+    return "Previous outreach is already recorded.";
+  if (candidate.stage !== "qualified-available")
+    return `${stageLabel[candidate.stage]} people cannot start a new draft.`;
+  return null;
+}
+
+function PendingSubmit({ children }: { children: ReactNode }) {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending} aria-disabled={pending}>
+      {pending ? "Creating…" : children}
+    </button>
+  );
+}
+
+type TrustFeedback = { tone: "success" | "error"; message: string } | null;
+
+function EmployerReviewForm({ candidate }: { candidate: CandidateWorkspaceRow }) {
+  const [feedback, action, pending] = useActionState(
+    async (_prior: TrustFeedback, formData: FormData): Promise<TrustFeedback> => {
+      try {
+        await reviewCandidateCompanyTrust(formData);
+        return {
+          tone: "success",
+          message: "Employer review saved. Candidate capacity has been refreshed.",
+        };
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "unknown";
+        return {
+          tone: "error",
+          message: code.includes("version")
+            ? "This employer changed while you were reviewing it. Refresh and review the latest state."
+            : "The review was not saved. Check the reason and try again.",
+        };
+      }
+    },
+    null,
+  );
+  return (
+    <form action={action} aria-busy={pending}>
+      <input type="hidden" name="candidateId" value={candidate.id} />
+      <input type="hidden" name="expectedVersion" value={candidate.employerTrust?.version ?? 0} />
+      <input type="hidden" name="commandId" value={candidate.companyTrustReview?.commandId ?? ""} />
+      <input type="hidden" name="reviewedAt" value={candidate.companyTrustReview?.reviewedAt ?? ""} />
+      <label>
+        <span>Reason for this decision</span>
+        <textarea name="reason" maxLength={500} required placeholder="Note the company evidence you reviewed." />
+      </label>
+      <div>
+        <button disabled={pending} name="decision" value="trusted-operating">
+          {pending ? "Saving…" : "Trust operating employer"}
+        </button>
+        <button disabled={pending} name="decision" value="disallowed-recruiting-service">
+          Mark recruiting/staffing service
+        </button>
+      </div>
+      <button type="button" className={styles.leaveUnverified}>Leave unverified</button>
+      {feedback ? (
+        <p className={styles.actionFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
+          {feedback.message}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function CandidatesWorkspace({
   candidates,
   initialSelectedId,
@@ -121,6 +212,8 @@ export function CandidatesWorkspace({
     [filterOpen, setFilterOpen] = useState(initialFilterOpen),
     [search, setSearch] = useState(""),
     [filters, setFilters] = useState<Filters>(initialFilters);
+  const inspectorRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const roles = useMemo(
       () => [...new Set(candidates.map((row) => row.functionName))].sort(),
       [candidates],
@@ -185,11 +278,56 @@ export function CandidatesWorkspace({
   ].filter(Boolean) as string[];
   const select = (id: string) => {
     setSelectedId(id);
-    setMobileDetail(true);
+    if (window.matchMedia("(max-width: 860px)").matches) {
+      returnFocusRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setMobileDetail(true);
+    }
     const url = new URL(window.location.href);
     url.searchParams.set("selected", id);
     window.history.replaceState(null, "", url);
   };
+  const closeDetail = useCallback(() => {
+    setMobileDetail(false);
+    requestAnimationFrame(() => returnFocusRef.current?.focus());
+  }, []);
+  useEffect(() => {
+    if (!mobileDetail) return;
+    const root = inspectorRef.current;
+    const items = () =>
+      Array.from(
+        root?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled),a[href],textarea:not(:disabled),select:not(:disabled),input:not([type="hidden"]):not(:disabled)',
+        ) ?? [],
+      );
+    const frame = requestAnimationFrame(() => items()[0]?.focus());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDetail();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = items();
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [closeDetail, mobileDetail]);
   const clear = () => {
     setSearch("");
     setFilters(initialFilters);
@@ -274,22 +412,6 @@ export function CandidatesWorkspace({
             </button>
           ) : null}
         </div>
-        {bucketNavigation?.selected === "peers" ? (
-          <label className={styles.earlyCareerFilter}>
-            <input
-              type="checkbox"
-              checked={Boolean(bucketNavigation.earlyCareerOnly)}
-              onChange={(event) => {
-                const url = new URL(window.location.href);
-                if (event.currentTarget.checked)
-                  url.searchParams.set("earlyCareerOnly", "true");
-                else url.searchParams.delete("earlyCareerOnly");
-                window.location.assign(url.toString());
-              }}
-            />
-            <span>Early-career only</span>
-          </label>
-        ) : null}
         {filterOpen ? (
           <div
             className={styles.sheet}
@@ -405,6 +527,7 @@ export function CandidatesWorkspace({
             className={styles.list}
             role="listbox"
             aria-label="Candidate supply"
+            aria-hidden={mobileDetail ? "true" : undefined}
           >
             <div className={styles.columns}>
               <span>Person and current work</span>
@@ -414,9 +537,24 @@ export function CandidatesWorkspace({
             {rows.map((candidate) => (
               <button
                 key={candidate.id}
+                id={`candidate-${candidate.id}`}
                 role="option"
                 aria-selected={selected?.id === candidate.id}
                 onClick={() => select(candidate.id)}
+                onKeyDown={(event) => {
+                  const index = rows.findIndex((row) => row.id === candidate.id);
+                  const next =
+                    event.key === "ArrowDown"
+                      ? rows[index + 1]
+                      : event.key === "ArrowUp"
+                        ? rows[index - 1]
+                        : null;
+                  if (next) {
+                    event.preventDefault();
+                    setSelectedId(next.id);
+                    document.getElementById(`candidate-${next.id}`)?.focus();
+                  }
+                }}
                 className={styles.row}
                 data-review-needed={
                   candidate.bucketReviewState === "review-required"
@@ -465,12 +603,16 @@ export function CandidatesWorkspace({
           </div>
           {selected ? (
             <aside
+              ref={inspectorRef}
               className={`${styles.inspector} ${mobileDetail ? styles.detailOpen : ""}`}
+              role={mobileDetail ? "dialog" : undefined}
+              aria-modal={mobileDetail ? "true" : undefined}
+              aria-label={`Candidate details for ${selected.recipient}`}
             >
               <button
                 type="button"
                 className={styles.close}
-                onClick={() => setMobileDetail(false)}
+                onClick={closeDetail}
               >
                 Close
               </button>
@@ -520,13 +662,8 @@ export function CandidatesWorkspace({
                       <dd>{selected.employerIdentity?.domain ?? "Not provided"}</dd>
                     </div>
                     <div>
-                      <dt>Provider identity</dt>
-                      <dd>
-                        {selected.employerIdentity?.providerNamespace &&
-                        selected.employerIdentity.providerEmployerId
-                          ? `${selected.employerIdentity.providerNamespace} · ${selected.employerIdentity.providerEmployerId}`
-                          : "Domain-backed identity"}
-                      </dd>
+                      <dt>Identity evidence</dt>
+                      <dd>{selected.employerTrust?.identityVerified ? "Stable company identity" : "Limited evidence"}</dd>
                     </div>
                     <div>
                       <dt>Current trust</dt>
@@ -537,48 +674,7 @@ export function CandidatesWorkspace({
                     This recruiter remains review-required, non-actionable, and
                     excluded from drafting until the employer is trusted.
                   </p>
-                  <form action={reviewCandidateCompanyTrust}>
-                    <input type="hidden" name="candidateId" value={selected.id} />
-                    <input
-                      type="hidden"
-                      name="expectedVersion"
-                      value={selected.employerTrust?.version ?? 0}
-                    />
-                    <input
-                      type="hidden"
-                      name="commandId"
-                      value={selected.companyTrustReview.commandId}
-                    />
-                    <input
-                      type="hidden"
-                      name="reviewedAt"
-                      value={selected.companyTrustReview.reviewedAt}
-                    />
-                    <label>
-                      <span>Review reason</span>
-                      <textarea
-                        name="reason"
-                        maxLength={500}
-                        required
-                        placeholder="Record the evidence supporting this trust decision."
-                      />
-                    </label>
-                    <div>
-                      <button name="decision" value="trusted-operating">
-                        Trust operating employer
-                      </button>
-                      <button
-                        name="decision"
-                        value="disallowed-recruiting-service"
-                      >
-                        Mark recruiting/staffing service
-                      </button>
-                    </div>
-                  </form>
-                  <small>
-                    Leave unverified by taking no action; the candidate remains
-                    blocked.
-                  </small>
+                  <EmployerReviewForm candidate={selected} />
                 </section>
               ) : null}
               <div className={styles.evidenceGroups}>
@@ -625,7 +721,33 @@ export function CandidatesWorkspace({
                     : styles.restricted
                 }
               >
-                <h3>Planning eligibility</h3>
+                <h3>Next step</h3>
+                {selected.stage === "in-draft-queue" ? (
+                  <Link
+                    className={styles.primaryAction}
+                    href={`/drafts?candidate=${encodeURIComponent(selected.id)}`}
+                  >
+                    Open draft
+                  </Link>
+                ) : draftBlockReason(selected) ? (
+                  <>
+                    <button className={styles.primaryAction} disabled>
+                      Create draft
+                    </button>
+                    <p className={styles.blockReason}>{draftBlockReason(selected)}</p>
+                  </>
+                ) : (
+                  <form action={createCandidateDraft} className={styles.createDraftForm}>
+                    <input type="hidden" name="candidateId" value={selected.id} />
+                    <input
+                      type="hidden"
+                      name="requestId"
+                      value={selected.draftRequestId ?? `candidate-draft-ui:${selected.id}`}
+                    />
+                    <PendingSubmit>Create draft</PendingSubmit>
+                    <small>Uses the qualified reserve. No provider call.</small>
+                  </form>
+                )}
                 <strong>
                   {selected.bucketReviewState === "review-required"
                     ? employerReviewRequired(selected)

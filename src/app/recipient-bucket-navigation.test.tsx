@@ -12,14 +12,13 @@ describe("five-bucket workspace navigation",()=>{
     expect(html).toContain("bucket=legacy");
     expect(html).toContain('<small>4</small>');
     expect(html).toContain('<small>5</small>');
-    expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain('aria-label="Select workspace"');
-    expect(html).toContain('aria-label="Select recipient bucket"');
+    expect(html).toContain('aria-label="Filter by recipient group"');
+    expect(html).toContain("Recipient group");
   });
 
-  it("preserves the original workspaces in navigation and keeps the early-career filter scoped to peers",()=>{
+  it("keeps workspace navigation separate and scopes the early-career filter to peers",()=>{
     const html=renderToStaticMarkup(<RecipientBucketNavigation data={data}/>);
-    for(const href of ["/today","/resumes","/","/sent","/candidates"])expect(html).toContain(`href="${href}"`);
+    expect(html).not.toContain('aria-label="Select workspace"');
     expect(html).toContain("Early-career only");
     expect(html).not.toContain("bucket=recruiters&amp;earlyCareerOnly=true");
   });

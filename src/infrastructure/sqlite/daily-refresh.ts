@@ -1,4 +1,4 @@
-import {addBucketDraftsFromRepository,resolveBucketDraftCorrectionInRepository} from "./bucket-reserve";
+import {addBucketDraftsFromRepository,createExactCandidateDraftFromRepository,resolveBucketDraftCorrectionInRepository} from "./bucket-reserve";
 import {initialResumeSelection} from "@/application/resumes/recruiter-default";
 import {assertFiveBucketEnabled,type BucketScope} from "@/domain/recipient-buckets";
 import {readCurrentQueueCandidates,readDraftGenerations,readQueueOperations,loadQueueReviews,renderQueueReview,draftIsDismissed,draftCampaignDate} from "./draft-queue";
@@ -56,6 +56,12 @@ export function resolveBucketDraftCorrection(input:{candidateId:string;snapshotI
 export function replaceBucketDraftFromReserve(input:{candidateId:string;scope:BucketScope;now?:()=>Date}):DailyRefreshResult {
   assertFiveBucketEnabled();const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
   try{repository.assertRuntimeSchema();return addBucketDraftsFromRepository(repository,1,input.scope,(input.now??(()=>new Date()))(),{replacementId:input.candidateId});}finally{repository.close();}
+}
+
+export function createExactCandidateDraft(input:{candidateId:string;requestId:string;now?:()=>Date}):DailyRefreshResult {
+  assertFiveBucketEnabled();
+  const repository=new SqliteSimulationRepository(resolveManualOutreachDatabaseSelection().path);
+  try{repository.assertRuntimeSchema();return createExactCandidateDraftFromRepository(repository,{candidateId:input.candidateId,requestId:input.requestId},(input.now??(()=>new Date()))());}finally{repository.close();}
 }
 
 export function recordDraftDisposition(input:{candidateId:string;permanent:boolean;now?:()=>Date}):void{

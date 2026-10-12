@@ -10,9 +10,9 @@ describe("Network Command Phase C.2", () => {
     const page = source("src/app/today/page.tsx"),
       styles = source("src/app/today/today-command.module.css");
     for (const text of [
-      "Now",
-      "Prepared work, ordered by consequence.",
-      "Live state",
+      "One clear next step.",
+      "Continue",
+      "Operational state",
       "Queue",
       "Relationships",
       "Supply",
@@ -21,8 +21,8 @@ describe("Network Command Phase C.2", () => {
     ])
       expect(page).toContain(text);
     expect(page).not.toMatch(/Good morning|Good afternoon|Good evening|KPI/i);
-    expect(styles).toContain(".tasks>a:first-child");
-    expect(styles).toContain("grid-template-columns:minmax(0,1fr) 306px");
+    expect(styles).toContain(".primaryTask");
+    expect(styles).toContain("grid-template-columns:minmax(0,1fr) minmax(250px,300px)");
   });
 
   it("reuses existing bounded actions without introducing provider logic", () => {
@@ -52,7 +52,8 @@ describe("Network Command Phase C.2", () => {
       "Role relevance",
       "Company evidence",
       "History",
-      "Planning eligibility",
+      "Next step",
+      "Create draft",
     ])
       expect(workspace).toContain(text);
     expect(workspace).toContain("window.history.replaceState");
@@ -68,13 +69,14 @@ describe("Network Command Phase C.2", () => {
     expect(workspace).not.toMatch(/prestige/i);
   });
 
-  it("composes sparse, two-task, and normal Today states without inventing work", () => {
+  it("composes one primary recommendation and secondary work without inventing tasks", () => {
     const page = source("src/app/today/page.tsx"),
       styles = source("src/app/today/today-command.module.css");
-    expect(page).toContain("data-task-count={Math.min(tasks.length,3)}");
+    expect(page).toContain("const primary=tasks[0]");
+    expect(page).toContain("const later=tasks.slice(1)");
     expect(page).toContain("const hasWork=tasks.length>0");
-    expect(styles).toContain('.now[data-task-count="1"]');
-    expect(styles).toContain('.now[data-task-count="2"]');
+    expect(styles).toContain(".primaryTask");
+    expect(styles).toContain(".later");
     expect(page).not.toMatch(/placeholder task|sample task|fictional task/i);
   });
 

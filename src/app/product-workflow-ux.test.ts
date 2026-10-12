@@ -52,8 +52,8 @@ describe("v1 daily workflow UX", () => {
     expect(workflow).toContain("manualSendConfirmed");
     expect(workflow).toContain('sendState!=="sent"');
     for (const action of [
-      "Approve draft",
-      "Create Gmail Draft",
+      "Approve & create Gmail draft",
+      "Retry creating Gmail draft",
       "Send email",
       "Resolve send status",
     ])
@@ -65,7 +65,8 @@ describe("v1 daily workflow UX", () => {
       infra = source("src/infrastructure/sqlite/command-center-drafts.ts");
     expect(review).toContain('name="subject"');
     expect(review).toContain('name="body"');
-    expect(review).toContain("Approve draft");
+    expect(review).toContain("Approve & create Gmail draft");
+    expect(review).toContain("approveAndCreateGmailDraft");
     expect(projection).toContain(
       'state!=="ready"?review.operation?.snapshot:null',
     );

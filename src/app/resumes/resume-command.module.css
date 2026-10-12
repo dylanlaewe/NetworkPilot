@@ -7,3 +7,67 @@
 .defaultResume{margin:18px 0;padding:16px;border:1px solid #c7d5c9;background:#f2f6f1}.defaultResume h3{margin:0 0 5px;font-size:13px}.defaultResume p{margin:0 0 12px;color:#68736e;font-size:11px;line-height:1.5}.defaultResume button{min-height:38px;padding:8px 13px;border:1px solid #9bb2a1;background:#fff;color:#205f48;cursor:pointer}
 @media(max-width:700px){.header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:20px max(18px,env(safe-area-inset-right)) 16px max(18px,env(safe-area-inset-left))}.header>div{min-width:0}.upload>summary{min-height:42px;display:flex;align-items:center;padding:8px 11px;white-space:nowrap}.upload>div{inset:auto 12px calc(64px + env(safe-area-inset-bottom));max-height:calc(100dvh - 86px);overflow:auto}.selection .detail{padding:20px max(18px,env(safe-area-inset-right)) calc(76px + env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))}.detail dl{grid-template-columns:1fr}.edit{grid-template-columns:1fr}.edit button{grid-column:auto;width:100%;min-height:44px}.detail :is(input,select,button){max-width:100%}}
 @media(max-width:380px){.header h1{font-size:22px}.upload>summary{padding-inline:9px}}
+
+/* Product experience refinement: calm, reachable controls and resilient copy. */
+.upload>summary,
+.upload button,
+.edit button,
+.defaultResume button {
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+.upload :is(input,select),
+.edit :is(input,select) {
+  min-height: 44px;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.upload>summary:focus-visible,
+.upload :is(input,select,button):focus-visible,
+.edit :is(input,select,button):focus-visible,
+.defaultResume button:focus-visible,
+.list a:focus-visible,
+.deactivate button:focus-visible {
+  outline: 3px solid #87aa95;
+  outline-offset: 2px;
+}
+
+.list a,
+.upload>summary,
+.upload button,
+.edit button,
+.defaultResume button,
+.deactivate button {
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+}
+
+.list a:active,
+.upload>summary:active,
+.upload button:active,
+.edit button:active,
+.defaultResume button:active {
+  transform: translateY(1px);
+}
+
+.detail h2,
+.detail header span,
+.detail dd,
+.defaultResume p,
+.history,
+.deactivate p {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list a,
+  .upload>summary,
+  .upload button,
+  .edit button,
+  .defaultResume button,
+  .deactivate button {
+    transition: none;
+  }
+}

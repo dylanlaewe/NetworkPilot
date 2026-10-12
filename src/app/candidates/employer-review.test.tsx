@@ -60,10 +60,11 @@ describe("Candidates employer-trust review", () => {
     );
     expect(html).toContain("Employer review required");
     expect(html).toContain("fixture.example");
-    expect(html).toContain("apollo · org-fixture");
+    expect(html).toContain("Stable company identity");
     expect(html).toContain("Trust operating employer");
     expect(html).toContain("Mark recruiting/staffing service");
-    expect(html).toContain("Leave unverified by taking no action");
+    expect(html).toContain("Leave unverified");
+    expect(html).not.toContain("org-fixture");
     expect(html).toContain('name="reason"');
     expect(html).toContain('required=""');
     expect(html).not.toContain("Create Gmail Draft");

@@ -26,6 +26,7 @@ import {
 export interface DraftsSearchParams {
   candidate?: string;
   error?: string;
+  gmailError?: string;
   sendError?: string;
   sendStatus?: string;
   skipStatus?: string;
@@ -37,11 +38,17 @@ export interface DraftsSearchParams {
   reserveRemaining?: string;
   bucket?: string;
   earlyCareerOnly?: string;
+  gmailStatus?: string;
 }
 
 function feedback(params: DraftsSearchParams) {
   if (params.error)
     return { tone: "error" as const, message: humanEditError(params.error) };
+  if (params.gmailError)
+    return {
+      tone: "error" as const,
+      message: humanDraftError(params.gmailError),
+    };
   if (params.sendError)
     return {
       tone: "error" as const,
@@ -51,6 +58,11 @@ function feedback(params: DraftsSearchParams) {
     return {
       tone: "success" as const,
       message: "Sent. Continue with the next draft.",
+    };
+  if (params.gmailStatus === "created")
+    return {
+      tone: "success" as const,
+      message: "Approved and created in Gmail. Review once more before sending.",
     };
   if (params.reconciliationStatus === "recorded")
     return { tone: "success" as const, message: "Send status recorded." };
@@ -106,8 +118,9 @@ export async function DraftsScreen({
   params: DraftsSearchParams;
   reviewMode?: boolean;
 }) {
-  const workflow = await loadCommandCenterDraftReviews();
+  const workflowPromise = loadCommandCenterDraftReviews();
   const commandCenter = loadDailyCommandCenter();
+  const workflow = await workflowPromise;
   const rows = activeDrafts(workflow.items, commandCenter.drafts);
   const candidateId = params.candidate
     ? decodeURIComponent(params.candidate)

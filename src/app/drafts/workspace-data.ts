@@ -50,7 +50,7 @@ export function workspacePrimaryBlockReason(draft:WorkspaceDraft|null,gmailAvail
   if(!draft)return "Select a draft first.";
   if(draft.classificationChange?.decisionRequired)return "Review the corrected recipient bucket and explicitly keep your edits or regenerate this unapproved message.";
   if(draft.bucketReviewState==="review-required")return draft.bucketReviewReason?`Bucket review required: ${draft.bucketReviewReason}.`:"Bucket evidence needs review before this draft can be approved or externalized.";
-  if(draft.state==="ready")return draft.blockedMessage;
+  if(draft.state==="ready")return draft.blockedMessage??(gmailAvailable?null:gmailReason??"Gmail draft creation is unavailable.");
   if(draft.state==="approved")return draft.blockedMessage??(gmailAvailable?null:gmailReason??"Gmail draft creation is unavailable.");
   if(draft.state==="gmail-draft-created")return draft.sendBlockedMessage;
   return null;
@@ -64,6 +64,7 @@ export function buildWorkspaceDrafts(input:{rows:readonly SimpleDraft[];outreach
     const attachment=immutable?.resumeAttachment??null;
     const manual=input.outreach.find((entry)=>entry.snapshotId===review.snapshotId&&!entry.manualSendConfirmed)??null;
     const sendBlock=state==="gmail-draft-created"?gmailSendBlockReason(review,input.readiness):null;
+    const creationUncertain=review.operation?.state==="creating-gmail-draft"||review.operation?.state==="reconciliation-required";
     return{
       snapshotId:review.snapshotId,
       candidateId:review.candidateId,
@@ -75,7 +76,7 @@ export function buildWorkspaceDrafts(input:{rows:readonly SimpleDraft[];outreach
       subject:immutable?.subject??review.subject,
       body:immutable?.body??review.body,
       blockedReason:review.blockedReason,
-      blockedMessage:review.blockedReason?humanDraftError(review.blockedReason):null,
+      blockedMessage:creationUncertain?humanDraftError("gmail-draft-reconciliation-required"):review.blockedReason?humanDraftError(review.blockedReason):null,
       sendBlockedMessage:sendBlock?humanSendError(sendBlock):null,
       selectionReason:humanSelectionReason(review.whySelected),
       intent:review.outreachIntent?.reason??"Use the approved evidence and ask one focused professional question.",

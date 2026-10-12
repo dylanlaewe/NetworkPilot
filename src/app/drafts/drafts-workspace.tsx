@@ -11,7 +11,7 @@ import {
   type RefObject,
 } from "react";
 import {
-  approveEditedDraft,
+  approveAndCreateGmailDraft,
   confirmAlreadySent,
   createGmailDraft,
   generateMoreDrafts,
@@ -54,8 +54,8 @@ const stateGlyph: Record<WorkspaceDraftState, string> = {
   "needs-send-verification": "?",
 };
 const actionLabels: Record<WorkspaceDraftState, string> = {
-  ready: "Approve draft",
-  approved: "Create Gmail Draft",
+  ready: "Approve & create Gmail draft",
+  approved: "Retry creating Gmail draft",
   "gmail-draft-created": "Send email",
   "needs-send-verification": "Resolve send status",
 };
@@ -226,6 +226,7 @@ export function DraftsWorkspace({
   const [draftEdits, setDraftEdits] = useState<Record<string, DraftEdit>>({});
   const [editsLoaded, setEditsLoaded] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<string | null>(null);
+  const [actionPending, setActionPending] = useState(false);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const approveRef = useRef<HTMLFormElement>(null);
@@ -407,6 +408,7 @@ export function DraftsWorkspace({
         !primaryBlocked
       ) {
         event.preventDefault();
+        setActionPending(true);
         approveRef.current?.requestSubmit();
       } else if (
         key === "r" &&
@@ -443,10 +445,17 @@ export function DraftsWorkspace({
 
   const runPrimary = () => {
     if (!selected || primaryBlocked) return;
-    if (selected.state === "ready") approveRef.current?.requestSubmit();
-    else if (selected.state === "approved") createRef.current?.requestSubmit();
-    else if (selected.state === "gmail-draft-created") setSendOpen(true);
-    else setReconcileOpen(true);
+    if (selected.state === "ready") {
+      setActionPending(true);
+      approveRef.current?.requestSubmit();
+    } else if (selected.state === "approved") {
+      setActionPending(true);
+      createRef.current?.requestSubmit();
+    } else if (selected.state === "gmail-draft-created") {
+      setSendOpen(true);
+    } else {
+      setReconcileOpen(true);
+    }
   };
 
   const scopeBucket =
@@ -491,11 +500,7 @@ export function DraftsWorkspace({
           System
         </Link>
       </header>
-      {bucketNavigation ? (
-        <RecipientBucketNavigation data={bucketNavigation} />
-      ) : null}
-      {!bucketNavigation ? (
-        <nav className={styles.rail} aria-label="Primary navigation">
+      <nav className={styles.rail} aria-label="Primary navigation">
           <Link href="/today">
             <span>○</span>
             <b>Today</b>
@@ -514,8 +519,12 @@ export function DraftsWorkspace({
             <b>Candidates</b>
           </Link>
         </nav>
-      ) : null}
       <section id="workspace-content" className={styles.workspace}>
+        {bucketNavigation ? (
+          <div className={styles.bucketNavigation}>
+            <RecipientBucketNavigation data={bucketNavigation} />
+          </div>
+        ) : null}
         <header className={styles.contextBar}>
           <div>
             <h1>Drafts</h1>
@@ -647,22 +656,6 @@ export function DraftsWorkspace({
             </div>
           </details>
         </header>
-        {bucketNavigation?.selected === "peers" ? (
-          <label className={styles.earlyCareerFilter}>
-            <input
-              type="checkbox"
-              checked={Boolean(bucketNavigation.earlyCareerOnly)}
-              onChange={(event) => {
-                const url = new URL(window.location.href);
-                if (event.currentTarget.checked)
-                  url.searchParams.set("earlyCareerOnly", "true");
-                else url.searchParams.delete("earlyCareerOnly");
-                window.location.assign(url.toString());
-              }}
-            />
-            <span>Early-career only</span>
-          </label>
-        ) : null}
         {feedback ? (
           <p
             className={styles.feedback}
@@ -779,7 +772,7 @@ export function DraftsWorkspace({
                   <form
                     id={`approve-${selected.candidateId}`}
                     ref={approveRef}
-                    action={approveEditedDraft}
+                    action={approveAndCreateGmailDraft}
                     onSubmit={(event) => {
                       if (
                         selected.state !== "ready" ||
@@ -787,6 +780,7 @@ export function DraftsWorkspace({
                         !resumeDecisionResolved
                       ) {
                         event.preventDefault();
+                        setActionPending(false);
                         if (!resumeDecisionResolved)
                           setResumePrompt(
                             "Choose an active resume or confirm that you want to continue without an attachment.",
@@ -994,6 +988,29 @@ export function DraftsWorkspace({
                         draft={selected}
                         showBucketDetails={Boolean(bucketNavigation)}
                       />
+                      {selected.manualOperatorId ? (
+                        <details className={styles.manualFallback}>
+                          <summary>Sent outside NetworkPilot?</summary>
+                          <form action={confirmAlreadySent}>
+                            <input
+                              type="hidden"
+                              name="id"
+                              value={selected.manualOperatorId}
+                            />
+                            <label>
+                              Sent time
+                              <input
+                                type="datetime-local"
+                                name="sentAt"
+                                required
+                              />
+                            </label>
+                            <button name="confirmation" value="confirmed">
+                              Record manual send
+                            </button>
+                          </form>
+                        </details>
+                      ) : null}
                     </details>
                   </form>
                   {selected.classificationChange?.decisionRequired ? (
@@ -1077,35 +1094,6 @@ export function DraftsWorkspace({
                     </section>
                   ) : null}
                 </article>
-                <aside className={styles.inspector}>
-                  <div className={styles.planeLabel}>
-                    <span>Inspector</span>
-                    <em>Secondary</em>
-                  </div>
-                  <Inspector
-                    draft={selected}
-                    showBucketDetails={Boolean(bucketNavigation)}
-                  />
-                  {selected.manualOperatorId ? (
-                    <details className={styles.manualFallback}>
-                      <summary>Sent outside NetworkPilot?</summary>
-                      <form action={confirmAlreadySent}>
-                        <input
-                          type="hidden"
-                          name="id"
-                          value={selected.manualOperatorId}
-                        />
-                        <label>
-                          Sent time
-                          <input type="datetime-local" name="sentAt" required />
-                        </label>
-                        <button name="confirmation" value="confirmed">
-                          Record manual send
-                        </button>
-                      </form>
-                    </details>
-                  ) : null}
-                </aside>
                 <footer className={styles.dock} data-state={selected.state}>
                   <div className={styles.secondaryActions}>
                     {selected.state !== "needs-send-verification" ? (
@@ -1204,6 +1192,11 @@ export function DraftsWorkspace({
                           name="snapshotId"
                           value={selected.snapshotId}
                         />
+                        <input
+                          type="hidden"
+                          name="candidateId"
+                          value={selected.candidateId}
+                        />
                       </form>
                     ) : null}
                     {selected.state === "approved" && !gmailAvailable ? (
@@ -1217,9 +1210,12 @@ export function DraftsWorkspace({
                       type="button"
                       className={styles.primary}
                       onClick={runPrimary}
-                      disabled={primaryBlocked}
+                      disabled={primaryBlocked || actionPending}
+                      aria-busy={actionPending}
                     >
-                      {selected.bucketReviewState === "review-required"
+                      {actionPending
+                        ? "Working…"
+                        : selected.bucketReviewState === "review-required"
                         ? "Review bucket evidence"
                         : actionLabels[selected.state]}{" "}
                       <kbd>

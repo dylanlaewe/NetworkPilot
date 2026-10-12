@@ -10,7 +10,7 @@ export function activeDrafts(reviews:readonly CommandCenterDraftReview[],outreac
   return reviews.filter((review)=>review.operation?.sendState!=="sent"&&!sent.has(review.snapshotId)).map((review)=>{
     if(review.operation?.sendState==="sending"||review.operation?.sendState==="send-status-uncertain")return{review,state:"needs-send-verification",primaryAction:"verify-send"};
     if(review.operation?.state==="gmail-draft-created")return{review,state:"gmail-draft-created",primaryAction:"send-email"};
-    if(review.operation?.state==="approved-for-gmail-draft")return{review,state:"approved",primaryAction:"create-gmail-draft"};
+    if(review.operation)return{review,state:"approved",primaryAction:"create-gmail-draft"};
     return{review,state:"ready",primaryAction:"review-and-approve"};
   });
 }

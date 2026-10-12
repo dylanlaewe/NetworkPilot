@@ -14,6 +14,7 @@ import { buildReviewedBucketCorrection } from "@/application/ingestion/review-bu
 import {
   addBucketDraftsFromRepository,
   bucketReserve,
+  createExactCandidateDraftFromRepository,
   resolveBucketDraftCorrectionInRepository,
 } from "./bucket-reserve";
 import { loadQueueReviews, readDraftGenerations } from "./draft-queue";
@@ -72,6 +73,33 @@ afterEach(() => {
 });
 
 describe("bucket persistence and reserve integration", () => {
+  it("creates only the selected eligible candidate, replays by request id, and blocks duplicates", () => {
+    const r = repo();
+    const selected = add(r, "peers", 91, true);
+    const other = add(r, "peers", 92, false);
+    const first = createExactCandidateDraftFromRepository(
+      r,
+      { candidateId: selected.id, requestId: "exact-candidate-one" },
+      FIXTURE_AT,
+    );
+    expect(first.candidateIds).toEqual([selected.id]);
+    expect(first.candidateIds).not.toContain(other.id);
+    expect(first).toMatchObject({ providerUsed: false, enrichmentAttempts: 0 });
+    expect(
+      createExactCandidateDraftFromRepository(
+        r,
+        { candidateId: selected.id, requestId: "exact-candidate-one" },
+        FIXTURE_AT,
+      ),
+    ).toEqual(first);
+    expect(() =>
+      createExactCandidateDraftFromRepository(
+        r,
+        { candidateId: selected.id, requestId: "exact-candidate-two" },
+        FIXTURE_AT,
+      ),
+    ).toThrow("candidate-draft-unavailable");
+  });
   it("preserves disabled legacy imports and writes no classification or default preference", () => {
     vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "false");
     const r = repo(),
