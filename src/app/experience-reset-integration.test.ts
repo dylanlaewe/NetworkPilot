@@ -58,7 +58,7 @@ describe("real-data experience reset contracts", () => {
     });
     expect(candidateHealthStatus({ actionableCapacity: 0, enabled: false, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("0 actionable candidates · Apollo disabled");
     expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("2 actionable candidates · Apollo unavailable — configuration needed");
-    expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: true, exposure: 3, maximumPerDay: 10 })).toBe("2 actionable candidates · 7 refresh credits available");
+    expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: true, exposure: 3, maximumPerDay: 10 })).toBe("2 actionable candidates · 7 local sourcing credits available");
   });
 
   it("returns reasoned full, partial and zero Add Drafts feedback", () => {

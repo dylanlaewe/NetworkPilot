@@ -8,7 +8,7 @@ import {
 
 export interface ScopedDiscoveryProvider {
   preflight(): void | Promise<void>;
-  discover(input: { scope: BucketScope; maximum: number; operationId: string; maximumSearchCalls: number }): Promise<{ records: CandidateSourceRecord[]; searchedCandidates: number; rejectedCandidates: number; enrichmentAttempts: number; searchCalls: number; observedCredits: number | null }>;
+  discover(input: { scope: BucketScope; maximum: number; operationId: string; maximumSearchCalls: number }): Promise<{ records: CandidateSourceRecord[]; searchedCandidates: number; rejectedCandidates: number; rejectionReasons?: Record<string, number>; enrichmentAttempts: number; searchCalls: number; observedCredits: number | null }>;
 }
 export class ScopedDiscoveryProviderFailure extends Error {
   constructor(
@@ -26,7 +26,7 @@ export interface ScopedDiscoveryPolicy { maximumPerBatch: number; maximumPerDay:
 export interface ScopedDiscoveryStore {
   preflight(input: { requestId?: string; scope: BucketScope; requested: number; policy: ScopedDiscoveryPolicy; at: Date }): ScopedDiscoveryReadiness;
   claim(input: { requestId: string; scope: BucketScope; requested: number; policy: ScopedDiscoveryPolicy; at: Date }): { operationId: string; maximum: number; existing?: CandidateRefreshResult };
-  complete(input: { operationId: string; scope: BucketScope; requested: number; maximum: number; usableBefore: number; records: CandidateSourceRecord[]; searchedCandidates: number; rejectedCandidates: number; attempts: number; searchCalls: number; observedCredits: number | null; at: Date }): CandidateRefreshResult;
+  complete(input: { operationId: string; scope: BucketScope; requested: number; maximum: number; usableBefore: number; records: CandidateSourceRecord[]; searchedCandidates: number; rejectedCandidates: number; rejectionReasons?: Record<string, number>; attempts: number; searchCalls: number; observedCredits: number | null; at: Date }): CandidateRefreshResult;
   fail(operationId: string, reason: string, accounting?: { attempts: number; observedCredits: number | null; at: Date }): void;
 }
 
@@ -51,7 +51,7 @@ export async function refreshScopedCandidateReserve(input: { requestId: string; 
     accounting = { attempts: result.enrichmentAttempts, observedCredits: result.observedCredits, at: input.now() };
     if (!Number.isInteger(result.enrichmentAttempts) || result.enrichmentAttempts < 0 || result.enrichmentAttempts > claim.maximum || !Number.isInteger(result.searchCalls) || result.searchCalls < 0 || result.searchCalls > input.policy.maximumSearchCalls || result.records.length > result.enrichmentAttempts || !Number.isInteger(result.searchedCandidates) || result.searchedCandidates < result.records.length || !Number.isInteger(result.rejectedCandidates) || result.rejectedCandidates < 0 || result.rejectedCandidates > result.searchedCandidates) throw new Error("scoped-refresh-provider-cap-exceeded");
     if (result.observedCredits !== null && (!Number.isFinite(result.observedCredits) || result.observedCredits < 0 || result.observedCredits > claim.maximum)) throw new Error("scoped-refresh-credit-model-exceeded");
-    return input.store.complete({ operationId: claim.operationId, scope: input.scope, requested: input.requested, maximum: claim.maximum, usableBefore: input.usableBefore, records: result.records, searchedCandidates: result.searchedCandidates, rejectedCandidates: result.rejectedCandidates, attempts: result.enrichmentAttempts, searchCalls: result.searchCalls, observedCredits: result.observedCredits, at: input.now() });
+    return input.store.complete({ operationId: claim.operationId, scope: input.scope, requested: input.requested, maximum: claim.maximum, usableBefore: input.usableBefore, records: result.records, searchedCandidates: result.searchedCandidates, rejectedCandidates: result.rejectedCandidates, rejectionReasons: result.rejectionReasons, attempts: result.enrichmentAttempts, searchCalls: result.searchCalls, observedCredits: result.observedCredits, at: input.now() });
   } catch (error) {
     if (error instanceof ScopedDiscoveryProviderFailure)
       accounting = { ...error.accounting, at: input.now() };

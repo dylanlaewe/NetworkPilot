@@ -21,10 +21,10 @@ describe("offline operator controls",()=>{
   });
   it("renders exhausted sourcing separately from existing outreach without a refresh form",()=>{
     const html=renderToStaticMarkup(createElement(CandidateRefreshControl,{available:4,exposure:20}));
-    expect(html).toContain("Candidate refresh is available again tomorrow.");expect(html).toContain("Your drafts and outreach are still available.");expect(html).not.toContain("<form");
+    expect(html).toContain("local daily allowance is fully accounted or held");expect(html).toContain("separate from the Apollo account balance");expect(html).not.toContain("<form");
   });
   it("shows only remaining daily exposure as maximum credits",()=>{
-    const html=renderToStaticMarkup(createElement(CandidateRefreshControl,{available:4,exposure:17}));
-    expect(html).toContain("<dt>Maximum Apollo credits</dt><dd>3</dd>");
+    const html=renderToStaticMarkup(createElement(CandidateRefreshControl,{available:4,exposure:17,maximumPerDay:20}));
+    expect(html).toContain("<dt>Maximum credits this run</dt><dd>3</dd>");
   });
 });

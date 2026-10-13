@@ -464,7 +464,7 @@ describe("offline scoped Apollo orchestration", () => {
       expect(canonical.listImportedCandidates()).toHaveLength(1);
       expect(canonical.getApolloProviderStatus("2026-09-28")).toMatchObject({
         attempted: 2,
-        estimatedExposure: 2,
+        estimatedExposure: 1,
         observedConsumption: 1,
       });
       expect(

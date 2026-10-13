@@ -207,6 +207,29 @@ describe("Candidates pool states", () => {
     expect(html).not.toContain("Add drafts");
   });
 
+  it("renders one scoped sourcing confirmation for a blocked populated pool", () => {
+    const html = renderToStaticMarkup(
+      <CandidatesWorkspace
+        candidates={[
+          candidate("contacted", {
+            stage: "in-draft-queue",
+          }),
+        ]}
+        refreshControl={<div>Scoped Apollo confirmation</div>}
+        refreshResult={null}
+        bucketNavigation={navigation(1)}
+        actionableCapacityByBucket={{ recruiters: 0 }}
+        unionActionableCapacity={0}
+        refreshScope="recruiters"
+        findMoreOpen
+        apolloEnabled
+        apolloReady
+      />,
+    );
+
+    expect(html.match(/Scoped Apollo confirmation/g)).toHaveLength(1);
+  });
+
   it("keeps per-person drafting distinct from sourcing in a mixed pool", () => {
     const html = render(
       [

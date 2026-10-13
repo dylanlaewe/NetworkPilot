@@ -10,6 +10,10 @@ import styles from "./today-command.module.css";
 import {migrationRequiredView} from "@/app/migration-required";
 import {fiveBucketEnabled,RECIPIENT_BUCKETS} from "@/domain/recipient-buckets";
 import {loadBucketReserveMetricsForScopes} from "@/infrastructure/sqlite/bucket-reserve";
+import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
+import {resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
+import {readApolloConfig} from "@/infrastructure/providers/apollo/config";
+import {loadSourcingUsage} from "@/infrastructure/sqlite/sourcing-limits";
 
 export const dynamic="force-dynamic";
 
@@ -19,7 +23,8 @@ async function renderTodayPage(){
   const drafts=activeDrafts(workflow.items,data.drafts),uncertain=drafts.filter((item)=>item.state==="needs-send-verification").length;
   const reviewable=drafts.filter((item)=>item.state==="ready").length,o=data.outreach.outcomes,relationships=o.replied+o["no-response"];
   const bucketEnabled=fiveBucketEnabled(),reserveMetrics=bucketEnabled?loadBucketReserveMetricsForScopes(RECIPIENT_BUCKETS.map((bucket)=>({bucket}))):null,available=reserveMetrics?.actionableCapacity??data.pipeline.available;
-  const gmailReady=workflow.gmail.readiness.available,apolloEnabled=data.safety.apolloEnabled,apolloReady=data.safety.apolloReady,apolloExhausted=data.safety.apolloExposure>=20,apolloStatus=!apolloEnabled?"Apollo disabled":!apolloReady?"Apollo unavailable":apolloExhausted?"Candidate refresh tomorrow":`${Math.max(0,20-data.safety.apolloExposure)} refresh credits available`,lowSupply=available<10;
+  const operational=openRuntimeRepository(resolveManualOutreachDatabaseSelection().path,{readonly:true});let sourcing;try{sourcing=loadSourcingUsage(operational,readApolloConfig(process.env));}finally{operational.close();}
+  const gmailReady=workflow.gmail.readiness.available,apolloEnabled=data.safety.apolloEnabled,apolloReady=data.safety.apolloReady,apolloExhausted=sourcing.remainingAllowance===0,apolloStatus=!apolloEnabled?"Apollo disabled":!apolloReady?"Apollo unavailable":apolloExhausted?"Local sourcing allowance reached":`${sourcing.remainingAllowance} local sourcing credits available`,lowSupply=available<10;
   const gmailReason=workflow.gmail.readiness.reason?humanDraftError(workflow.gmail.readiness.reason):"Gmail is ready.";
   const date=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"long",month:"long",day:"numeric"}).format(new Date());
   const health=`${gmailReady?"Gmail ready":"Gmail needs attention"} · ${apolloStatus}`;
@@ -50,9 +55,9 @@ async function renderTodayPage(){
           <div className={relationships>0?styles.attentionState:undefined}><dt>Relationships</dt><dd>{data.outreach.replyEligible} awaiting</dd></div>
           <div className={lowSupply?styles.attentionState:undefined}><dt>Supply</dt><dd>{available} actionable</dd></div>
           <div className={!gmailReady?styles.alert:undefined}><dt>Gmail</dt><dd>{gmailReady?"Ready":"Action required"}</dd></div>
-          <div className={!apolloReady||apolloExhausted?styles.attentionState:undefined}><dt>Apollo</dt><dd>{!apolloEnabled?"Disabled":!apolloReady?"Unavailable":apolloExhausted?"Available tomorrow":`${data.safety.apolloExposure} of 20 used`}</dd></div>
+          <div className={!apolloReady||apolloExhausted?styles.attentionState:undefined}><dt>Apollo</dt><dd>{!apolloEnabled?"Disabled":!apolloReady?"Unavailable":apolloExhausted?"Local allowance reached":`${sourcing.accountedOrHeldExposure} of ${sourcing.dailyAllowance} accounted or held`}</dd></div>
         </dl>
-        <p>{apolloExhausted?"Candidate refresh is available again tomorrow. Drafts, Gmail, and relationship work remain available.":!gmailReady?"Review remains available. Gmail actions stay safely blocked until the connection is ready.":"Healthy systems recede until they need attention."}</p>
+        <p>{apolloExhausted?"The local sourcing allowance is fully accounted or held. Drafts, Gmail, and relationship work remain available.":!gmailReady?"Review remains available. Gmail actions stay safely blocked until the connection is ready.":"Healthy systems recede until they need attention."}</p>
       </details>:null}
     </div>
   </NetworkCommandShell>;

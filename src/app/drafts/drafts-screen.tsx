@@ -171,7 +171,8 @@ export async function DraftsScreen({
         current: "drafts" as const,
         selected: selectedBucket,
         counts: bucketCounts,
-        total: drafts.length,
+        total: drafts.filter((draft) => Boolean(draft.recipientBucket?.bucket))
+          .length,
         legacyCount: drafts.filter((draft) => !draft.recipientBucket?.bucket)
           .length,
         earlyCareerOnly,

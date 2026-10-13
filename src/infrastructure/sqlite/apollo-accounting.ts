@@ -7,6 +7,7 @@ type DailyBudgetRow = {
 
 type OperationAccountingRow = {
   id: string;
+  state: string;
   estimated_max_exposure: number;
   observed_consumption: number | null;
   attempt_count: number;
@@ -29,14 +30,16 @@ function localDate(iso: string): string {
 
 /**
  * Reads the conservative Apollo hold for one NetworkPilot budget day.
- * Overspend is calculated per operation so a known overage cannot be hidden
- * by a separate operation whose reserved consumption is still unknown.
+ * Active operations retain their full authorization. Finalized scoped
+ * operations retain actual attempts/exact overage while releasing unused
+ * authorization; the immutable authorization rows remain available for audit.
  */
 export function readPersistedApolloDailyAccounting(
   database: Database.Database,
   date: string,
 ): {
   attempted: number;
+  authorizedExposure: number;
   reservedExposure: number;
   effectiveExposure: number;
   observedConsumption: number | null;
@@ -56,7 +59,7 @@ export function readPersistedApolloDailyAccounting(
     operations = (
       database
         .prepare(
-          `SELECT id,estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo' AND candidate_count>0`,
+          `SELECT id,state,estimated_max_exposure,observed_consumption,attempt_count,${hasBucketScope ? "bucket_scope_json" : "NULL AS bucket_scope_json"},occurred_at_utc FROM provider_operations WHERE provider_id='apollo' AND candidate_count>0`,
         )
         .all() as OperationAccountingRow[]
     ).filter((operation) => localDate(operation.occurred_at_utc) === date),
@@ -112,24 +115,44 @@ export function readPersistedApolloDailyAccounting(
       : hasConsumptionEvidence
         ? knownObservedConsumption
         : null,
-    overage = operations.reduce((sum, operation) => {
-      // Scoped sourcing uses a one-credit-per-enrichment model. When exact
-      // provider consumption is unavailable, truthful attempts are therefore
-      // still a conservative exposure signal. Legacy operations retain their
-      // persisted reservation unless the provider supplied exact consumption.
-      const evidence = Math.max(
-        operation.observed_consumption ?? 0,
-        operation.bucket_scope_json === null ? 0 : operation.attempt_count,
-      );
-      return (
-        sum + Math.max(0, evidence - operation.estimated_max_exposure)
-      );
-    }, 0),
-    reservedExposure = budget?.estimated_max_exposure ?? 0;
+    authorizedExposure = budget?.estimated_max_exposure ?? 0,
+    representedAuthorization = operations.reduce(
+      (sum, operation) => sum + operation.estimated_max_exposure,
+      0,
+    ),
+    compatibilityHold = Math.max(
+      0,
+      authorizedExposure - representedAuthorization,
+    ),
+    reservedExposure =
+      compatibilityHold +
+      operations.reduce((sum, operation) => {
+        if (operation.state === "authorized")
+          return sum + operation.estimated_max_exposure;
+        // Scoped sourcing has a one-credit-per-attempt ceiling. Once a run is
+        // finalized, release unused authorization while retaining every real
+        // attempt (and any larger exact observation) as conservative exposure.
+        // Legacy operations did not persist equivalent attempt semantics, so
+        // they keep their original hold unless exact provider usage is known.
+        if (operation.bucket_scope_json !== null)
+          return (
+            sum +
+            Math.max(
+              operation.attempt_count,
+              operation.observed_consumption ?? 0,
+              personLowerBounds.get(operation.id) ?? 0,
+            )
+          );
+        return (
+          sum +
+          (operation.observed_consumption ?? operation.estimated_max_exposure)
+        );
+      }, 0);
   return {
     attempted: budget?.attempted_candidates ?? 0,
+    authorizedExposure,
     reservedExposure,
-    effectiveExposure: reservedExposure + overage,
+    effectiveExposure: reservedExposure,
     observedConsumption,
     knownObservedConsumption,
     hasUnknownConsumption,

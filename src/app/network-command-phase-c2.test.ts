@@ -84,8 +84,8 @@ describe("Network Command experience reset", () => {
   it("keeps Apollo exhaustion local to candidate refresh", () => {
     const refresh = source("src/app/candidates/refresh-control.tsx"),
       today = source("src/app/today/page.tsx");
-    expect(refresh).toContain("Candidate refresh is available again tomorrow.");
-    expect(refresh).toContain("Your drafts and outreach are still available.");
+    expect(refresh).toContain("local daily allowance is fully accounted or held");
+    expect(refresh).toContain("separate from the Apollo account balance");
     expect(today).toContain(
       "Drafts, Gmail, and relationship work remain available.",
     );

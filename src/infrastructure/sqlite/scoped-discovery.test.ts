@@ -37,16 +37,16 @@ describe("scoped discovery through existing persisted provider accounting", () =
     const discover = vi.fn<ScopedDiscoveryProvider["discover"]>(async input => ({ records: [input.scope.bucket === "recruiters" ? recruiter.source : peer.source], searchedCandidates: 3, rejectedCandidates: 2, enrichmentAttempts: 1, searchCalls: 1, observedCredits: 1 }));
     const provider = { preflight: vi.fn(), discover };
     const first = await run("fictional-request-one", { bucket: "recruiters" }, provider);
-    expect(first).toMatchObject({ requested: 5, searchedCandidates: 3, enrichedCandidates: 1, qualifiedCandidatesAdded: 0, added: 0, rejectedCandidates: 3, shortfallCode: "scoped-supply-shortfall", remainingActionableCapacity: 0 });
+    expect(first).toMatchObject({ requested: 5, searchedCandidates: 3, enrichedCandidates: 1, qualifiedCandidatesAdded: 0, added: 1, rejectedCandidates: 2, confirmedCredits: 1, accountedOrHeldCredits: 1, shortfallCode: "scoped-supply-shortfall", remainingActionableCapacity: 0 });
     expect(discover.mock.calls[0][0]).toMatchObject({ scope: { bucket: "recruiters" }, maximum: 5 });
     const second = await run("fictional-request-two", { bucket: "peers", earlyCareerOnly: true }, provider);
-    expect(second.providerCap).toBe(2);
-    expect(discover.mock.calls[1][0]).toMatchObject({ scope: { bucket: "peers", earlyCareerOnly: true }, maximum: 2 });
-    expect(repository.getApolloProviderStatus("2026-09-22").estimatedExposure).toBe(7);
-    await expect(run("fictional-request-three", { bucket: "ceos" }, provider)).rejects.toThrow("provider-budget-unavailable");
-    expect(discover).toHaveBeenCalledTimes(2);
+    expect(second.providerCap).toBe(5);
+    expect(discover.mock.calls[1][0]).toMatchObject({ scope: { bucket: "peers", earlyCareerOnly: true }, maximum: 5 });
+    expect(repository.getApolloProviderStatus("2026-09-22").estimatedExposure).toBe(2);
+    await expect(run("fictional-request-three", { bucket: "ceos" }, provider)).resolves.toMatchObject({accountedOrHeldCredits:1});
+    expect(discover).toHaveBeenCalledTimes(3);
     expect(await run("fictional-request-one", { bucket: "recruiters" }, provider)).toEqual(first);
-    expect(discover).toHaveBeenCalledTimes(2);
+    expect(discover).toHaveBeenCalledTimes(3);
     await expect(run("fictional-request-one", { bucket: "peers" }, provider)).rejects.toThrow("scoped-refresh-request-conflict");
   });
   it("reserves once and refuses duplicate pending work", async () => {
@@ -60,6 +60,43 @@ describe("scoped discovery through existing persisted provider accounting", () =
     expect(discover).toHaveBeenCalledTimes(1);
     finish({ records: [recruiter.source], searchedCandidates: 1, rejectedCandidates: 0, enrichmentAttempts: 1, searchCalls: 1, observedCredits: 1 });
     await pending;
+  });
+  it("shares one atomic allowance across simultaneous bucket runs", async () => {
+    const { repository, run } = setup();
+    const finishes: Array<(
+      value: Awaited<ReturnType<ScopedDiscoveryProvider["discover"]>>,
+    ) => void> = [];
+    const discover = vi.fn<ScopedDiscoveryProvider["discover"]>(
+      () => new Promise((resolve) => finishes.push(resolve)),
+    );
+    const provider = { preflight: vi.fn(), discover };
+    const recruiters = run(
+      "simultaneous-recruiters",
+      { bucket: "recruiters" },
+      provider,
+    );
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledTimes(1));
+    const executives = run(
+      "simultaneous-executives",
+      { bucket: "executives" },
+      provider,
+    );
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledTimes(2));
+    expect(discover.mock.calls.map(([input]) => input.maximum)).toEqual([5, 2]);
+    expect(repository.getApolloProviderStatus("2026-09-22").estimatedExposure).toBe(7);
+    await expect(
+      run("simultaneous-ceos", { bucket: "ceos" }, provider),
+    ).rejects.toThrow("provider-budget-unavailable");
+    for (const finish of finishes)
+      finish({
+        records: [],
+        searchedCandidates: 0,
+        rejectedCandidates: 0,
+        enrichmentAttempts: 0,
+        searchCalls: 0,
+        observedCredits: 0,
+      });
+    await Promise.all([recruiters, executives]);
   });
   it("fails closed without a validated scoped adapter and in disabled mode before accounting", async () => {
     const { repository, run } = setup();

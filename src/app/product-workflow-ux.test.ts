@@ -115,8 +115,9 @@ describe("v1 daily workflow UX", () => {
     expect(candidates).toContain("Role family");
     for (const text of [
       "Ready for drafts",
-      "Daily target",
-      "Maximum Apollo credits",
+      "Desired candidates",
+      "Maximum credits this run",
+      "Remaining daily allowance",
       "Find people",
     ])
       expect(refresh).toContain(text);
@@ -159,8 +160,7 @@ describe("v1 daily workflow UX", () => {
       today = source("src/app/today/page.tsx"),
       nav = source("src/app/network-command-shell.tsx");
     expect(drafts).toContain("Create drafts");
-    expect(drafts).toContain("Create 5");
-    expect(drafts).toContain("Create 10");
+    expect(drafts).toContain('"5", "10", "custom"');
     expect(drafts).toContain('min="1"');
     expect(drafts).toContain('max="20"');
     expect(drafts).toContain("Skip");

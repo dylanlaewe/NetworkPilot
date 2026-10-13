@@ -33,6 +33,6 @@ export function candidateHealthStatus(input: {
   if (!input.ready)
     return `${prefix} · Apollo unavailable — configuration needed`;
   if (input.exposure >= input.maximumPerDay)
-    return `${prefix} · Candidate refresh available tomorrow`;
-  return `${prefix} · ${Math.max(0, input.maximumPerDay - input.exposure)} refresh credits available`;
+    return `${prefix} · Local sourcing allowance reached`;
+  return `${prefix} · ${Math.max(0, input.maximumPerDay - input.exposure)} local sourcing credits available`;
 }

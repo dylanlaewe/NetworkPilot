@@ -95,6 +95,10 @@ const recipientBucketLabels = {
   executives: "Executives",
   ceos: "CEOs & presidents",
 } as const;
+type DraftCreationBucket = keyof typeof recipientBucketLabels;
+const draftCreationBuckets = Object.entries(recipientBucketLabels) as Array<
+  [DraftCreationBucket, string]
+>;
 const bucketLabel = (bucket: string | null | undefined) =>
   bucket
     ? ((recipientBucketLabels as Record<string, string>)[bucket] ?? bucket)
@@ -230,6 +234,126 @@ function SendSubmitButton() {
   );
 }
 
+export function DraftCreationForm({
+  action,
+  requestId,
+  bucketEnabled,
+  bucket,
+  bucketLocked,
+  earlyCareerOnly,
+  capacity,
+  countMode,
+  customCount,
+  pending,
+  submitRef,
+  onBucketChange,
+  onCountModeChange,
+  onCustomCountChange,
+}: {
+  action: (payload: FormData) => void;
+  requestId: string;
+  bucketEnabled: boolean;
+  bucket: DraftCreationBucket;
+  bucketLocked: boolean;
+  earlyCareerOnly: boolean;
+  capacity: number;
+  countMode: "5" | "10" | "custom";
+  customCount: number;
+  pending: boolean;
+  submitRef?: RefObject<HTMLButtonElement | null>;
+  onBucketChange: (bucket: DraftCreationBucket) => void;
+  onCountModeChange: (mode: "5" | "10" | "custom") => void;
+  onCustomCountChange: (count: number) => void;
+}) {
+  const requested = countMode === "custom" ? customCount : Number(countMode);
+  return (
+    <form
+      className={styles.createDrafts}
+      action={action}
+      aria-busy={pending}
+    >
+      <input type="hidden" name="requestId" value={requestId} />
+      {bucketEnabled ? (
+        <input type="hidden" name="bucket" value={bucket} />
+      ) : null}
+      <input type="hidden" name="additionalDraftCount" value={requested} />
+      {earlyCareerOnly ? (
+        <input type="hidden" name="earlyCareerOnly" value="true" />
+      ) : null}
+      <div className={styles.creationIntro}>
+        <strong>Create drafts</strong>
+        <span>
+          Uses ready candidates already in NetworkPilot. No Apollo or Gmail call.
+        </span>
+      </div>
+      {bucketEnabled ? (
+        <label className={styles.creationBucket}>
+          <span>Recipient group</span>
+          <select
+            value={bucket}
+            disabled={bucketLocked || pending}
+            onChange={(event) =>
+              onBucketChange(event.currentTarget.value as DraftCreationBucket)
+            }
+          >
+            {draftCreationBuckets.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div className={styles.creationBucket}>
+          <span>Recipient group</span>
+          <strong>All ready candidates</strong>
+        </div>
+      )}
+      <fieldset className={styles.creationQuantity} disabled={pending}>
+        <legend>Quantity</legend>
+        {(["5", "10", "custom"] as const).map((value) => (
+          <label key={value}>
+            <input
+              type="radio"
+              name="draftQuantity"
+              value={value}
+              checked={countMode === value}
+              onChange={() => onCountModeChange(value)}
+            />
+            <span>{value === "custom" ? "Custom" : value}</span>
+          </label>
+        ))}
+      </fieldset>
+      {countMode === "custom" ? (
+        <label className={styles.customQuantity}>
+          <span>Custom, 1–20</span>
+          <input
+            type="number"
+            min="1"
+            max="20"
+            value={customCount}
+            required
+            disabled={pending}
+            onChange={(event) =>
+              onCustomCountChange(Number(event.currentTarget.value))
+            }
+          />
+        </label>
+      ) : null}
+      <div className={styles.creationSubmit}>
+        <small>
+          {capacity > 0
+            ? `${capacity} ${capacity === 1 ? "candidate is" : "candidates are"} ready in this group.`
+            : "No candidates are currently ready in this group."}
+        </small>
+        <button ref={submitRef} disabled={pending}>
+          {pending ? "Creating drafts…" : "Create drafts"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function DraftsWorkspace({
   drafts,
   resumes,
@@ -277,15 +401,29 @@ export function DraftsWorkspace({
   const [editsLoaded, setEditsLoaded] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<string | null>(null);
   const [additionState, additionAction, additionPending] = useActionState(generateMoreDraftsInline, initialDraftAdditionActionState);
+  const initialCreationBucket =
+    bucketSelection !== "all" && bucketSelection !== "legacy"
+      ? bucketSelection
+      : initial?.recipientBucket?.bucket ??
+        draftCreationBuckets.find(
+          ([bucket]) => (reserveCapacity?.[bucket] ?? 0) > 0,
+        )?.[0] ??
+        "recruiters";
+  const [creationBucket, setCreationBucket] =
+    useState<DraftCreationBucket>(initialCreationBucket);
+  const [creationCountMode, setCreationCountMode] = useState<
+    "5" | "10" | "custom"
+  >("5");
+  const [customCreationCount, setCustomCreationCount] = useState(5);
   const visibleAdditionState = normalizedDraftAdditionState(additionState);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const skipRef = useRef<HTMLFormElement>(null);
   const replaceRef = useRef<HTMLFormElement>(null);
-  const addRef = useRef<HTMLDetailsElement>(null);
+  const createDraftsRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (initialAddOpen && addRef.current) addRef.current.open = true;
+    if (initialAddOpen) createDraftsRef.current?.focus();
   }, [initialAddOpen]);
   const closeSend = useCallback(() => {
     setSendOpen(false);
@@ -368,6 +506,7 @@ export function DraftsWorkspace({
   const selectBucket = useCallback((next: BucketSelection, nextEarlyCareer: boolean) => {
     setBucketSelection(next);
     setEarlyCareerOnly(nextEarlyCareer);
+    if (next !== "all" && next !== "legacy") setCreationBucket(next);
     const nextDrafts = draftsForBucket(drafts, next, nextEarlyCareer);
     const nextSelected = nextDrafts.some((draft) => draft.candidateId === selectedId) ? selectedId : (nextDrafts[0]?.candidateId ?? "");
     setSelectedId(nextSelected);
@@ -485,7 +624,7 @@ export function DraftsWorkspace({
         skipRef.current?.requestSubmit();
       } else if (key === "n") {
         event.preventDefault();
-        if (addRef.current) addRef.current.open = true;
+        createDraftsRef.current?.focus();
       }
     };
     document.addEventListener("keydown", onKey);
@@ -526,6 +665,13 @@ export function DraftsWorkspace({
     bucketSelection === "peers" && earlyCareerOnly,
   );
   const activeHasReserve = scopeBucket ? Boolean(scopeBucket === "peers" && scopeEarlyCareer ? earlyCareerPeerCapacity : reserveCapacity?.[scopeBucket]) : hasReserve;
+  const creationEarlyCareer = Boolean(
+    bucketSelection === "peers" && earlyCareerOnly && creationBucket === "peers",
+  );
+  const creationCapacity =
+    creationBucket === "peers" && creationEarlyCareer
+      ? (earlyCareerPeerCapacity ?? 0)
+      : (reserveCapacity?.[creationBucket] ?? (hasReserve ? 1 : 0));
   const resumeOptions = resumes;
   const confirmationAttachment =
     selected?.state === "ready"
@@ -572,117 +718,50 @@ export function DraftsWorkspace({
               </span>
             ))}
           </div>
-          <details className={styles.addDrafts} ref={addRef}>
-            <summary>
-              {bucketNavigation && scopeBucket
-                ? `Create ${({ recruiters: "recruiter", peers: "peer", managers: "manager", executives: "executive", ceos: "CEO/president" } as const)[scopeBucket]} drafts`
-                : "Create drafts"}{" "}
-              <kbd>N</kbd>
-            </summary>
-            <div>
-              <strong>
-                Create drafts from{" "}
-                {scopeBucket
-                  ? (
-                      {
-                        recruiters: "recruiter",
-                        peers: "peer and practitioner",
-                        managers: "manager",
-                        executives: "executive",
-                        ceos: "CEO/president",
-                      } as const
-                    )[scopeBucket] + " candidates"
-                  : "existing candidates"}
-              </strong>
-              <p>
-                {scopeEarlyCareer ? "Scope: Early-career peers only. " : ""}
-                Creates drafts without replacing your edits, attachments, or
-                queue order. No Apollo call.
-              </p>
-              {scopedLegacy ? (
-                <p role="status">
-                  Legacy / unclassified drafts are read-only in this view.
-                  Choose a group to create drafts.
-                </p>
-              ) : chooseBucketFirst ? (
-                <div className={styles.chooseBucket} role="status"><p>Choose a recipient group to create drafts for its ready candidates.</p><button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button></div>
-              ) : activeHasReserve ? (
-                <>
-                  <form action={additionAction} aria-busy={additionPending}>
-                    <input type="hidden" name="requestId" value={addRequestId} />
-                    <input
-                      type="hidden"
-                      name="candidateId"
-                      value={selected?.candidateId ?? ""}
-                    />
-                    {bucketNavigation && scopeBucket ? (
-                      <input type="hidden" name="bucket" value={scopeBucket} />
-                    ) : null}
-                    {scopeEarlyCareer ? (
-                      <input
-                        type="hidden"
-                        name="earlyCareerOnly"
-                        value="true"
-                      />
-                    ) : null}
-                    <button name="additionalDraftCount" value="5" disabled={additionPending}>
-                      {additionPending ? "Creating…" : "Create 5"}
-                    </button>
-                    <button name="additionalDraftCount" value="10" disabled={additionPending}>
-                      Create 10
-                    </button>
-                  </form>
-                  <form action={additionAction} aria-busy={additionPending}>
-                    <input type="hidden" name="requestId" value={addRequestId} />
-                    <input
-                      type="hidden"
-                      name="candidateId"
-                      value={selected?.candidateId ?? ""}
-                    />
-                    {bucketNavigation && scopeBucket ? (
-                      <input type="hidden" name="bucket" value={scopeBucket} />
-                    ) : null}
-                    {scopeEarlyCareer ? (
-                      <input
-                        type="hidden"
-                        name="earlyCareerOnly"
-                        value="true"
-                      />
-                    ) : null}
-                    <label>
-                      Custom, 1–20
-                      <input
-                        name="additionalDraftCount"
-                        type="number"
-                        min="1"
-                        max="20"
-                        defaultValue="5"
-                        required
-                      />
-                    </label>
-                    <button disabled={additionPending}>Create custom</button>
-                  </form>
-                </>
-              ) : (
-                <p role="status">
-                  No candidates are ready for drafts in this view.{" "}
-                  <Link
-                    href={
-                      scopeBucket
-                        ? `/candidates?bucket=${encodeURIComponent(scopeBucket)}${scopeEarlyCareer ? "&earlyCareerOnly=true" : ""}`
-                        : "/candidates"
-                    }
-                  >
-                    {scopeBucket
-                      ? `Find ${scopeBucket}`
-                      : "Find people"}
-                  </Link>
-                </p>
-              )}
-              {visibleAdditionState.status !== "idle" ? <div className={styles.additionResult} data-status={visibleAdditionState.status} role={visibleAdditionState.status === "error" ? "alert" : "status"}><strong>{creationLanguage(visibleAdditionState.message)}</strong>{visibleAdditionState.reasons.length ? <ul>{visibleAdditionState.reasons.map((reason) => <li key={reason}>{creationLanguage(reason)}</li>)}</ul> : null}{visibleAdditionState.recovery ? <Link href={visibleAdditionState.recovery.href}>{visibleAdditionState.recovery.label}</Link> : null}</div> : null}
-            </div>
-          </details>
         </header>
+        <section className={styles.creationRegion} aria-label="Create drafts">
+          <DraftCreationForm
+            action={additionAction}
+            requestId={addRequestId}
+            bucketEnabled={Boolean(bucketNavigation)}
+            bucket={creationBucket}
+            bucketLocked={Boolean(
+              bucketNavigation &&
+                bucketSelection !== "all" &&
+                bucketSelection !== "legacy",
+            )}
+            earlyCareerOnly={creationEarlyCareer}
+            capacity={creationCapacity}
+            countMode={creationCountMode}
+            customCount={customCreationCount}
+            pending={additionPending}
+            submitRef={createDraftsRef}
+            onBucketChange={setCreationBucket}
+            onCountModeChange={setCreationCountMode}
+            onCustomCountChange={setCustomCreationCount}
+          />
+          {visibleAdditionState.status !== "idle" ? (
+            <div
+              className={styles.additionResult}
+              data-status={visibleAdditionState.status}
+              role={visibleAdditionState.status === "error" ? "alert" : "status"}
+            >
+              <strong>{creationLanguage(visibleAdditionState.message)}</strong>
+              {visibleAdditionState.reasons.length ? (
+                <ul>
+                  {visibleAdditionState.reasons.map((reason) => (
+                    <li key={reason}>{creationLanguage(reason)}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {visibleAdditionState.recovery ? (
+                <Link href={visibleAdditionState.recovery.href}>
+                  {visibleAdditionState.recovery.label}
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
         {feedback ? (
           <p
             className={styles.feedback}

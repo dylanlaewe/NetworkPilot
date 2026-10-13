@@ -6,6 +6,7 @@ import {
 } from "./scoped-provider";
 import { SqliteApolloPersonReservationStore } from "@/infrastructure/sqlite/apollo-person-reservations";
 import type { SqliteSimulationRepository } from "@/infrastructure/sqlite/database";
+import type { ApolloConfig } from "./types";
 
 const localDate = (date: Date) =>
   new Intl.DateTimeFormat("en-CA", {
@@ -29,9 +30,10 @@ export function createServerScopedApolloProvider(
   repository: SqliteSimulationRepository,
   environment: Readonly<Record<string, string | undefined>> = process.env,
   now: () => Date = () => new Date(),
+  configOverride?: ApolloConfig,
 ): ScopedApolloProvider {
   return new ScopedApolloProvider({
-    config: readApolloConfig(environment),
+    config: configOverride ?? readApolloConfig(environment),
     transport: new FetchApolloTransport(),
     now,
     sleep: (milliseconds) =>

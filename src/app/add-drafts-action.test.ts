@@ -33,4 +33,19 @@ describe("actual Add Drafts server action",()=>{
     expect(mocks.revalidate.mock.calls.map(([path])=>path)).toEqual(["/today","/drafts","/sent","/candidates"]);
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
+  it.each([[5,5,"success"],[5,0,"zero"]] as const)("returns a visible %s-of-%s %s outcome without provider activity",async(requested,added,status)=>{
+    vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED","true");
+    const network=vi.fn(()=>{throw new Error("provider-network-prohibited");});vi.stubGlobal("fetch",network);
+    mocks.run.mockReturnValue({addition:{additionalDraftCount:requested,addedCount:added,activeBefore:1,activeAfter:1+added,eligibleReserveRemaining:0,scope:{bucket:"ceos"},blockCounts:{reviewRequired:0,alreadyDraftedOrContacted:0,companyCooldown:0,suppressed:0,unresolvedEvidence:0,noQualifiedReserve:added===0?1:0}}});
+    const form=new FormData();form.set("additionalDraftCount",String(requested));form.set("bucket","ceos");form.set("requestId","add-inline-ceos");
+    await expect(generateMoreDraftsInline(initialDraftAdditionActionState,form)).resolves.toMatchObject({status});
+    expect(mocks.run).toHaveBeenCalledExactlyOnceWith(requested,expect.any(Function),{bucket:"ceos"},"add-inline-ceos");
+    expect(network).not.toHaveBeenCalled();
+  });
+  it("turns validation failure into visible recovery copy without refreshing",async()=>{
+    vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED","true");mocks.run.mockImplementation(()=>{throw new Error("draft-batch-size-invalid");});
+    const form=new FormData();form.set("additionalDraftCount","21");form.set("bucket","managers");
+    await expect(generateMoreDraftsInline(initialDraftAdditionActionState,form)).resolves.toMatchObject({status:"error",message:"Drafts were not created",reasons:["Choose a number from 1 to 20."]});
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+  });
 });

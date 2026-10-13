@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { AddDraftsControl } from "./add-drafts-control";
+import { DraftCreationForm } from "./drafts-workspace";
 import { DraftAdditionFeedback } from "./addition-feedback";
 
 const workspace = () =>
@@ -12,14 +12,60 @@ const workspace = () =>
   );
 
 describe("Drafts preferred CRM workflow", () => {
-  it("uses Create drafts language for the bounded batch control", () => {
-    const html = renderToStaticMarkup(<AddDraftsControl action={vi.fn()} />);
+  it("renders the real primary Create drafts form with visible scope and quantity selections", () => {
+    const html = renderToStaticMarkup(
+      <DraftCreationForm
+        action={vi.fn()}
+        requestId="fixture-request"
+        bucketEnabled
+        bucket="ceos"
+        bucketLocked={false}
+        earlyCareerOnly={false}
+        capacity={2}
+        countMode="5"
+        customCount={5}
+        pending={false}
+        onBucketChange={vi.fn()}
+        onCountModeChange={vi.fn()}
+        onCustomCountChange={vi.fn()}
+      />,
+    );
     expect(html).toContain("Create drafts");
-    expect(html).toContain("Create 5");
-    expect(html).toContain("Create 10");
-    expect(html).toContain("Create custom");
-    expect(html).toContain("No Apollo call");
-    expect(html).not.toMatch(/Add Drafts|Generate|reserve/i);
+    expect(html).toContain("Recipient group");
+    expect(html).toContain('value="ceos" selected=""');
+    expect(html).toContain('name="draftQuantity"');
+    expect(html).toContain('name="draftQuantity" checked="" value="5"');
+    expect(html).toContain('value="10"');
+    expect(html).toContain("Custom");
+    expect(html).toContain('name="additionalDraftCount" value="5"');
+    expect(html).toContain("2 candidates are ready in this group.");
+    expect(html).toContain("No Apollo or Gmail call");
+    expect(html).not.toMatch(/<details|<summary|Add Drafts|Generate|reserve/i);
+  });
+
+  it("shows immediate pending language and the custom 1–20 input", () => {
+    const html = renderToStaticMarkup(
+      <DraftCreationForm
+        action={vi.fn()}
+        requestId="fixture-custom"
+        bucketEnabled
+        bucket="peers"
+        bucketLocked
+        earlyCareerOnly
+        capacity={0}
+        countMode="custom"
+        customCount={17}
+        pending
+        onBucketChange={vi.fn()}
+        onCountModeChange={vi.fn()}
+        onCustomCountChange={vi.fn()}
+      />,
+    );
+    expect(html).toContain("Creating drafts…");
+    expect(html).toContain("Custom, 1–20");
+    expect(html).toContain('min="1" max="20" required="" disabled="" value="17"');
+    expect(html).toContain('name="earlyCareerOnly" value="true"');
+    expect(html).toContain("No candidates are currently ready in this group.");
   });
 
   it("keeps creation feedback persistent and points recovery to Candidates", () => {

@@ -287,6 +287,7 @@ export function CandidatesWorkspace({
   initialFilterOpen = false,
   refreshControl,
   refreshResult,
+  refreshRejectionReasons,
   bucketNavigation,
   actionableCapacity,
   actionableCapacityByBucket,
@@ -306,6 +307,7 @@ export function CandidatesWorkspace({
   initialFilterOpen?: boolean;
   refreshControl: ReactNode;
   refreshResult: string | null;
+  refreshRejectionReasons?: string;
   bucketNavigation?: BucketNavigationData;
   actionableCapacity?: number;
   actionableCapacityByBucket?: Partial<Record<RecipientBucket, number>>;
@@ -320,6 +322,20 @@ export function CandidatesWorkspace({
   apolloEnabled: boolean;
   apolloReady: boolean;
 }) {
+  let rejectionReasons: Record<string, number> = {};
+  try {
+    const parsed = refreshRejectionReasons
+      ? (JSON.parse(refreshRejectionReasons) as unknown)
+      : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      rejectionReasons = Object.fromEntries(
+        Object.entries(parsed).filter(
+          ([, value]) => Number.isInteger(value) && Number(value) > 0,
+        ),
+      ) as Record<string, number>;
+  } catch {
+    rejectionReasons = {};
+  }
   const [bucketSelection, setBucketSelection] = useState<BucketSelection>(bucketNavigation?.selected ?? "all"),
     [earlyCareerOnly, setEarlyCareerOnly] = useState(Boolean(bucketNavigation?.earlyCareerOnly)),
     [selectedId, setSelectedId] = useState(
@@ -418,7 +434,7 @@ export function CandidatesWorkspace({
     url.searchParams.set("selected", id);
     window.history.replaceState(null, "", url);
   };
-  const selectBucket = useCallback((next: BucketSelection, nextEarlyCareer: boolean) => {
+  const selectBucket = (next: BucketSelection, nextEarlyCareer: boolean) => {
     setBucketSelection(next);
     setEarlyCareerOnly(nextEarlyCareer);
     const nextRows = candidates.filter((row) => matchesCandidateBucket(row, bucketNavigation, next, nextEarlyCareer));
@@ -431,7 +447,7 @@ export function CandidatesWorkspace({
     if (nextSelected) url.searchParams.set("selected", nextSelected); else url.searchParams.delete("selected");
     url.searchParams.delete("findMore");
     window.history.replaceState(null, "", url);
-  }, [bucketNavigation, candidates, selectedId]);
+  };
   const closeDetail = useCallback(() => {
     setMobileDetail(false);
     requestAnimationFrame(() => returnFocusRef.current?.focus());
@@ -573,7 +589,9 @@ export function CandidatesWorkspace({
     </div>
   );
   const findPeopleControl = showScopedConfirmation ? (
-    <div className={styles.headerSourcing}>{refreshControl}</div>
+    isBlockedPool || rows.length === 0 ? null : (
+      <div className={styles.headerSourcing}>{refreshControl}</div>
+    )
   ) : sourcingStatus.available ? (
     <Link className={styles.findPeopleHeader} href={sourcingHref}>
       <span>Find people</span>
@@ -744,9 +762,22 @@ export function CandidatesWorkspace({
         ) : null}
       </header>
       {refreshResult ? (
-        <p className={styles.result} role="status">
-          {refreshResult}
-        </p>
+        <div className={styles.result} role="status">
+          <p>{refreshResult}</p>
+          {Object.keys(rejectionReasons).length ? (
+            <details>
+              <summary>Excluded people details</summary>
+              <ul>
+                {Object.entries(rejectionReasons).map(([reason, count]) => (
+                  <li key={reason}>
+                    <strong>{count}</strong>{" "}
+                    {reason.replace(/^eligibility:/, "eligibility: ").replaceAll("-", " ")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
       ) : null}
       {isBlockedPool && !hasCandidateFilters ? (
         <section className={styles.blockedPool} aria-labelledby="blocked-pool-title">

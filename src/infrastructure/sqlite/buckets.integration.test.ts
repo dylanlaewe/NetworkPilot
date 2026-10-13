@@ -346,6 +346,38 @@ describe("bucket persistence and reserve integration", () => {
     ).toThrow("draft-add-request-conflict");
     expect(readDraftGenerations(r.native)).toEqual(before);
   });
+  it("adds ten drafts to an existing five without replacing the queue", () => {
+    const r = repo();
+    for (let ordinal = 1; ordinal <= 15; ordinal++)
+      add(r, "managers", ordinal);
+    const first = addBucketDraftsFromRepository(
+      r,
+      5,
+      { bucket: "managers" },
+      FIXTURE_AT,
+      { includeSecondary: false, requestId: "fixture-first-five" },
+    );
+    const second = addBucketDraftsFromRepository(
+      r,
+      10,
+      { bucket: "managers" },
+      FIXTURE_AT,
+      { includeSecondary: false, requestId: "fixture-next-ten" },
+    );
+    expect(first.addition).toMatchObject({
+      addedCount: 5,
+      activeBefore: 0,
+      activeAfter: 5,
+    });
+    expect(second.addition).toMatchObject({
+      addedCount: 10,
+      activeBefore: 5,
+      activeAfter: 15,
+    });
+    expect(
+      loadQueueReviews(r, FIXTURE_AT, { includeSecondary: false }),
+    ).toHaveLength(15);
+  });
   it("replays an empty scoped Add result after reserve supply changes", () => {
     const r = repo(),
       options = { includeSecondary: false, requestId: "fixture-empty-add" };

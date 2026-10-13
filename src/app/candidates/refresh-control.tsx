@@ -1,29 +1,165 @@
-import { DEFAULT_RESERVE_TARGET, planCandidateRefresh } from "@/application/candidate-refresh";
-import { humanScopedDiscoveryReadiness, type ScopedDiscoveryReadiness } from "@/application/candidate-refresh/scoped-readiness";
+"use client";
+
+import { useState } from "react";
+import { useFormStatus } from "react-dom";
+import {
+  humanScopedDiscoveryReadiness,
+  type ScopedDiscoveryReadiness,
+} from "@/application/candidate-refresh/scoped-readiness";
 import { refreshCandidates } from "./actions";
 
-const labels = { recruiters: "recruiters", peers: "peers", managers: "managers", executives: "executives", ceos: "CEOs and presidents" } as const;
+const labels = {
+  recruiters: "Recruiters",
+  peers: "Peers & practitioners",
+  managers: "Managers & team leaders",
+  executives: "Executives",
+  ceos: "CEOs & presidents",
+} as const;
 
-export function CandidateRefreshControl({ available, totalReserve = available, exposure = 0, maximumPerBatch = 20, maximumPerDay = 20, fiveBucketEnabled = false, bucket, earlyCareerOnly = false, legacyView = false, requestId, readiness, open = false }: { available: number; totalReserve?: number; exposure?: number; maximumPerBatch?: number; maximumPerDay?: number; fiveBucketEnabled?: boolean; bucket?: keyof typeof labels; earlyCareerOnly?: boolean; legacyView?: boolean; requestId?: string; readiness?: ScopedDiscoveryReadiness; open?: boolean }) {
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending}>
+      {pending ? "Finding people…" : `Find ${label}`}
+    </button>
+  );
+}
+
+export function CandidateRefreshControl({
+  available,
+  totalReserve = available,
+  exposure = 0,
+  maximumPerBatch = 5,
+  maximumPerDay = 10,
+  fiveBucketEnabled = false,
+  bucket,
+  earlyCareerOnly = false,
+  legacyView = false,
+  requestId,
+  readiness,
+  open = false,
+}: {
+  available: number;
+  totalReserve?: number;
+  exposure?: number;
+  maximumPerBatch?: number;
+  maximumPerDay?: number;
+  fiveBucketEnabled?: boolean;
+  bucket?: keyof typeof labels;
+  earlyCareerOnly?: boolean;
+  legacyView?: boolean;
+  requestId?: string;
+  readiness?: ScopedDiscoveryReadiness;
+  open?: boolean;
+}) {
+  const [preset, setPreset] = useState<"5" | "10" | "custom">("5");
+  const [custom, setCustom] = useState(5);
+  const desired = preset === "custom" ? custom : Number(preset);
   const remaining = Math.max(0, maximumPerDay - exposure);
-  const plan = planCandidateRefresh(available, DEFAULT_RESERVE_TARGET, Math.min(maximumPerBatch, remaining));
-  const label = fiveBucketEnabled && bucket ? labels[bucket] : "candidates";
-  const title = "Find people";
-  if (legacyView) return <p className="budget-message" role="status">Choose a recipient group before finding people. Legacy records stay unchanged.</p>;
-  if (fiveBucketEnabled && !bucket) return <p className="budget-message" role="status">Choose a recipient group first. Apollo usage is shared across all groups.</p>;
-  if (fiveBucketEnabled && readiness && !readiness.ready) return <div className="budget-message" role="status"><strong>Find people is unavailable</strong><small>{humanScopedDiscoveryReadiness(readiness)}</small></div>;
-  if (remaining === 0) return <p className="budget-message" role="status">Candidate refresh is available again tomorrow.<small>Your drafts and outreach are still available. The shared provider allowance is exhausted across all buckets.</small></p>;
-  return <details className="refresh-candidates" open={open}>
-    <summary>{title}</summary>
-    <div>
-      <h3>{fiveBucketEnabled && bucket ? `Find ${label}?` : "Find people?"}</h3>
-      <dl><div><dt>People in this group</dt><dd>{totalReserve}</dd></div><div><dt>Ready for drafts</dt><dd>{available}</dd></div><div><dt>Daily target</dt><dd>{DEFAULT_RESERVE_TARGET}</dd></div><div><dt>Maximum Apollo credits</dt><dd>{Math.min(plan.maximumProviderUsage, remaining)}</dd></div></dl>
-      <p>{earlyCareerOnly ? "Scope: Early-career peers only. " : ""}{plan.providerRequired ? `This search is scoped to ${label} and may use Apollo credits. NetworkPilot uses existing candidates first, then requests only the additional people needed.` : "This group already has enough candidates. No Apollo search is needed."}</p>
-      <form action={refreshCandidates}>
-        <input type="hidden" name="confirmation" value="confirmed" /><input type="hidden" name="allowProvider" value="yes" /><input type="hidden" name="requested" value={plan.maximumProviderUsage} />
-        {bucket ? <input type="hidden" name="bucket" value={bucket} /> : null}{earlyCareerOnly ? <input type="hidden" name="earlyCareerOnly" value="true" /> : null}{requestId ? <input type="hidden" name="requestId" value={requestId} /> : null}
-        <button disabled={!plan.providerRequired}>Find {fiveBucketEnabled && bucket ? label : "people"}</button>
-      </form>
-    </div>
-  </details>;
+  const maximumAuthorized = Math.max(
+    0,
+    Math.min(desired, maximumPerBatch, remaining),
+  );
+  const label = fiveBucketEnabled && bucket ? labels[bucket] : "people";
+
+  if (legacyView)
+    return (
+      <p className="budget-message" role="status">
+        Choose a recipient group before finding people. Legacy records stay
+        unchanged.
+      </p>
+    );
+  if (fiveBucketEnabled && !bucket)
+    return (
+      <p className="budget-message" role="status">
+        Choose a recipient group first. Apollo usage is shared across all
+        groups.
+      </p>
+    );
+  if (remaining === 0)
+    return (
+      <p className="budget-message" role="status">
+        NetworkPilot&apos;s local daily allowance is fully accounted or held.
+        <small>
+          This is separate from the Apollo account balance. Draft creation
+          remains available, and limits can be reviewed in Settings.
+        </small>
+      </p>
+    );
+  if (fiveBucketEnabled && readiness && !readiness.ready)
+    return (
+      <div className="budget-message" role="status">
+        <strong>Find people is unavailable</strong>
+        <small>{humanScopedDiscoveryReadiness(readiness)}</small>
+      </div>
+    );
+
+  return (
+    <details className="refresh-candidates" open={open}>
+      <summary>Find people</summary>
+      <div>
+        <h3>Find {label}</h3>
+        <div
+          className="sourcing-target"
+          role="group"
+          aria-label="Desired candidate quantity"
+        >
+          <span>Desired candidates</span>
+          {(["5", "10", "custom"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={preset === value}
+              onClick={() => setPreset(value)}
+            >
+              {value === "custom" ? "Custom" : value}
+            </button>
+          ))}
+          {preset === "custom" ? (
+            <label>
+              <span>Custom quantity, 1–20</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                value={custom}
+                onChange={(event) =>
+                  setCustom(
+                    Math.max(
+                      1,
+                      Math.min(20, Number(event.target.value) || 1),
+                    ),
+                  )
+                }
+              />
+            </label>
+          ) : null}
+        </div>
+        <dl>
+          <div><dt>Recipient group</dt><dd>{label}</dd></div>
+          <div><dt>Desired candidates</dt><dd>{desired}</dd></div>
+          <div><dt>Maximum credits this run</dt><dd>{maximumAuthorized}</dd></div>
+          <div><dt>Remaining daily allowance</dt><dd>{remaining}</dd></div>
+          <div><dt>People in this group</dt><dd>{totalReserve}</dd></div>
+          <div><dt>Ready for drafts</dt><dd>{available}</dd></div>
+        </dl>
+        <p>
+          {earlyCareerOnly ? "Scope: Early-career peers only. " : ""}
+          The requested quantity is a target, not a guaranteed yield. This
+          scoped search may use Apollo, up to the displayed maximum. Existing
+          people are deduplicated before enrichment.
+        </p>
+        <form action={refreshCandidates}>
+          <input type="hidden" name="confirmation" value="confirmed" />
+          <input type="hidden" name="allowProvider" value="yes" />
+          <input type="hidden" name="requested" value={desired} />
+          {bucket ? <input type="hidden" name="bucket" value={bucket} /> : null}
+          {earlyCareerOnly ? <input type="hidden" name="earlyCareerOnly" value="true" /> : null}
+          {requestId ? <input type="hidden" name="requestId" value={requestId} /> : null}
+          <SubmitButton label={label} />
+        </form>
+      </div>
+    </details>
+  );
 }

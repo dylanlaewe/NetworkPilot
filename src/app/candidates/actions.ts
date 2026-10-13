@@ -4,6 +4,7 @@ import {runCandidateRefresh} from "@/infrastructure/sqlite/candidate-refresh";
 import {parseBucketScope} from "@/domain/recipient-buckets";
 import {redirect} from "next/navigation";
 import {ScopedDiscoveryReadinessError} from "@/application/candidate-refresh/scoped-readiness";
+import {ScopedDiscoveryProviderFailure} from "@/application/candidate-refresh/scoped";
 import {reviewCompanyTrust} from "@/application/company-trust";
 import {fiveBucketEnabled} from "@/domain/recipient-buckets";
 import {resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
@@ -154,12 +155,17 @@ export async function refreshCandidates(formData:FormData){
     result=await runCandidateRefresh({allowProvider:formData.get("allowProvider")==="yes",scope,requestId:typeof requestId==="string"?requestId:undefined,requested:scope?requested:undefined});
   }catch(error){
     if(scope&&error instanceof ScopedDiscoveryReadinessError){
-      const query=new URLSearchParams({bucket:scope.bucket,refreshError:"scoped-readiness-blocked"});
+      const query=new URLSearchParams({bucket:scope.bucket,refreshError:error.readiness.reason==="provider-budget-unavailable"?"local-allowance-exhausted":"scoped-readiness-blocked"});
       if(scope.earlyCareerOnly)query.set("earlyCareerOnly","true");
       redirect(`/candidates?${query}`);
     }
     if(scope&&error instanceof Error&&error.message==="scoped-discovery-live-validation-required"){
       const query=new URLSearchParams({bucket:scope.bucket,refreshError:"scoped-provider-validation-required"});
+      if(scope.earlyCareerOnly)query.set("earlyCareerOnly","true");
+      redirect(`/candidates?${query}`);
+    }
+    if(scope&&error instanceof ScopedDiscoveryProviderFailure&&["provider-rate-limited","provider-authorization-failed"].includes(error.message)){
+      const query=new URLSearchParams({bucket:scope.bucket,refreshError:"provider-limit-unavailable"});
       if(scope.earlyCareerOnly)query.set("earlyCareerOnly","true");
       redirect(`/candidates?${query}`);
     }
@@ -172,8 +178,12 @@ export async function refreshCandidates(formData:FormData){
     professional:String(result.professionalCandidatesAdded),
     recruiter:String(result.recruiterCandidatesAdded),
     companies:String(result.companiesAdded),
-    credits:String(result.enrichmentCreditsUsed),
+    attempts:String(result.enrichmentCreditsUsed),
+    held:String(result.accountedOrHeldCredits??result.enrichmentCreditsUsed),
   });
+  if(result.confirmedCredits!==undefined&&result.confirmedCredits!==null)query.set("confirmed",String(result.confirmedCredits));
+  if(result.hasUnknownConsumption)query.set("unknown","true");
+  if(result.rejectionReasons&&Object.keys(result.rejectionReasons).length)query.set("reasons",JSON.stringify(result.rejectionReasons));
   if(result.requested!==undefined)query.set("requested",String(result.requested));
   if(result.searchedCandidates!==undefined)query.set("searched",String(result.searchedCandidates));
   if(result.enrichedCandidates!==undefined)query.set("enriched",String(result.enrichedCandidates));

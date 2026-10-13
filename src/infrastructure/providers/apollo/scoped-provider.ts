@@ -276,6 +276,12 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
     let searchedCandidates = 0;
     let rejectedCandidates = 0;
     let searchCalls = 0;
+    const rejectionReasons: Record<string, number> = {};
+    const reject = (reason: string, count = 1) => {
+      if (count < 1) return;
+      rejectedCandidates += count;
+      rejectionReasons[reason] = (rejectionReasons[reason] ?? 0) + count;
+    };
 
     try {
       for (const plan of plans) {
@@ -288,18 +294,12 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
         if (this.dependencies.strictProviderShape && recordRejections.length)
           throw new ApolloProviderError("provider-search-record-shape-anomaly");
         searchedCandidates += result.records.length + recordRejections.length;
-        rejectedCandidates += recordRejections.length;
+        reject("provider-record-invalid", recordRejections.length);
         for (const record of result.records) {
-          if (
-            seen.has(record.providerRecordId) ||
-            !plausibleEmployer(record) ||
-            !searchTitleEligible(record, requestedTitles) ||
-            (input.scope.bucket === "recruiters" &&
-              !recruiterSearchEligible(record))
-          ) {
-            rejectedCandidates += 1;
-            continue;
-          }
+          if (seen.has(record.providerRecordId)) { reject("duplicate-or-already-known"); continue; }
+          if (!plausibleEmployer(record)) { reject("employer-evidence-insufficient"); continue; }
+          if (!searchTitleEligible(record, requestedTitles)) { reject("title-outside-requested-scope"); continue; }
+          if (input.scope.bucket === "recruiters" && !recruiterSearchEligible(record)) { reject("recruiting-service-evidence"); continue; }
           seen.add(record.providerRecordId);
           candidates.push(record);
         }
@@ -320,7 +320,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
     try {
       for (const [index, candidate] of orderedCandidates.entries()) {
         if (enrichmentAttempts >= input.maximum) {
-          rejectedCandidates += 1;
+          reject("run-credit-limit-reached");
           continue;
         }
         const reservation = {
@@ -333,7 +333,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
             at: this.dependencies.now(),
           })
         ) {
-          rejectedCandidates += 1;
+          reject("duplicate-or-concurrent-reservation");
           continue;
         }
         let attempted = false;
@@ -418,6 +418,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
       records,
       searchedCandidates,
       rejectedCandidates,
+      rejectionReasons,
       enrichmentAttempts,
       searchCalls,
       observedCredits: budget.observedCredits(enrichmentAttempts),
