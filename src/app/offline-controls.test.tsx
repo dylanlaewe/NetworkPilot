@@ -7,11 +7,11 @@ import {DraftAdditionFeedback} from "./drafts/addition-feedback";
 import {draftAdditionDestination} from "@/application/daily-refresh/addition-feedback";
 vi.mock("./candidates/actions",()=>({refreshCandidates:vi.fn()}));
 describe("offline operator controls",()=>{
-  it.each([[10,10,4,"10 drafts added."],[6,10,0,"6 of 10 drafts added. The actionable reserve is exhausted."],[0,10,0,"No drafts could be added. No eligible candidates are available right now."]])("keeps Add feedback on Drafts (%i added / %i requested)",(added,requested,remaining,message)=>{
+  it.each([[10,10,4,"10 drafts created."],[6,10,0,"6 of 10 drafts created. No more candidates are ready."],[0,10,0,"No drafts could be created. No candidates are ready right now."]])("keeps Create drafts feedback persistent (%i created / %i requested)",(added,requested,remaining,message)=>{
     const html=renderToStaticMarkup(createElement(DraftAdditionFeedback,{added,requested,remaining}));
     expect(html).toContain('role="status"');expect(html).toContain(message);
     expect(draftAdditionDestination({addedCount:added,additionalDraftCount:requested,activeBefore:5,activeAfter:5+added,eligibleReserveRemaining:remaining})).toMatch(/^\/drafts\?/);
-    if(added<requested){expect(html).toContain('href="/candidates"');expect(html).toContain("Refresh Candidates");}
+    if(added<requested){expect(html).toContain('href="/candidates"');expect(html).toContain("Find people");}
   });
   it("separates quick counts from the custom count so form data cannot silently submit five for every request",()=>{
     const html=renderToStaticMarkup(createElement(AddDraftsControl,{action:vi.fn()}));
@@ -25,6 +25,6 @@ describe("offline operator controls",()=>{
   });
   it("shows only remaining daily exposure as maximum credits",()=>{
     const html=renderToStaticMarkup(createElement(CandidateRefreshControl,{available:4,exposure:17}));
-    expect(html).toContain("<dt>Maximum credits</dt><dd>3</dd>");
+    expect(html).toContain("<dt>Maximum Apollo credits</dt><dd>3</dd>");
   });
 });

@@ -14,10 +14,11 @@ function operation(state:GmailDraftOperation["state"]):GmailDraftOperation{
 }
 
 describe("Drafts workspace projection",()=>{
-  it("projects reviewable content without exposing professional email or provider identifiers",()=>{
+  it("projects the exact professional email needed for final send confirmation without provider identifiers",()=>{
     const [draft]=buildWorkspaceDrafts({rows:[{review:baseReview,state:"ready",primaryAction:"review-and-approve"}],outreach:[],readiness:{available:true,reason:null}});
     expect(draft).toMatchObject({recipient:"Current Name",company:"Current Company",subject:"Current subject",state:"ready",intent:"Understand the path into product leadership"});
-    expect(JSON.stringify(draft)).not.toMatch(/private@example|gmailDraftId|recipientEmail/i);
+    expect(draft.recipientEmail).toBe("private@example.test");
+    expect(JSON.stringify(draft)).not.toMatch(/gmailDraftId/i);
   });
 
   it.each(["approved","gmail-draft-created","needs-send-verification"] as const)("uses the immutable approved snapshot for %s content",(state)=>{
@@ -25,8 +26,16 @@ describe("Drafts workspace projection",()=>{
     const op={...operation(state==="approved"?"approved-for-gmail-draft":"gmail-draft-created"),sendState} satisfies GmailDraftOperation;
     const row={review:{...baseReview,operation:op},state,primaryAction:state==="approved"?"create-gmail-draft":state==="gmail-draft-created"?"send-email":"verify-send"} satisfies SimpleDraft;
     const [draft]=buildWorkspaceDrafts({rows:[row],outreach:[],readiness:{available:true,reason:null}});
-    expect(draft).toMatchObject({recipient:"Immutable Name",company:"Immutable Company",title:"Immutable Role",subject:"Immutable subject",body:"Immutable body",catalogVersion:"catalog-locked",factCount:2});
-    expect(JSON.stringify(draft)).not.toMatch(/immutable@example|secret-gmail-draft-id/);
+    expect(draft).toMatchObject({recipient:"Immutable Name",recipientEmail:"immutable@example.test",company:"Immutable Company",title:"Immutable Role",subject:"Immutable subject",body:"Immutable body",catalogVersion:"catalog-locked",factCount:2});
+    expect(JSON.stringify(draft)).not.toMatch(/secret-gmail-draft-id/);
+  });
+
+  it("carries immutable attachment identity after approval",()=>{
+    const op=operation("approved-for-gmail-draft");
+    op.snapshot={...op.snapshot,resumeAttachment:{resumeId:"resume-locked",displayLabel:"General Resume",filename:"general.pdf",storageKey:"private-storage-key",sizeBytes:1234,sha256:"fixture-sha"}};
+    const [draft]=buildWorkspaceDrafts({rows:[{review:{...baseReview,operation:op},state:"approved",primaryAction:"create-gmail-draft"}],outreach:[],readiness:{available:true,reason:null}});
+    expect(draft.attachment).toEqual({resumeId:"resume-locked",label:"General Resume",filename:"general.pdf"});
+    expect(JSON.stringify(draft)).not.toContain("private-storage-key");
   });
 
   it("translates mutable and runtime gates into operator-facing reasons",()=>{

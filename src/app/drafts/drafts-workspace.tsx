@@ -11,16 +11,15 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useFormStatus } from "react-dom";
 import {
-  approveAndCreateGmailDraft,
   confirmAlreadySent,
-  createGmailDraft,
   generateMoreDraftsInline,
   permanentlyExcludeDraft,
   reconcileGmailSendStatus,
   replaceDraft,
   resolveBucketCorrection,
-  sendGmailDraft,
+  sendDraft,
   skipDraft,
 } from "@/app/today/actions";
 import {
@@ -49,23 +48,34 @@ const stateOrder: WorkspaceDraftState[] = [
   "needs-send-verification",
 ];
 const stateLabels: Record<WorkspaceDraftState, string> = {
-  ready: "Needs review",
-  approved: "Approved",
-  "gmail-draft-created": "Gmail created",
+  ready: "Drafts",
+  approved: "Ready to send",
+  "gmail-draft-created": "Ready to send",
   "needs-send-verification": "Needs verification",
 };
-const stateGlyph: Record<WorkspaceDraftState, string> = {
-  ready: "○",
-  approved: "✓",
-  "gmail-draft-created": "▣",
-  "needs-send-verification": "?",
-};
 const actionLabels: Record<WorkspaceDraftState, string> = {
-  ready: "Approve & create Gmail draft",
-  approved: "Retry creating Gmail draft",
-  "gmail-draft-created": "Send email",
+  ready: "Send",
+  approved: "Send",
+  "gmail-draft-created": "Send",
   "needs-send-verification": "Resolve send status",
 };
+const queueGroups: {
+  key: string;
+  label: string;
+  states: WorkspaceDraftState[];
+}[] = [
+  { key: "drafts", label: "Drafts", states: ["ready"] },
+  {
+    key: "ready-to-send",
+    label: "Ready to send",
+    states: ["approved", "gmail-draft-created"],
+  },
+  {
+    key: "needs-verification",
+    label: "Needs verification",
+    states: ["needs-send-verification"],
+  },
+];
 
 type Feedback = {
   tone: "success" | "caution" | "error";
@@ -102,6 +112,16 @@ export function normalizedDraftAdditionState(
   return state && Array.isArray(state.reasons)
     ? state
     : initialDraftAdditionActionState;
+}
+
+function creationLanguage(value: string) {
+  return value
+    .replace(/No drafts could be added/g, "No drafts could be created")
+    .replace(/drafts added/g, "drafts created")
+    .replace(/draft added/g, "draft created")
+    .replace(/actionable reserve/gi, "ready candidate pool")
+    .replace(/qualified reserve/gi, "ready candidate pool")
+    .replace(/\breserve\b/gi, "candidate pool");
 }
 
 function isTypingTarget(target: EventTarget | null) {
@@ -201,6 +221,15 @@ function SafeDialog({
   );
 }
 
+function SendSubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button name="confirmation" value="send-draft-now" disabled={pending}>
+      {pending ? "Sending…" : "Send"}
+    </button>
+  );
+}
+
 export function DraftsWorkspace({
   drafts,
   resumes,
@@ -247,15 +276,12 @@ export function DraftsWorkspace({
   const [draftEdits, setDraftEdits] = useState<Record<string, DraftEdit>>({});
   const [editsLoaded, setEditsLoaded] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<string | null>(null);
-  const [actionPending, setActionPending] = useState(false);
   const [additionState, additionAction, additionPending] = useActionState(generateMoreDraftsInline, initialDraftAdditionActionState);
   const visibleAdditionState = normalizedDraftAdditionState(additionState);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
-  const approveRef = useRef<HTMLFormElement>(null);
   const skipRef = useRef<HTMLFormElement>(null);
   const replaceRef = useRef<HTMLFormElement>(null);
-  const createRef = useRef<HTMLFormElement>(null);
   const addRef = useRef<HTMLDetailsElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -281,16 +307,20 @@ export function DraftsWorkspace({
         document.getElementById(`queue-${candidateId}`)?.focus();
     });
   }, [selected?.candidateId]);
-  const selectedEdit = selected ? draftEdits[selected.snapshotId] : undefined;
+  const selectedEdit =
+    selected?.state === "ready" ? draftEdits[selected.snapshotId] : undefined;
   const editedSubject = selectedEdit?.subject ?? selected?.subject ?? "";
   const editedBody = selectedEdit?.body ?? selected?.body ?? "";
   const requestedResumeId =
-    selectedEdit?.resumeId ?? selected?.resumeSelection?.resumeId ?? "";
-  const selectedResumeId = resumes.some(
-    (resume) => resume.id === requestedResumeId,
-  )
-    ? requestedResumeId
-    : "";
+    selected?.state !== "ready"
+      ? (selected?.attachment?.resumeId ?? "")
+      : (selectedEdit?.resumeId ?? selected?.resumeSelection?.resumeId ?? "");
+  const selectedResumeId =
+    selected?.state !== "ready"
+      ? requestedResumeId
+      : resumes.some((resume) => resume.id === requestedResumeId)
+        ? requestedResumeId
+        : "";
   const continueWithoutAttachment = Boolean(
     selectedEdit?.continueWithoutAttachment,
   );
@@ -438,14 +468,10 @@ export function DraftsWorkspace({
       } else if (key === "e" && selected?.state === "ready") {
         event.preventDefault();
         subjectRef.current?.focus();
-      } else if (
-        key === "a" &&
-        selected?.state === "ready" &&
-        !primaryBlocked
-      ) {
+      } else if (key === "s" && selected && !primaryBlocked) {
         event.preventDefault();
-        setActionPending(true);
-        approveRef.current?.requestSubmit();
+        if (selected.state === "needs-send-verification") setReconcileOpen(true);
+        else setSendOpen(true);
       } else if (
         key === "r" &&
         selected?.state !== "needs-send-verification" &&
@@ -480,16 +506,10 @@ export function DraftsWorkspace({
 
   const runPrimary = () => {
     if (!selected || primaryBlocked) return;
-    if (selected.state === "ready") {
-      setActionPending(true);
-      approveRef.current?.requestSubmit();
-    } else if (selected.state === "approved") {
-      setActionPending(true);
-      createRef.current?.requestSubmit();
-    } else if (selected.state === "gmail-draft-created") {
-      setSendOpen(true);
-    } else {
+    if (selected.state === "needs-send-verification") {
       setReconcileOpen(true);
+    } else {
+      setSendOpen(true);
     }
   };
 
@@ -507,6 +527,15 @@ export function DraftsWorkspace({
   );
   const activeHasReserve = scopeBucket ? Boolean(scopeBucket === "peers" && scopeEarlyCareer ? earlyCareerPeerCapacity : reserveCapacity?.[scopeBucket]) : hasReserve;
   const resumeOptions = resumes;
+  const confirmationAttachment =
+    selected?.state === "ready"
+      ? (resumeOptions.find((resume) => resume.id === selectedResumeId)?.label ??
+        "None")
+      : (selected?.attachment?.label ?? "None");
+  const confirmationResumeDecision =
+    resumeDecisionRequired && !selectedResumeId && continueWithoutAttachment
+      ? "continue-without-attachment"
+      : "";
   return (
     <main
       className={styles.shell}
@@ -534,22 +563,25 @@ export function DraftsWorkspace({
             </span>
           </div>
           <div className={styles.counts} aria-label="Draft state counts">
-            {stateOrder.map((state) => (
-              <span key={state}>
-                {stateLabels[state]} <b>{counts[state]}</b>
+            {queueGroups.map((group) => (
+              <span key={group.key}>
+                {group.label}{" "}
+                <b>
+                  {group.states.reduce((sum, state) => sum + counts[state], 0)}
+                </b>
               </span>
             ))}
           </div>
           <details className={styles.addDrafts} ref={addRef}>
             <summary>
               {bucketNavigation && scopeBucket
-                ? `Add ${({ recruiters: "recruiter", peers: "peer", managers: "manager", executives: "executive", ceos: "CEO/president" } as const)[scopeBucket]} drafts`
-                : "Add drafts"}{" "}
+                ? `Create ${({ recruiters: "recruiter", peers: "peer", managers: "manager", executives: "executive", ceos: "CEO/president" } as const)[scopeBucket]} drafts`
+                : "Create drafts"}{" "}
               <kbd>N</kbd>
             </summary>
             <div>
               <strong>
-                Add from{" "}
+                Create drafts from{" "}
                 {scopeBucket
                   ? (
                       {
@@ -559,21 +591,21 @@ export function DraftsWorkspace({
                         executives: "executive",
                         ceos: "CEO/president",
                       } as const
-                    )[scopeBucket] + " reserve"
-                  : "reserve"}
+                    )[scopeBucket] + " candidates"
+                  : "existing candidates"}
               </strong>
               <p>
-                {scopeEarlyCareer ? "Scope: Early-career peers only. " : ""}Adds
-                additional candidates without replacing the queue. This uses
-                qualified reserve only.
+                {scopeEarlyCareer ? "Scope: Early-career peers only. " : ""}
+                Creates drafts without replacing your edits, attachments, or
+                queue order. No Apollo call.
               </p>
               {scopedLegacy ? (
                 <p role="status">
                   Legacy / unclassified drafts are read-only in this view.
-                  Choose a bucket to add scoped drafts.
+                  Choose a group to create drafts.
                 </p>
               ) : chooseBucketFirst ? (
-                <div className={styles.chooseBucket} role="status"><p>Choose a recipient group to add drafts from its qualified reserve.</p><button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button></div>
+                <div className={styles.chooseBucket} role="status"><p>Choose a recipient group to create drafts for its ready candidates.</p><button type="button" onClick={() => document.getElementById("recipient-bucket-navigation")?.querySelector<HTMLElement>("a,select")?.focus()}>Choose a recipient group</button></div>
               ) : activeHasReserve ? (
                 <>
                   <form action={additionAction} aria-busy={additionPending}>
@@ -594,10 +626,10 @@ export function DraftsWorkspace({
                       />
                     ) : null}
                     <button name="additionalDraftCount" value="5" disabled={additionPending}>
-                      {additionPending ? "Adding…" : "Add 5"}
+                      {additionPending ? "Creating…" : "Create 5"}
                     </button>
                     <button name="additionalDraftCount" value="10" disabled={additionPending}>
-                      Add 10
+                      Create 10
                     </button>
                   </form>
                   <form action={additionAction} aria-busy={additionPending}>
@@ -628,12 +660,12 @@ export function DraftsWorkspace({
                         required
                       />
                     </label>
-                    <button disabled={additionPending}>Add custom</button>
+                    <button disabled={additionPending}>Create custom</button>
                   </form>
                 </>
               ) : (
                 <p role="status">
-                  There are no actionable people in this reserve view.{" "}
+                  No candidates are ready for drafts in this view.{" "}
                   <Link
                     href={
                       scopeBucket
@@ -642,13 +674,12 @@ export function DraftsWorkspace({
                     }
                   >
                     {scopeBucket
-                      ? `Find more ${scopeBucket}`
-                      : "Refresh Candidates"}
-                  </Link>{" "}
-                  for more supply.
+                      ? `Find ${scopeBucket}`
+                      : "Find people"}
+                  </Link>
                 </p>
               )}
-              {visibleAdditionState.status !== "idle" ? <div className={styles.additionResult} data-status={visibleAdditionState.status} role={visibleAdditionState.status === "error" ? "alert" : "status"}><strong>{visibleAdditionState.message}</strong>{visibleAdditionState.reasons.length ? <ul>{visibleAdditionState.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}{visibleAdditionState.recovery ? <Link href={visibleAdditionState.recovery.href}>{visibleAdditionState.recovery.label}</Link> : null}</div> : null}
+              {visibleAdditionState.status !== "idle" ? <div className={styles.additionResult} data-status={visibleAdditionState.status} role={visibleAdditionState.status === "error" ? "alert" : "status"}><strong>{creationLanguage(visibleAdditionState.message)}</strong>{visibleAdditionState.reasons.length ? <ul>{visibleAdditionState.reasons.map((reason) => <li key={reason}>{creationLanguage(reason)}</li>)}</ul> : null}{visibleAdditionState.recovery ? <Link href={visibleAdditionState.recovery.href}>{visibleAdditionState.recovery.label}</Link> : null}</div> : null}
             </div>
           </details>
         </header>
@@ -667,17 +698,19 @@ export function DraftsWorkspace({
             <h2>
               {bucketSelection === "legacy"
                 ? "No legacy drafts in this view"
-                : "No drafts waiting for review"}
+                : activeHasReserve
+                  ? "No drafts yet"
+                  : "No candidates yet. Find people first."}
             </h2>
             <p>
               {bucketSelection === "legacy"
                 ? "Legacy / unclassified records remain visible in their historical workspace and are not relabeled."
                 : activeHasReserve
-                  ? "Add another bounded batch from the qualified reserve."
-                  : "The queue and qualified reserve are both empty for this view."}
+                  ? "Candidates are ready. Create drafts to start reviewing messages."
+                  : "Find people in Candidates, then return here to review and send their messages."}
             </p>
             {bucketSelection !== "legacy" && !activeHasReserve ? (
-              <Link href="/candidates">Review Candidates</Link>
+              <Link href="/candidates">Go to Candidates</Link>
             ) : null}
           </div>
         ) : (
@@ -693,16 +726,14 @@ export function DraftsWorkspace({
                 <span>Queue</span>
                 <kbd>J / K</kbd>
               </div>
-              {stateOrder.map((state) => {
+              {queueGroups.map((queueGroup) => {
                 const group = viewDrafts.filter(
-                  (draft) => draft.state === state,
+                  (draft) => queueGroup.states.includes(draft.state),
                 );
                 return group.length ? (
-                  <section key={state}>
+                  <section key={queueGroup.key}>
                     <h2>
-                      <span>
-                        {stateGlyph[state]} {stateLabels[state]}
-                      </span>
+                      <span>{queueGroup.label}</span>
                       <b>{group.length}</b>
                     </h2>
                     {group.map((draft) => (
@@ -734,7 +765,7 @@ export function DraftsWorkspace({
                         <i>
                           {draft.bucketReviewState === "review-required"
                             ? "Review needed"
-                            : `${stateGlyph[draft.state]} ${stateLabels[draft.state]}`}
+                            : stateLabels[draft.state]}
                         </i>
                       </button>
                     ))}
@@ -761,28 +792,11 @@ export function DraftsWorkspace({
                   </button>
                   <div className={styles.planeLabel}>
                     <span>Message</span>
-                    <em>
-                      {stateGlyph[selected.state]} {stateLabels[selected.state]}
-                    </em>
+                    <em>{stateLabels[selected.state]}</em>
                   </div>
                   <form
                     id={`approve-${selected.candidateId}`}
-                    ref={approveRef}
-                    action={approveAndCreateGmailDraft}
-                    onSubmit={(event) => {
-                      if (
-                        selected.state !== "ready" ||
-                        selected.bucketReviewState === "review-required" ||
-                        !resumeDecisionResolved
-                      ) {
-                        event.preventDefault();
-                        setActionPending(false);
-                        if (!resumeDecisionResolved)
-                          setResumePrompt(
-                            "Choose an active resume or confirm that you want to continue without an attachment.",
-                          );
-                      }
-                    }}
+                    onSubmit={(event) => event.preventDefault()}
                     className={styles.editor}
                     key={`${selected.candidateId}-${selected.state}`}
                     aria-busy={!editsLoaded}
@@ -902,13 +916,11 @@ export function DraftsWorkspace({
                     ) : null}
                     {selected.state !== "ready" ? (
                       <div className={styles.sealed}>
-                        <span>
-                          {stateGlyph[selected.state]} Approved snapshot
-                        </span>
+                        <span>Saved message</span>
                         <small>
                           {selected.approvedAt
-                            ? `Locked ${new Date(selected.approvedAt).toLocaleDateString()}`
-                            : "Immutable approved content"}
+                            ? `Saved ${new Date(selected.approvedAt).toLocaleDateString()}`
+                            : "Message content is preserved"}
                         </small>
                       </div>
                     ) : null}
@@ -1190,7 +1202,6 @@ export function DraftsWorkspace({
                     ) : null}
                   </div>
                   <span className={styles.progress}>
-                    <i>{stateGlyph[selected.state]}</i>
                     <b>
                       {selected.bucketReviewState === "review-required"
                         ? "Review needed"
@@ -1201,48 +1212,18 @@ export function DraftsWorkspace({
                     </small>
                   </span>
                   <div className={styles.primaryArea}>
-                    {selected.state === "approved" ? (
-                      <form ref={createRef} action={createGmailDraft}>
-                        <input
-                          type="hidden"
-                          name="snapshotId"
-                          value={selected.snapshotId}
-                        />
-                        <input
-                          type="hidden"
-                          name="candidateId"
-                          value={selected.candidateId}
-                        />
-                      </form>
-                    ) : null}
-                    {selected.state === "approved" && !gmailAvailable ? (
-                      <small role="status">{gmailReason}</small>
-                    ) : selected.state === "gmail-draft-created" &&
-                      selected.sendBlockedMessage ? (
-                      <small role="status">{selected.sendBlockedMessage}</small>
-                    ) : null}
+                    {primaryReason ? <small role="status">{primaryReason}</small> : null}
                     <button
                       ref={primaryRef}
                       type="button"
                       className={styles.primary}
                       onClick={runPrimary}
-                      disabled={primaryBlocked || actionPending}
-                      aria-busy={actionPending}
+                      disabled={primaryBlocked}
                     >
-                      {actionPending
-                        ? "Working…"
-                        : selected.bucketReviewState === "review-required"
+                      {selected.bucketReviewState === "review-required"
                         ? "Review bucket evidence"
                         : actionLabels[selected.state]}{" "}
-                      <kbd>
-                        {selected.state === "ready"
-                          ? "A"
-                          : selected.state === "approved"
-                            ? "G"
-                            : selected.state === "gmail-draft-created"
-                              ? "S"
-                              : "U"}
-                      </kbd>
+                      <kbd>{selected.state === "needs-send-verification" ? "U" : "S"}</kbd>
                     </button>
                   </div>
                 </footer>
@@ -1259,44 +1240,61 @@ export function DraftsWorkspace({
         returnFocus={primaryRef}
       >
         <small>Final review · external consequence</small>
-        <h2>Send email</h2>
+        <h2>Send this message?</h2>
         <div className={styles.sendRecipient}>
           <small>To</small>
           <span>{selected?.recipient}</span>
+          <span>{selected?.recipientEmail}</span>
           <em>{selected?.title}</em>
           <strong>{selected?.company}</strong>
         </div>
         <div className={styles.sendSubject}>
           <small>Subject</small>
-          <p>{selected?.subject}</p>
+          <p>{editedSubject}</p>
         </div>
-        <p>
-          This sends the immutable approved Gmail draft now. The message will
-          leave NetworkPilot and cannot be recalled here.
-        </p>
+        <div className={styles.sendBody}>
+          <small>Message</small>
+          <p>{editedBody}</p>
+        </div>
         <dl>
           <div>
             <dt>Attachment</dt>
-            <dd>{selected?.attachment?.label ?? "None"}</dd>
+            <dd>{confirmationAttachment}</dd>
           </div>
           <div>
-            <dt>Approved snapshot</dt>
-            <dd>{selected?.catalogVersion}</dd>
+            <dt>Email address</dt>
+            <dd>{selected?.recipientEmail}</dd>
           </div>
         </dl>
-        <form action={sendGmailDraft}>
+        <p>
+          Send is the only external action in this flow. NetworkPilot will
+          preserve this exact message and attachment, create the Gmail draft
+          if needed, and send it after this confirmation.
+        </p>
+        <form action={sendDraft}>
           <input
             type="hidden"
             name="snapshotId"
             value={selected?.snapshotId ?? ""}
           />
+          <input
+            type="hidden"
+            name="candidateId"
+            value={selected?.candidateId ?? ""}
+          />
           <input type="hidden" name="nextCandidateId" value={nextCandidateId} />
+          <input type="hidden" name="subject" value={editedSubject} />
+          <input type="hidden" name="body" value={editedBody} />
+          <input type="hidden" name="resumeId" value={selectedResumeId} />
+          <input
+            type="hidden"
+            name="resumeDecision"
+            value={confirmationResumeDecision}
+          />
           <button autoFocus type="button" onClick={closeSend}>
             Cancel
           </button>
-          <button name="confirmation" value="send-approved-draft-now">
-            Send email
-          </button>
+          <SendSubmitButton />
         </form>
       </SafeDialog>
       <SafeDialog

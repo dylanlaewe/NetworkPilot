@@ -8,7 +8,8 @@ describe("recruiter selection rationale", () => {
       technicalRecruiting: true,
       earlyCareerRecruiting: false,
     });
-    expect(rationale).toContain("employer review is still required");
+    expect(rationale).toContain("employer type remains unverified");
+    expect(rationale).toContain("personal introduction");
     expect(rationale).not.toMatch(/reviewed (?:target|operating) (?:company|employer)/i);
   });
 

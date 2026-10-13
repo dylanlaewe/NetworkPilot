@@ -69,7 +69,7 @@ function render(
   return renderToStaticMarkup(
     <CandidatesWorkspace
       candidates={candidates}
-      refreshControl={<span>Find more · May use Apollo</span>}
+      refreshControl={<span>Find people · May use Apollo</span>}
       refreshResult={null}
       bucketNavigation={navigation(
         candidates.filter((row) => row.recipientBucket?.bucket).length,
@@ -109,10 +109,10 @@ describe("Candidates pool states", () => {
         candidates={[]}
         refreshControl={
           <details open>
-            <summary>Find more peers</summary>
+            <summary>Find people</summary>
             <div>
               <p>Scoped Apollo confirmation</p>
-              <button>Find more peers</button>
+              <button>Find peers</button>
             </div>
           </details>
         }
@@ -140,7 +140,8 @@ describe("Candidates pool states", () => {
     expect(scopedHtml).not.toMatch(
       /<(?:a|button)[^>]*>Find people<\/(?:a|button)>/,
     );
-    expect(scopedHtml.match(/Find more peers/g)).toHaveLength(2);
+    expect(scopedHtml).toContain("Find people");
+    expect(scopedHtml).toContain("Find peers");
     const css = readFileSync(
       join(process.cwd(), "src/app/candidates/candidates-command.module.css"),
       "utf8",
@@ -206,7 +207,7 @@ describe("Candidates pool states", () => {
     expect(html).not.toContain("Add drafts");
   });
 
-  it("keeps Add drafts truthful for a mixed actionable and review pool", () => {
+  it("keeps per-person drafting distinct from sourcing in a mixed pool", () => {
     const html = render(
       [
         candidate("ready"),
@@ -236,17 +237,25 @@ describe("Candidates pool states", () => {
       1,
     );
 
-    expect(html).toContain("Add drafts");
-    expect(html).toContain("1 ready · No provider call");
-    expect(html).toContain("1 employer review required");
-    expect(html).toContain("Find more");
+    expect(html).toContain("Create draft");
+    expect(html).toContain("1 ready for drafts");
+    expect(html).toContain("Review needed");
+    expect(html).toContain("Find people");
+    expect(html).toContain("May use Apollo credits");
+    expect(html).toContain("Skip");
+    expect(html).toContain("Don&#x27;t show again");
+    expect(html).toContain('name="nextCandidateId" value="review"');
+    expect(html).toContain('value="do-not-show-again" name="confirmation"');
+    expect(html).not.toContain("Add drafts");
   });
 
   it("shows healthy actionable capacity without blocker framing", () => {
     const html = render([candidate("one"), candidate("two")], 2);
 
-    expect(html).toContain("Add drafts");
-    expect(html).toContain("2 ready · No provider call");
+    expect(html).toContain("Create draft");
+    expect(html).toContain("2 ready for drafts");
+    expect(html).toContain("Find people");
+    expect(html).not.toContain("Add drafts");
     expect(html).not.toContain("No candidates are ready for drafts");
   });
 

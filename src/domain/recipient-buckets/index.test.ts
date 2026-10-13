@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketAwareGateFailures, bucketLabel, classifyRecipientBucket, fiveBucketEnabled, matchesBucketScope, parseBucketScope } from ".";
+import { bucketAwareGateFailures, bucketLabel, classifyRecipientBucket, fiveBucketEnabled, matchesBucketScope, parseBucketScope, projectTitleSupportedPersonalNetworking } from ".";
 import { bucketFixture, fixtureEvidence } from "./test-fixtures";
 import { classifyRecruiter } from "@/domain/recruiters";
 
@@ -90,5 +90,34 @@ describe("provider-independent relationship buckets", () => {
     const unreviewed = classifyRecipientBucket({ title: "Junior analyst", outreachTrack: "professional", evidence: source.responsibilityEvidence!.map(e => ({ ...e, reviewedBy: undefined })) });
     expect(unreviewed.earlyCareer).toBe(false);
     expect(bucketAwareGateFailures({ classification: unreviewed, gateFailures: gates, minimumYears: 1 })).toEqual(gates);
+  });
+  it.each([
+    ["managers", "Data Engineering Manager"],
+    ["executives", "VP of Data"],
+    ["ceos", "Chief Executive Officer"],
+  ] as const)("projects exact requested %s scope from title without inventing responsibility evidence", (bucket, title) => {
+    const { source } = bucketFixture(bucket);
+    const evidence = source.responsibilityEvidence!.filter((item) => !["team-leadership", "functional-leadership", "division-leadership", "company-leadership"].includes(item.kind));
+    const base = classifyRecipientBucket({ title, outreachTrack: "professional", evidence });
+    const projected = projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket }, title });
+    expect(projected).toMatchObject({ bucket, reviewState: "accepted", confidence: "low", explanationCodes: ["title-supported-personal-networking"] });
+    expect(projected.evidence.some((item) => item.kind.endsWith("leadership"))).toBe(false);
+  });
+  it("does not project a title into the wrong, ambiguous, regional, or identity-unsupported scope", () => {
+    const { source } = bucketFixture("executives");
+    const evidence = source.responsibilityEvidence!.filter((item) => item.kind !== "functional-leadership");
+    const base = classifyRecipientBucket({ title: "VP of Data", outreachTrack: "professional", evidence });
+    expect(projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket: "managers" }, title: "VP of Data" })).toBe(base);
+    expect(projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket: "ceos" }, title: "Regional President" })).toBe(base);
+    const missingIdentity = classifyRecipientBucket({ title: "VP of Data", outreachTrack: "professional", evidence: evidence.filter((item) => item.kind !== "professional-identity") });
+    expect(projectTitleSupportedPersonalNetworking({ classification: missingIdentity, requestedScope: { bucket: "executives" }, title: "VP of Data" })).toBe(missingIdentity);
+  });
+  it("removes prohibited seniority only when provider seniority agrees with title-supported exact scope", () => {
+    const { source } = bucketFixture("executives");
+    const evidence = source.responsibilityEvidence!.filter((item) => item.kind !== "functional-leadership");
+    const base = classifyRecipientBucket({ title: "VP of Data", outreachTrack: "professional", evidence });
+    const projected = projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket: "executives" }, title: "VP of Data" });
+    expect(bucketAwareGateFailures({ classification: projected, gateFailures: ["prohibited-seniority", "email-unverified"], minimumYears: 8, providerSeniority: "vp" })).toEqual(["email-unverified"]);
+    expect(bucketAwareGateFailures({ classification: projected, gateFailures: ["prohibited-seniority"], minimumYears: 8, providerSeniority: "manager" })).toEqual(["prohibited-seniority"]);
   });
 });

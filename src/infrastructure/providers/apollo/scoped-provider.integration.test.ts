@@ -166,8 +166,8 @@ describe("offline scoped Apollo orchestration", () => {
           "senior",
           "Recruiter Technology Employer",
         ),
-        qualified: 0,
-        state: "review-required",
+        qualified: 1,
+        state: "eligible",
       },
       {
         bucket: "peers",
@@ -188,8 +188,8 @@ describe("offline scoped Apollo orchestration", () => {
           "manager",
           "Manager Technology Employer",
         ),
-        qualified: 0,
-        state: "review-required",
+        qualified: 1,
+        state: "eligible",
       },
       {
         bucket: "executives",
@@ -199,8 +199,8 @@ describe("offline scoped Apollo orchestration", () => {
           "vp",
           "Executive Technology Employer",
         ),
-        qualified: 0,
-        state: "review-required",
+        qualified: 1,
+        state: "eligible",
       },
       {
         bucket: "ceos",
@@ -210,8 +210,8 @@ describe("offline scoped Apollo orchestration", () => {
           "c_suite",
           "CEO Technology Employer",
         ),
-        qualified: 0,
-        state: "review-required",
+        qualified: 1,
+        state: "eligible",
       },
     ];
     const results: Record<string, unknown> = {};
@@ -244,7 +244,7 @@ describe("offline scoped Apollo orchestration", () => {
         now: () => at,
       });
       results[fixture.bucket] = result;
-      expect(result).toMatchObject({
+      expect(result, fixture.bucket).toMatchObject({
         searchedCandidates: 1,
         enrichedCandidates: 1,
         qualifiedCandidatesAdded: fixture.qualified,
@@ -258,13 +258,19 @@ describe("offline scoped Apollo orchestration", () => {
       );
       expect(saved).toMatchObject({ state: fixture.state });
       if (fixture.bucket==="recruiters")
-        expect(saved?.recipientBucket).toMatchObject({bucket:"recruiters",reviewState:"review-required",explanationCodes:["company-trust-unverified"]});
-      else if (fixture.qualified === 0)
-        expect(saved?.recipientBucket).toMatchObject({
-          bucket: null,
-          reviewState: "review-required",
-          explanationCodes: ["responsibility-evidence-missing"],
+        expect(saved).toMatchObject({
+          employerTrust: { state: "unverified", identityVerified: true },
+          recipientBucket: { bucket: "recruiters", reviewState: "accepted", explanationCodes: ["recruiter-role-supported-employer-unverified"] },
         });
+      else if (["managers", "executives", "ceos"].includes(fixture.bucket)) {
+        expect(saved?.recipientBucket).toMatchObject({
+          bucket: fixture.bucket,
+          reviewState: "accepted",
+          confidence: "low",
+          explanationCodes: ["title-supported-personal-networking"],
+        });
+        expect(saved?.recipientBucket?.evidence.some((item) => item.kind.endsWith("leadership"))).toBe(false);
+      }
       expect(
         transport.calls.every((call) =>
           [

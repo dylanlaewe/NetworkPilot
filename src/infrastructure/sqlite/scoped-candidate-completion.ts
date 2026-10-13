@@ -49,6 +49,7 @@ export function completeScopedCandidateRecords(input: {
         datasetClassification: dataset,
         sourceFingerprint: input.sourceFingerprint,
         records: input.records,
+        requestedBucketScope: input.scope,
         strategyCompanyDomains: input.companyDomains,
         ...(dataset === "authorized-provider"
           ? {

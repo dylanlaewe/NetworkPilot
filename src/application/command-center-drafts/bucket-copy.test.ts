@@ -1,7 +1,7 @@
 import {migrateTestDatabase} from "@/infrastructure/sqlite/test-migrations";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CANONICAL, TEMPLATE_VERSION } from "@/domain/drafting/bucket-templates";
+import { CANONICAL, TEMPLATE_VERSION, TITLE_SUPPORTED } from "@/domain/drafting/bucket-templates";
 import { assertDylanVoice } from "@/domain/drafting/voice";
 import { primaryAskCount } from "@/domain/drafting/primary-ask";
 import { bucketFixture, FIXTURE_AT } from "@/domain/recipient-buckets/test-fixtures";
@@ -34,8 +34,9 @@ const addSyntheticResume = (repository: SqliteSimulationRepository, id: string) 
 
 describe("approved bucket copy and explicit resume decisions", () => {
   it("matches the approved canonical source fixture byte-for-byte", () => {
-    expect(TEMPLATE_VERSION).toBe("approved-2026-09-22.v1");
+    expect(TEMPLATE_VERSION).toBe("approved-2026-10-12.v2");
     expect(createHash("sha256").update(JSON.stringify(CANONICAL)).digest("hex")).toBe("86c40c47e6defb62bc3e651f4d39405c15b714ebabb188d8151eab3046063b79");
+    expect(createHash("sha256").update(JSON.stringify(TITLE_SUPPORTED)).digest("hex")).toBe("940ee26cf4c378ceb9ec5c080083d9d7302e7b483c1b2a7be5c763453018d25c");
   });
   it.each(["recruiters", "peers", "managers", "executives", "ceos"] as const)("renders %s using supported personalization and one semantic invitation", bucket => {
     const { candidate, review: queuedReview } = setup(bucket);
@@ -53,12 +54,43 @@ describe("approved bucket copy and explicit resume decisions", () => {
     expect(() => assertDylanVoice(review.subject, `${review.body}\n\nPlease send your resume.`, { semanticAsks: true })).toThrow("dylan-voice-cta-count-invalid");
     expect(() => assertDylanVoice("A focused conversation", "Hi Avery,\n\nWould you be open to a brief call?\n\nBest,\nDylan", { semanticAsks: true })).not.toThrow();
   });
-  it("requires missing leadership and contact-reason evidence without inventing it", () => {
+  it("uses neutral title-based fallbacks when leadership or contact-reason evidence is absent", () => {
     for (const bucket of ["executives", "ceos"] as const) {
       const { candidate } = setup(bucket);
       candidate.recipientBucket!.evidence = candidate.recipientBucket!.evidence.filter(e => !["functional-leadership", "contact-reason"].includes(e.kind));
-      expect(() => renderBucketCopy(candidate)).toThrow("bucket-copy-evidence-required");
+      const rendered = renderBucketCopy(candidate);
+      expect(rendered.variant).toBe(`title-supported-${bucket}`);
+      expect(rendered.body).toContain(candidate.source.currentTitle);
+      expect(rendered.body).toContain("I promise I'll pay your time forward.");
+      expect(rendered.body).not.toMatch(/your role leading|responsibility for people|company-wide|division-wide/i);
     }
+  });
+  it("uses neutral recruiter copy while employer type remains unverified", () => {
+    const { candidate } = setup("recruiters");
+    candidate.employerTrust = { ...candidate.employerTrust!, state: "unverified" };
+    const rendered = renderBucketCopy(candidate);
+    expect(rendered.variant).toBe("title-supported-recruiters");
+    expect(rendered.body).toContain(candidate.source.currentTitle);
+    expect(rendered.body).not.toMatch(/opportunities at|attached my resume|internal recruiter/i);
+    expect(rendered.body).not.toMatch(/career in recruiting/i);
+  });
+  it("keeps the neutral title-supported path behind explicit approval and mocked Gmail boundaries", async () => {
+    const { repository, candidate } = setup("executives");
+    candidate.recipientBucket!.evidence = candidate.recipientBucket!.evidence.filter((item) => item.kind !== "functional-leadership");
+    candidate.recipientBucket!.explanationCodes = ["title-supported-personal-networking"];
+    const review = renderQueueReview(candidate, 0, FIXTURE_AT)!;
+    expect(review.templateVariant).toBe("title-supported-executives");
+    const snapshot = approvedSnapshot(review, FIXTURE_AT);
+    approveForGmailDraft(repository, snapshot, "fixture-only");
+    const creator = { createDraft: vi.fn(async () => ({ draftId: "neutral-draft", messageId: "neutral-message" })) };
+    await createApprovedGmailDraft({ snapshotId: snapshot.snapshotId, repository, creator, mime: { build: (approved) => `${approved.subject}\n${approved.body}` }, now: () => FIXTURE_AT });
+    const sender = { sendDraft: vi.fn(async () => ({ messageId: "neutral-sent" })) };
+    const first = await sendApprovedGmailDraft({ snapshotId: snapshot.snapshotId, repository, sender, now: () => FIXTURE_AT });
+    const replay = await sendApprovedGmailDraft({ snapshotId: snapshot.snapshotId, repository, sender, now: () => FIXTURE_AT });
+    expect(first).toMatchObject({ sendState: "sent", gmailSentMessageId: "neutral-sent" });
+    expect(replay).toEqual(first);
+    expect(creator.createDraft).toHaveBeenCalledTimes(1);
+    expect(sender.sendDraft).toHaveBeenCalledTimes(1);
   });
   it("uses one configured active resume for future drafts without lane fallback", () => {
     const { repository } = setup("recruiters");

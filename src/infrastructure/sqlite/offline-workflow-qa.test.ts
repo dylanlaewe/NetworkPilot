@@ -109,7 +109,7 @@ describe("persisted offline queue under exhausted Apollo budget",()=>{
     const id=runNextDraftBatchFromReserve(1,now).candidateIds[0]!;recordDraftDisposition({candidateId:id,permanent:true,now});recordDraftDisposition({candidateId:id,permanent:false,now});
     expect(repository.native.prepare("SELECT disposition FROM draft_dispositions").get()).toEqual({disposition:"permanently-excluded"});
     expect(repository.native.prepare("SELECT COUNT(*) count FROM draft_disposition_audit").get()).toEqual({count:1});
-    expect(loadDailyCommandCenter(at).reserve.find(c=>c.id===id)?.stage).toBe("suppressed");
+    expect(loadDailyCommandCenter(at).reserve.find(c=>c.id===id)).toBeUndefined();
   });
   it("validates custom counts without writing a generation",()=>{
     for(const n of [0,21,NaN,1.5])expect(()=>runNextDraftBatchFromReserve(n,now)).toThrow("draft-batch-size-invalid");

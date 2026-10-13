@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { draftAdditionMessage } from "@/application/daily-refresh/addition-feedback";
 import {
   humanDraftError,
   humanEditError,
@@ -62,7 +61,7 @@ function feedback(params: DraftsSearchParams) {
   if (params.gmailStatus === "created")
     return {
       tone: "success" as const,
-      message: "Approved and created in Gmail. Review once more before sending.",
+      message: "Message prepared. Review it once more before sending.",
     };
   if (params.reconciliationStatus === "recorded")
     return { tone: "success" as const, message: "Send status recorded." };
@@ -91,22 +90,23 @@ function feedback(params: DraftsSearchParams) {
   if (params.replacementStatus === "ready")
     return {
       tone: "success" as const,
-      message: "Replacement added from the qualified reserve.",
+      message: "A ready candidate replaced the previous draft.",
     };
   if (params.replacementStatus === "empty")
     return {
       tone: "caution" as const,
-      message: "No eligible replacement is available in the qualified reserve.",
+      message: "No eligible replacement is ready in this recipient group.",
     };
   if (params.added !== undefined)
     return {
       tone:
         Number(params.added) > 0 ? ("success" as const) : ("caution" as const),
-      message: draftAdditionMessage(
-        Number(params.added) || 0,
-        Number(params.requested) || 0,
-        Number(params.reserveRemaining) || 0,
-      ),
+      message:
+        Number(params.added) === 0
+          ? "No drafts could be created. No candidates are ready right now."
+          : Number(params.added) < Number(params.requested)
+            ? `${Number(params.added)} of ${Number(params.requested)} drafts created. ${Number(params.reserveRemaining) === 0 ? "No more candidates are ready." : "Some candidates still need attention."}`
+            : `${Number(params.added)} ${Number(params.added) === 1 ? "draft" : "drafts"} created.`,
     };
   return null;
 }

@@ -9,6 +9,7 @@ import {fiveBucketEnabled} from "@/domain/recipient-buckets";
 import {resolveManualOutreachDatabaseSelection} from "@/infrastructure/sqlite/manual-outreach-operator";
 import {openRuntimeRepository} from "@/infrastructure/sqlite/runtime";
 import {createExactCandidateDraft} from "@/infrastructure/sqlite/daily-refresh";
+import {recordCandidateDispositionInRepository} from "@/infrastructure/sqlite/candidate-disposition";
 
 const TRUST_DECISIONS = [
   "trusted-operating",
@@ -23,6 +24,64 @@ export async function createCandidateDraft(formData: FormData) {
   revalidatePath("/drafts");
   revalidatePath("/candidates");
   redirect(`/drafts/review?candidate=${encodeURIComponent(candidateId)}`);
+}
+
+function refreshCandidateDispositionPages() {
+  revalidatePath("/candidates");
+  revalidatePath("/drafts");
+  revalidatePath("/today");
+}
+
+function candidateDispositionDestination(formData: FormData, status: string) {
+  const nextCandidateId = String(formData.get("nextCandidateId") ?? "").trim();
+  const query = new URLSearchParams({ disposition: status });
+  const bucket = String(formData.get("bucket") ?? "").trim();
+  if (["recruiters", "peers", "managers", "executives", "ceos", "legacy"].includes(bucket))
+    query.set("bucket", bucket);
+  if (bucket === "peers" && formData.get("earlyCareerOnly") === "true")
+    query.set("earlyCareerOnly", "true");
+  if (nextCandidateId) query.set("selected", nextCandidateId);
+  return `/candidates?${query}`;
+}
+
+export async function skipCandidate(formData: FormData) {
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  const repository = openRuntimeRepository(
+    resolveManualOutreachDatabaseSelection().path,
+  );
+  try {
+    repository.assertRuntimeSchema();
+    recordCandidateDispositionInRepository(repository, {
+      candidateId,
+      disposition: "skip",
+      at: new Date(),
+    });
+  } finally {
+    repository.close();
+  }
+  refreshCandidateDispositionPages();
+  redirect(candidateDispositionDestination(formData, "skipped"));
+}
+
+export async function permanentlyExcludeCandidate(formData: FormData) {
+  if (formData.get("confirmation") !== "do-not-show-again")
+    throw new Error("permanent-exclusion-confirmation-required");
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  const repository = openRuntimeRepository(
+    resolveManualOutreachDatabaseSelection().path,
+  );
+  try {
+    repository.assertRuntimeSchema();
+    recordCandidateDispositionInRepository(repository, {
+      candidateId,
+      disposition: "do-not-show-again",
+      at: new Date(),
+    });
+  } finally {
+    repository.close();
+  }
+  refreshCandidateDispositionPages();
+  redirect(candidateDispositionDestination(formData, "excluded"));
 }
 
 export async function reviewCandidateCompanyTrust(formData: FormData) {

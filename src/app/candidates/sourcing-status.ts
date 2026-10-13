@@ -5,19 +5,19 @@ export function candidateSourcingStatus(input: {
   if (!input.enabled)
     return {
       available: false,
-      label: "Find more unavailable",
+      label: "Find people unavailable",
       detail: "Apollo disabled",
     } as const;
   if (!input.ready)
     return {
       available: false,
-      label: "Find more unavailable",
+      label: "Find people unavailable",
       detail: "Apollo configuration needed",
     } as const;
   return {
     available: true,
-    label: "Find more",
-    detail: "May use Apollo",
+    label: "Find people",
+    detail: "May use Apollo credits",
   } as const;
 }
 

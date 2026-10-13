@@ -10,7 +10,7 @@
 .shell * { box-sizing: border-box; }
 .shell :is(h1,h2,h3,p) { font-family: inherit; }
 .shell :is(button,input,select,textarea) { font: inherit; }
-.shell :is(a,button,input,select,textarea,summary):focus-visible { outline: 3px solid #8eb5aa; outline-offset: 2px; }
+.shell :is(a,button,input,select,textarea,summary):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .shell button:active:not(:disabled) { transform: translateY(1px); }
 .skipLink { position: fixed; z-index: 100; top: -80px; left: 12px; padding: 10px 14px; border-radius: 8px; background: var(--ink); color: #fff; }
 .skipLink:focus { top: 12px; }

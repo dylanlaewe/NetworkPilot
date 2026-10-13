@@ -11,7 +11,8 @@ export function approveForGmailDraft(repository:GmailDraftOperationRepository,sn
   if(snapshot.recipientBucket){assertFiveBucketEnabled();if(snapshot.recipientBucket.reviewState!=="accepted"||!snapshot.recipientBucket.bucket)throw new Error("recipient-bucket-review-required");}
   const existing=repository.findGmailDraftOperation(snapshot.snapshotId);
   if(existing){
-    if(JSON.stringify(existing.snapshot)!==JSON.stringify(snapshot))throw new Error("gmail-draft-snapshot-conflict");
+    const existingContent={...existing.snapshot,approvedAt:""},nextContent={...snapshot,approvedAt:""};
+    if(JSON.stringify(existingContent)!==JSON.stringify(nextContent))throw new Error("gmail-draft-snapshot-conflict");
     return existing;
   }
   const operation:GmailDraftOperation={operationId:operationId(snapshot.snapshotId),snapshot:structuredClone(snapshot),provider:"gmail",state:"approved-for-gmail-draft",gmailDraftId:null,gmailMessageId:null,attemptStartedAt:null,completedAt:null,errorCategory:null,adapterVersion,outreachTrack};

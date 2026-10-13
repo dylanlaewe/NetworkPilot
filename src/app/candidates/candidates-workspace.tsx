@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import {
-  useActionState,
   useCallback,
   useEffect,
   useMemo,
@@ -17,7 +16,11 @@ import type {
 import type { DraftAdditionBlockCounts } from "@/application/daily-refresh";
 import styles from "./candidates-command.module.css";
 import { RecipientBucketNavigation, type BucketNavigationData, type BucketSelection, type RecipientBucket } from "@/app/recipient-bucket-navigation";
-import { createCandidateDraft, reviewCandidateCompanyTrust } from "./actions";
+import {
+  createCandidateDraft,
+  permanentlyExcludeCandidate,
+  skipCandidate,
+} from "./actions";
 import { candidateSourcingStatus } from "./sourcing-status";
 
 export type CandidateWorkspaceRow = ReserveCandidate & {
@@ -40,7 +43,7 @@ const stageLabel: Record<ReserveStage, string> = {
   suppressed: "Do not contact",
   "already-contacted": "Contacted",
   "enriched-unqualified": "Not eligible",
-  "search-only": "Needs verification",
+  "search-only": "Needs more evidence",
 };
 const roleLabel = (value: string) =>
   value === "product-management" || value === "product"
@@ -78,6 +81,7 @@ function companyEvidence(candidate: ReserveCandidate) {
 }
 function employerReviewRequired(candidate: ReserveCandidate) {
   return (
+    candidate.bucketReviewState === "review-required" &&
     candidate.recipientBucket?.bucket === "recruiters" &&
     candidate.employerTrust?.state === "unverified" &&
     Boolean(candidate.employerTrust.identityVerified) &&
@@ -175,9 +179,7 @@ export function candidateSourcingHref(
 
 function draftBlockReason(candidate: CandidateWorkspaceRow) {
   if (candidate.bucketReviewState === "review-required")
-    return employerReviewRequired(candidate)
-      ? "Review this employer before creating a draft."
-      : "Review the recipient evidence before creating a draft.";
+    return "Candidate eligibility needs review before creating a draft.";
   if (!candidate.recipientBucket?.bucket)
     return "Legacy or unclassified people cannot enter the five-bucket draft queue.";
   if (candidate.planningBlockReason)
@@ -200,6 +202,48 @@ function PendingSubmit({ children }: { children: ReactNode }) {
     <button disabled={pending} aria-disabled={pending}>
       {pending ? "Creating…" : children}
     </button>
+  );
+}
+
+function CandidateDispositionSubmit({ children }: { children: ReactNode }) {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? "Saving…" : children}</button>;
+}
+
+function CandidateDispositionActions({
+  candidateId,
+  nextCandidateId,
+  bucket,
+  earlyCareerOnly,
+}: {
+  candidateId: string;
+  nextCandidateId: string;
+  bucket: BucketSelection;
+  earlyCareerOnly: boolean;
+}) {
+  return (
+    <div className={styles.candidateDisposition}>
+      <form action={skipCandidate}>
+        <input type="hidden" name="candidateId" value={candidateId} />
+        <input type="hidden" name="nextCandidateId" value={nextCandidateId} />
+        <input type="hidden" name="bucket" value={bucket} />
+        <input type="hidden" name="earlyCareerOnly" value={String(earlyCareerOnly)} />
+        <CandidateDispositionSubmit>Skip</CandidateDispositionSubmit>
+      </form>
+      <details>
+        <summary>Don&apos;t show again</summary>
+        <form action={permanentlyExcludeCandidate}>
+          <input type="hidden" name="candidateId" value={candidateId} />
+          <input type="hidden" name="nextCandidateId" value={nextCandidateId} />
+          <input type="hidden" name="bucket" value={bucket} />
+          <input type="hidden" name="earlyCareerOnly" value={String(earlyCareerOnly)} />
+          <p>Remove this person from all future candidate and draft queues?</p>
+          <button name="confirmation" value="do-not-show-again">
+            Confirm don&apos;t show again
+          </button>
+        </form>
+      </details>
+    </div>
   );
 }
 
@@ -232,79 +276,7 @@ function CandidateDraftAction({ candidate }: { candidate: CandidateWorkspaceRow 
         value={candidate.draftRequestId ?? `candidate-draft-ui:${candidate.id}`}
       />
       <PendingSubmit>Create draft</PendingSubmit>
-      <small>Uses the qualified reserve. No provider call.</small>
-    </form>
-  );
-}
-
-type TrustFeedback = { tone: "success" | "error"; message: string } | null;
-
-function EmployerReviewForm({ candidate }: { candidate: CandidateWorkspaceRow }) {
-  const [leaveFeedback, setLeaveFeedback] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  const [feedback, action, pending] = useActionState(
-    async (_prior: TrustFeedback, formData: FormData): Promise<TrustFeedback> => {
-      setLeaveFeedback(null);
-      try {
-        await reviewCandidateCompanyTrust(formData);
-        return {
-          tone: "success",
-          message: "Employer review saved. Candidate capacity has been refreshed.",
-        };
-      } catch (error) {
-        const code = error instanceof Error ? error.message : "unknown";
-        return {
-          tone: "error",
-          message: code.includes("version")
-            ? "This employer changed while you were reviewing it. Refresh and review the latest state."
-            : "The review was not saved. Check the reason and try again.",
-        };
-      }
-    },
-    null,
-  );
-  if (dismissed)
-    return (
-      <div className={styles.reviewDismissed} role="status">
-        <p>{leaveFeedback}</p>
-        <button type="button" onClick={() => setDismissed(false)}>
-          Review employer
-        </button>
-      </div>
-    );
-  return (
-    <form action={action} aria-busy={pending}>
-      <input type="hidden" name="candidateId" value={candidate.id} />
-      <input type="hidden" name="expectedVersion" value={candidate.employerTrust?.version ?? 0} />
-      <input type="hidden" name="commandId" value={candidate.companyTrustReview?.commandId ?? ""} />
-      <input type="hidden" name="reviewedAt" value={candidate.companyTrustReview?.reviewedAt ?? ""} />
-      <label>
-        <span>Reason for this decision</span>
-        <textarea name="reason" maxLength={500} required placeholder="Note the company evidence you reviewed." />
-      </label>
-      <div>
-        <button disabled={pending} name="decision" value="trusted-operating">
-          {pending ? "Saving…" : "Trust operating employer"}
-        </button>
-        <button disabled={pending} name="decision" value="disallowed-recruiting-service">
-          Mark recruiting/staffing service
-        </button>
-      </div>
-      <button
-        type="button"
-        className={styles.leaveUnverified}
-        onClick={() => {
-          setLeaveFeedback("No change saved. Employer remains unverified and this candidate remains blocked.");
-          setDismissed(true);
-        }}
-      >
-        Leave unverified
-      </button>
-      {feedback ? (
-        <p className={styles.actionFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
-          {feedback.message}
-        </p>
-      ) : null}
+      <small>Uses this ready candidate. No Apollo call.</small>
     </form>
   );
 }
@@ -392,9 +364,6 @@ export function CandidatesWorkspace({
       earlyCareerOnly,
     ),
   );
-  const employerReviewCount = candidates.filter(
-    (row) => matchesCandidateBucket(row, bucketNavigation, bucketSelection, earlyCareerOnly) && employerReviewRequired(row),
-  ).length;
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return candidates.filter(
@@ -406,9 +375,7 @@ export function CandidatesWorkspace({
         (filters.industry === "all" || row.industry === filters.industry) &&
         (filters.geography === "all" || row.geography === filters.geography) &&
         (filters.status === "all" ||
-          (filters.status === "employer-review-required"
-            ? employerReviewRequired(row)
-            : row.stage === filters.status)) &&
+          row.stage === filters.status) &&
         (!query ||
           `${row.recipient} ${row.title} ${row.company} ${row.functionName} ${row.industry}`
             .toLowerCase()
@@ -416,6 +383,13 @@ export function CandidatesWorkspace({
     );
   }, [bucketNavigation, bucketSelection, candidates, earlyCareerOnly, filters, search]);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
+  const selectedIndex = selected
+    ? rows.findIndex((row) => row.id === selected.id)
+    : -1;
+  const nextCandidateId =
+    selectedIndex >= 0
+      ? ((rows[selectedIndex + 1] ?? rows[selectedIndex - 1])?.id ?? "")
+      : "";
   const active = [
     bucketNavigation && bucketSelection !== "all"
       ? bucketSelection === "legacy"
@@ -428,9 +402,7 @@ export function CandidatesWorkspace({
     filters.industry !== "all" ? filters.industry : null,
     filters.geography !== "all" ? filters.geography : null,
     filters.status !== "all"
-      ? filters.status === "employer-review-required"
-        ? "Employer review required"
-        : (stageLabel[filters.status as ReserveStage] ?? filters.status)
+      ? (stageLabel[filters.status as ReserveStage] ?? filters.status)
       : null,
   ].filter(Boolean) as string[];
   const select = (id: string) => {
@@ -535,15 +507,6 @@ export function CandidatesWorkspace({
     enabled: apolloEnabled,
     ready: apolloReady,
   });
-  const findMoreControl = !bucketNavigation
-    ? refreshControl
-    : !selectedScope
-      ? <p className={styles.findMorePrompt}>Choose a recipient group to find more people.</p>
-      : refreshScope === selectedScope && refreshEarlyCareerOnly === earlyCareerOnly
-        ? refreshControl
-        : !sourcingStatus.available
-          ? <p className={styles.findMorePrompt}><strong>{sourcingStatus.label}</strong><small>{sourcingStatus.detail}</small></p>
-          : <Link className={styles.findMoreLink} href={`/candidates?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&findMore=true`}>{sourcingStatus.label} <small>{sourcingStatus.detail}</small></Link>;
   const sourcingHref = candidateSourcingHref(
     selectedScope ?? sourcingBucket,
     Boolean(selectedScope === "peers" && earlyCareerOnly),
@@ -609,6 +572,19 @@ export function CandidatesWorkspace({
       </small>
     </div>
   );
+  const findPeopleControl = showScopedConfirmation ? (
+    <div className={styles.headerSourcing}>{refreshControl}</div>
+  ) : sourcingStatus.available ? (
+    <Link className={styles.findPeopleHeader} href={sourcingHref}>
+      <span>Find people</span>
+      <small>May use Apollo credits</small>
+    </Link>
+  ) : (
+    <button className={styles.findPeopleHeader} disabled>
+      <span>Find people</span>
+      <small>{sourcingStatus.detail}</small>
+    </button>
+  );
   return (
     <div className={styles.candidates} data-density={density}>
       {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}
@@ -658,18 +634,7 @@ export function CandidatesWorkspace({
                 Compact
               </button>
             </div>
-            {selectedScope && visibleActionable > 0 ? (
-              <Link
-                className={styles.addDraftsLink}
-                href={`/drafts?bucket=${encodeURIComponent(selectedScope)}${earlyCareerOnly ? "&earlyCareerOnly=true" : ""}&add=true`}
-              >
-                Add drafts
-                <small>
-                  {visibleActionable} ready · No provider call
-                </small>
-              </Link>
-            ) : null}
-            {visibleActionable > 0 ? findMoreControl : null}
+            {findPeopleControl}
           </div>
         ) : null}
         {!isFirstRun ? <div className={styles.summary}>
@@ -681,21 +646,6 @@ export function CandidatesWorkspace({
           {active.length || search ? (
             <button type="button" onClick={clear}>
               Clear
-            </button>
-          ) : null}
-          {employerReviewCount > 0 ? (
-            <button
-              type="button"
-              onClick={() =>
-                setFilters((current) => ({
-                  ...current,
-                  track: "recruiter",
-                  status: "employer-review-required",
-                }))
-              }
-            >
-              {employerReviewCount} employer review
-              {employerReviewCount === 1 ? "" : "s"} required
             </button>
           ) : null}
         </div> : null}
@@ -779,7 +729,6 @@ export function CandidatesWorkspace({
               options={[
                 ["all", "All states"],
                 ["qualified-available", "Available"],
-                ["employer-review-required", "Employer review required"],
                 ["in-draft-queue", "In Drafts"],
                 ["cooldown", "Available later"],
                 ["suppressed", "Do not contact"],
@@ -951,10 +900,8 @@ export function CandidatesWorkspace({
                     <i aria-hidden="true">
                       {candidate.stage === "suppressed" ? "×" : "·"}
                     </i>
-                    {candidate.bucketReviewState === "review-required"
-                      ? employerReviewRequired(candidate)
-                        ? "Employer review"
-                        : "Review needed"
+                      {candidate.bucketReviewState === "review-required"
+                      ? "Review needed"
                       : stageLabel[candidate.stage]}
                   </em>
                 </span>
@@ -982,6 +929,14 @@ export function CandidatesWorkspace({
                 <p className={styles.role}>{selected.title}</p>
                 <p className={styles.company}>{selected.company}</p>
                 <CandidateDraftAction candidate={selected} />
+                {["qualified-available", "search-only", "enriched-unqualified", "cooldown"].includes(selected.stage) ? (
+                  <CandidateDispositionActions
+                    candidateId={selected.id}
+                    nextCandidateId={nextCandidateId}
+                    bucket={bucketSelection}
+                    earlyCareerOnly={earlyCareerOnly}
+                  />
+                ) : null}
               </header>
               <dl>
                 <div>
@@ -1014,32 +969,6 @@ export function CandidatesWorkspace({
                   Review bucket evidence
                 </Link>
               ) : null}
-              {employerReviewRequired(selected) &&
-              selected.companyTrustReview ? (
-                <section className={styles.employerReview}>
-                  <h3>Employer review required</h3>
-                  <strong>{selected.company}</strong>
-                  <dl>
-                    <div>
-                      <dt>Domain</dt>
-                      <dd>{selected.employerIdentity?.domain ?? "Not provided"}</dd>
-                    </div>
-                    <div>
-                      <dt>Identity evidence</dt>
-                      <dd>{selected.employerTrust?.identityVerified ? "Stable company identity" : "Limited evidence"}</dd>
-                    </div>
-                    <div>
-                      <dt>Current trust</dt>
-                      <dd>Unverified</dd>
-                    </div>
-                  </dl>
-                  <p>
-                    This recruiter remains review-required, non-actionable, and
-                    excluded from drafting until the employer is trusted.
-                  </p>
-                  <EmployerReviewForm candidate={selected} />
-                </section>
-              ) : null}
               <details className={styles.evidenceDisclosure}>
                 <summary>Details</summary>
                 <div className={styles.evidenceGroups}>
@@ -1047,10 +976,8 @@ export function CandidatesWorkspace({
                   <h3>Bucket evidence</h3>
                   <p>
                     {selected.bucketReviewState === "review-required"
-                      ? employerReviewRequired(selected)
-                        ? "The recruiter bucket is supported, but the provider-only employer must be reviewed before this person is actionable."
-                        : (selected.bucketReviewReason ??
-                          "Classification evidence needs review; this person is not actionable.")
+                      ? (selected.bucketReviewReason ??
+                        "Classification evidence contains a blocking conflict that needs review.")
                       : selected.bucketReviewState === "legacy-unclassified"
                         ? "No bucket was stored for this record. It has not been inferred."
                         : selected.bucketEvidenceReferences?.length
@@ -1072,6 +999,11 @@ export function CandidatesWorkspace({
                 <section>
                   <h3>Company evidence</h3>
                   <p>{companyEvidence(selected)}</p>
+                  {selected.employerTrust?.state === "unverified" ? (
+                    <p className={styles.advisory}>
+                      Employer not independently verified. Keep the message limited to the person’s verified title and company.
+                    </p>
+                  ) : null}
                 </section>
                 <section>
                   <h3>History</h3>
@@ -1090,20 +1022,16 @@ export function CandidatesWorkspace({
                 <h3>Current status</h3>
                 <strong>
                   {selected.bucketReviewState === "review-required"
-                    ? employerReviewRequired(selected)
-                      ? "Employer review required"
-                      : "Review needed"
+                    ? "Review needed"
                     : selected.stage === "qualified-available"
-                      ? "Eligible for a future plan"
+                      ? "Ready to create a draft"
                       : stageLabel[selected.stage]}
                 </strong>
                 <p>
                   {selected.bucketReviewState === "review-required"
-                    ? employerReviewRequired(selected)
-                      ? "This candidate is excluded from actionable capacity until the audited employer review is complete."
-                      : "This candidate is excluded from actionable capacity until bucket evidence is reviewed."
+                    ? "This candidate is excluded from drafting until the blocking eligibility evidence is reviewed."
                     : selected.stage === "qualified-available"
-                      ? "Company cooldown and one-per-company protections still apply when planning."
+                      ? "NetworkPilot rechecks contact history, company cooldown, and suppression before any external action."
                       : "NetworkPilot will not plan this person while the current state applies."}
                 </p>
               </section>

@@ -15,7 +15,7 @@ import {humanDraftError} from "@/application/command-center-drafts";
 export const dynamic="force-dynamic";
 
 const tone=(healthy:boolean)=>healthy?styles.healthy:styles.attention;
-export default async function Home({searchParams}:{searchParams?:Promise<{fixture?:string}>}={}){
+export default async function Home({searchParams}:{searchParams?:Promise<{fixture?:string}>}){
   const params:{fixture?:string}=await(searchParams??Promise.resolve({})),demo=isDemoMode(),fixture=demo?params.fixture:undefined;
   let migrationRequired:DatabaseMigrationRequiredError|null=null,simulation:{today:string;timezone:string;prospectCount:number;suppressionCount:number;simulationReady:boolean;latestRun:ReturnType<typeof getDashboardData>["latestRun"]},daily,gmailReadiness:{available:boolean;reason:string|null};
   if(demo){simulation={today:"2026-09-21",timezone:"America/New_York",prospectCount:120,suppressionCount:2,simulationReady:true,latestRun:null};daily=buildDailyCommandCenter({drafts:DEMO_RELATIONSHIPS,reserve:[],gmailState:fixture==="gmail"?"reauthorization-required":"connected",apolloEnabled:true,apolloReady:true,apolloExposure:fixture==="apollo"?20:7,apolloObserved:fixture==="apollo"?20:7,cooldownCompanies:3});gmailReadiness=fixture==="gmail"?{available:false,reason:"gmail-connection-invalid"}:{available:true,reason:null};}

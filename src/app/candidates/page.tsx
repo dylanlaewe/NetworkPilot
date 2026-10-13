@@ -40,6 +40,7 @@ async function renderCandidatesPage({
     bucket?: string;
     earlyCareerOnly?: string;
     findMore?: string;
+    disposition?: string;
   }>;
 }) {
   const data = loadDailyCommandCenter(),
@@ -135,7 +136,11 @@ async function renderCandidatesPage({
     />
   );
   const result =
-    params.refreshError === "scoped-readiness-blocked"
+    params.disposition === "skipped"
+      ? "Skipped. This person stays out of today’s candidate queue."
+      : params.disposition === "excluded"
+        ? "Won’t show again. This person was removed from future candidate and draft queues."
+    : params.refreshError === "scoped-readiness-blocked"
       ? "No candidates were added. Find More is blocked until its local data and provider readiness checks pass."
       : params.refreshError === "scoped-provider-validation-required"
       ? "No candidates were added. This bucket’s provider search needs validation before it can continue; the existing reserve was left unchanged."
@@ -185,4 +190,4 @@ async function renderCandidatesPage({
     </NetworkCommandShell>
   );
 }
-export default async function CandidatesPage(input:{searchParams:Promise<{selected?:string;filters?:string;added?:string;searched?:string;enriched?:string;qualified?:string;rejected?:string;professional?:string;recruiter?:string;companies?:string;credits?:string;requested?:string;shortfallCode?:string;refreshError?:string;bucket?:string;earlyCareerOnly?:string;findMore?:string}>}){try{return await renderCandidatesPage(input);}catch(error){return migrationRequiredView(error);}}
+export default async function CandidatesPage(input:{searchParams:Promise<{selected?:string;filters?:string;added?:string;searched?:string;enriched?:string;qualified?:string;rejected?:string;professional?:string;recruiter?:string;companies?:string;credits?:string;requested?:string;shortfallCode?:string;refreshError?:string;bucket?:string;earlyCareerOnly?:string;findMore?:string;disposition?:string}>}){try{return await renderCandidatesPage(input);}catch(error){return migrationRequiredView(error);}}

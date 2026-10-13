@@ -43,18 +43,18 @@ describe("real-data experience reset contracts", () => {
   it("only advertises candidate sourcing when Apollo is enabled and ready", () => {
     expect(candidateSourcingStatus({ enabled: false, ready: false })).toEqual({
       available: false,
-      label: "Find more unavailable",
+      label: "Find people unavailable",
       detail: "Apollo disabled",
     });
     expect(candidateSourcingStatus({ enabled: true, ready: false })).toEqual({
       available: false,
-      label: "Find more unavailable",
+      label: "Find people unavailable",
       detail: "Apollo configuration needed",
     });
     expect(candidateSourcingStatus({ enabled: true, ready: true })).toEqual({
       available: true,
-      label: "Find more",
-      detail: "May use Apollo",
+      label: "Find people",
+      detail: "May use Apollo credits",
     });
     expect(candidateHealthStatus({ actionableCapacity: 0, enabled: false, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("0 actionable candidates · Apollo disabled");
     expect(candidateHealthStatus({ actionableCapacity: 2, enabled: true, ready: false, exposure: 0, maximumPerDay: 10 })).toBe("2 actionable candidates · Apollo unavailable — configuration needed");

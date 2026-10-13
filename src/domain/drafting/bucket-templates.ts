@@ -1,5 +1,5 @@
 /** Approved prose, versioned independently of personalization and user edits. */
-export const TEMPLATE_VERSION = "approved-2026-09-22.v1";
+export const TEMPLATE_VERSION = "approved-2026-10-12.v2";
 export const CANONICAL = {
   managers: {
     subject: "A question about your career in [field]",
@@ -72,7 +72,70 @@ Dylan`,
   },
 } as const;
 
+/**
+ * Personal-networking copy for accepted title-supported relationships. These
+ * variants intentionally describe only the observed title and employment;
+ * they do not infer management, functional ownership or company-wide scope.
+ */
+export const TITLE_SUPPORTED = {
+  managers: {
+    subject: "A question about your career in [field]",
+    body: `Hi [First name],
+
+I'm Dylan, a recent computer science graduate from Marist University in Poughkeepsie, New York. I've been working in BI and data engineering, building automations and connecting business systems.
+
+I came across your [role] role at [Company]. I'm trying to learn from people with experience in [field] as I build my own career.
+
+Would you be open to a brief conversation about your career path?
+
+Thank you in advance for your guidance,
+Dylan`,
+  },
+  executives: {
+    subject: "A question about building toward leadership",
+    body: `Hi [First name],
+
+I'm Dylan, a recent computer science graduate from Marist University working in BI and data engineering.
+
+I came across your [role] role at [Company]. I'd value your perspective on staying close to new technology while growing into larger responsibilities over time.
+
+I'm sure you're extremely busy, but would it be possible to throw 10-15 mins on your calendar for a quick chat?
+
+I promise I'll pay your time forward.
+
+Best,
+Dylan`,
+  },
+  ceos: {
+    subject: "Guidance for someone starting out",
+    body: `Hi [First name],
+
+I know this is a long shot, but I came across your [role] role at [Company] and wanted to ask for your guidance.
+
+I'm a recent Marist University computer science graduate working in BI and data engineering. Eventually, I'd like to build useful products and lead a team, and I'm trying to understand what I should focus on now to get there.
+
+I'm sure your calendar is packed, but would you be open to finding 15 minutes for a conversation?
+
+I promise I'll pay your time forward.
+
+Thanks,
+Dylan`,
+  },
+  recruiters: {
+    subject: "A question about recruiting at [Company]",
+    body: `Hi [First name],
+
+I graduated from Marist University in May 2026 with a computer science degree and have hands-on BI and data engineering experience.
+
+I came across your [role] role at [Company]. I'd value your perspective on navigating an early career in data and technology.
+
+Would you be open to a brief conversation?
+
+Best,
+Dylan`,
+  },
+} as const;
+
 export function personalize(text: string, slots: Record<string, string>) {
   return text.replace(/\[([^\]]+)\]/g, (placeholder, key: string) => slots[key] || placeholder);
 }
-

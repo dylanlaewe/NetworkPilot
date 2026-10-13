@@ -505,13 +505,14 @@ describe("offline classification safety through scoped orchestration", () => {
     return { result, saved };
   }
 
-  it("keeps leadership evidence fail-closed", async () => {
+  it("allows exact scoped leadership titles without inventing responsibility and keeps contradictions fail-closed", async () => {
     expect((await classify("managers", 20)).saved.recipientBucket).toMatchObject({ bucket: "managers", reviewState: "accepted" });
     const titleOnly = await classify("managers", 21, (fixture) => {
       fixture.source.responsibilityEvidence = fixture.source.responsibilityEvidence?.filter((item) => item.kind !== "team-leadership");
     });
-    expect(titleOnly.saved).toMatchObject({ state: "review-required", recipientBucket: { bucket: null, reviewState: "review-required" } });
-    expect(titleOnly.result.qualifiedCandidatesAdded).toBe(0);
+    expect(titleOnly.saved).toMatchObject({ state: "eligible", recipientBucket: { bucket: "managers", reviewState: "accepted", confidence: "low", explanationCodes: ["title-supported-personal-networking"] } });
+    expect(titleOnly.saved.recipientBucket?.evidence.some((item) => item.kind === "team-leadership")).toBe(false);
+    expect(titleOnly.result.qualifiedCandidatesAdded).toBe(1);
     const contradicted = await classify("managers", 22, (fixture) => {
       fixture.source.responsibilityEvidence = fixture.source.responsibilityEvidence?.filter((item) => item.kind !== "team-leadership").concat(fixtureEvidence("individual-contributor"));
     });

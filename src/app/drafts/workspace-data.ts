@@ -1,4 +1,4 @@
-import {gmailSendBlockReason,humanDraftError,humanSendError,type GmailDraftReadiness} from "@/application/command-center-drafts";
+import {gmailSendBlockReason,humanDraftError,humanSendError,type GmailDraftReadiness} from "@/application/command-center-drafts/client-contract";
 import {humanSelectionReason,type SimpleDraft} from "@/application/product-workflow";
 import type {ManualDraftOperatorEntry} from "@/application/manual-outreach";
 import type {ResumeRecord} from "@/application/resumes";
@@ -15,6 +15,7 @@ export interface WorkspaceDraft {
   snapshotId:string;
   candidateId:string;
   recipient:string;
+  recipientEmail:string;
   company:string;
   title:string;
   track:"professional"|"recruiter";
@@ -34,7 +35,7 @@ export interface WorkspaceDraft {
   catalogVersion:string;
   factCount:number;
   approvedAt:string|null;
-  attachment:{label:string;filename:string}|null;
+  attachment:{resumeId:string;label:string;filename:string}|null;
   manualOperatorId:string|null;
   recipientBucket:import("@/domain/recipient-buckets").RecipientBucketClassification|null;
   bucketLabel:string;
@@ -69,6 +70,7 @@ export function buildWorkspaceDrafts(input:{rows:readonly SimpleDraft[];outreach
       snapshotId:review.snapshotId,
       candidateId:review.candidateId,
       recipient:immutable?.recipientDisplayName??review.recipient,
+      recipientEmail:immutable?.recipientProfessionalEmail??review.recipientEmail,
       company:immutable?.companyDisplayName??review.company,
       title:immutable?.professionalTitle??review.title,
       track:review.outreachTrack,
@@ -81,14 +83,14 @@ export function buildWorkspaceDrafts(input:{rows:readonly SimpleDraft[];outreach
       selectionReason:humanSelectionReason(review.whySelected),
       intent:review.outreachIntent?.reason??"Use the approved evidence and ask one focused professional question.",
       roleRelevance:humanize(review.primaryFunction),
-      companyEvidence:review.outreachTrack==="recruiter"?`Internal recruiting role at ${review.company}, carried from the reviewed candidate profile.`:`Current role at ${review.company}, carried from the reviewed candidate profile.`,
+      companyEvidence:review.outreachTrack==="recruiter"?`Current recruiting role at ${review.company}, carried from the provider-backed candidate profile; employer type may remain unverified.`:`Current role at ${review.company}, carried from the reviewed candidate profile.`,
       lane:review.lane==="product-management"?"Product":humanize(review.lane),
       location:review.location,
       industry:humanize(review.industry),
       catalogVersion:immutable?.templateCatalogVersion??review.catalogVersion,
       factCount:immutable?.evidenceIds.length??review.factIds.length,
       approvedAt:immutable?.approvedAt??null,
-      attachment:attachment?{label:attachment.displayLabel,filename:attachment.filename}:null,
+      attachment:attachment?{resumeId:attachment.resumeId,label:attachment.displayLabel,filename:attachment.filename}:null,
       manualOperatorId:manual?.operatorId??null,
       recipientBucket:review.recipientBucket??null,
       bucketLabel:review.bucketLabel??(review.recipientBucket?.bucket?({recruiters:"Recruiters",peers:"Peers & practitioners",managers:"Managers & team leaders",executives:"Executives",ceos:"CEOs & presidents"} as const)[review.recipientBucket.bucket]:"Legacy / unclassified"),

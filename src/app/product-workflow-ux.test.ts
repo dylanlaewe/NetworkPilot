@@ -46,13 +46,10 @@ describe("v1 daily workflow UX", () => {
       ui = source("src/app/drafts/drafts-workspace.tsx");
     expect(workflow).toContain("manualSendConfirmed");
     expect(workflow).toContain('sendState!=="sent"');
-    for (const action of [
-      "Approve & create Gmail draft",
-      "Retry creating Gmail draft",
-      "Send email",
-      "Resolve send status",
-    ])
-      expect(ui).toContain(action);
+    expect(ui).toContain('ready: "Send"');
+    expect(ui).toContain('approved: "Send"');
+    expect(ui).toContain('"gmail-draft-created": "Send"');
+    expect(ui).toContain("Resolve send status");
   });
   it("supports pre-approval editing and immutable approval", () => {
     const review = source("src/app/drafts/drafts-workspace.tsx"),
@@ -60,8 +57,9 @@ describe("v1 daily workflow UX", () => {
       infra = source("src/infrastructure/sqlite/command-center-drafts.ts");
     expect(review).toContain('name="subject"');
     expect(review).toContain('name="body"');
-    expect(review).toContain("Approve & create Gmail draft");
-    expect(review).toContain("approveAndCreateGmailDraft");
+    expect(review).toContain("Send this message?");
+    expect(review).toContain("action={sendDraft}");
+    expect(review).toContain('value="send-draft-now"');
     expect(projection).toContain(
       'state!=="ready"?review.operation?.snapshot:null',
     );
@@ -88,7 +86,7 @@ describe("v1 daily workflow UX", () => {
     ])
       expect(resumes).toContain(text);
   });
-  it("exposes audited bucket correction and replay-safe scoped Add controls", () => {
+  it("exposes audited bucket correction and replay-safe scoped Create drafts controls", () => {
     const review = source("src/app/candidate-review/page.tsx"),
       actions = source("src/app/candidate-review/actions.ts"),
       correction = source("src/application/ingestion/review-bucket.ts"),
@@ -110,16 +108,16 @@ describe("v1 daily workflow UX", () => {
     expect(projection).toContain("review.operation?.snapshot");
     expect(infra).toContain("ORDER BY updated_at_utc,operation_id");
   });
-  it("shows Product and scoped reserve refresh confirmation in product language", () => {
+  it("shows Product and scoped sourcing confirmation in product language", () => {
     const candidates = source("src/app/candidates/candidates-workspace.tsx"),
       refresh = source("src/app/candidates/refresh-control.tsx");
     expect(candidates).toContain('"Product"');
     expect(candidates).toContain("Role family");
     for (const text of [
-      "Available for new drafts",
-      "Target reserve",
-      "Maximum credits",
-      "Find more",
+      "Ready for drafts",
+      "Daily target",
+      "Maximum Apollo credits",
+      "Find people",
     ])
       expect(refresh).toContain(text);
   });
@@ -131,15 +129,28 @@ describe("v1 daily workflow UX", () => {
       "Reconnect Gmail",
     );
     expect(workspace).toContain("could not confirm whether Gmail sent");
-    expect(workspace).toContain("No drafts waiting for review");
-    expect(workspace).toContain("Add drafts");
-    expect(workspace).toContain("Refresh Candidates");
+    expect(workspace).toContain("No drafts yet");
+    expect(workspace).toContain("No candidates yet. Find people first.");
+    expect(workspace).toContain("Create drafts");
+    expect(workspace).toContain("Find people");
     expect(actions).toContain("sendStatus=sent");
     expect(actions).not.toContain("/sent?sendStatus=sent");
+    expect(actions).toContain(
+      'code==="draft-stale")redirect(`/drafts?candidate=',
+    );
+    expect(
+      source("src/application/command-center-drafts/index.ts"),
+    ).toContain('"draft-stale":"This draft changed');
     expect(sent).toContain("No outreach sent yet");
     expect(source("src/app/candidates/candidates-workspace.tsx")).toContain("No candidates match these filters");
     expect(source("src/app/candidates/candidates-workspace.tsx")).toContain("View Legacy");
+    expect(source("src/app/candidates/candidates-workspace.tsx")).toContain('name="bucket"');
+    expect(source("src/app/candidates/candidates-workspace.tsx")).toContain('name="earlyCareerOnly"');
+    expect(source("src/app/candidates/page.tsx")).toContain("Skipped. This person stays out of today’s candidate queue.");
+    expect(source("src/app/candidates/page.tsx")).toContain("Won’t show again. This person was removed from future candidate and draft queues.");
     expect(sent).toContain("aria-current={outcome===filter");
+    expect(sent).toContain("aria-pressed={selected?.operatorId===row.operatorId}");
+    expect(sent).not.toContain('role="listbox"');
     for (const page of ["/today", "/drafts", "/sent", "/candidates"])
       expect(actions).toContain(`"${page}"`);
   });
@@ -147,9 +158,9 @@ describe("v1 daily workflow UX", () => {
     const drafts = source("src/app/drafts/drafts-workspace.tsx"),
       today = source("src/app/today/page.tsx"),
       nav = source("src/app/network-command-shell.tsx");
-    expect(drafts).toContain("Add drafts");
-    expect(drafts).toContain("Add 5");
-    expect(drafts).toContain("Add 10");
+    expect(drafts).toContain("Create drafts");
+    expect(drafts).toContain("Create 5");
+    expect(drafts).toContain("Create 10");
     expect(drafts).toContain('min="1"');
     expect(drafts).toContain('max="20"');
     expect(drafts).toContain("Skip");

@@ -107,7 +107,7 @@ export function recruiterSelectionRationale(input: {
   earlyCareerRecruiting: boolean;
 }): string {
   if (input.trustState === "unverified")
-    return "Recruiter role evidence matches this relationship bucket; employer review is still required.";
+    return "Recruiter role and current-employment evidence support a personal introduction; employer type remains unverified.";
   if (input.trustState === "disallowed-recruiting-service")
     return "Recruiter role evidence is present, but the employer is marked as a recruiting or staffing service.";
   if (input.earlyCareerRecruiting && input.technicalRecruiting)
@@ -326,7 +326,9 @@ export function loadDailyCommandCenter(
       if (!prior || candidate.track === "recruiter")
         byPerson.set(candidate.id, candidate);
     }
-    const reserve = [...byPerson.values()];
+    const reserve = [...byPerson.values()].filter(
+      (candidate) => !draftIsDismissed(db, candidate.id, localCampaignDate(at)),
+    );
     const gmail = db
       .prepare(
         "SELECT connection_state FROM gmail_connection_metadata WHERE provider='gmail'",

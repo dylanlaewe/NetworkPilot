@@ -8,7 +8,7 @@
 .mobile { display: none; }
 .earlyCareer { min-height: 36px; display: flex; align-items: center; gap: 8px; color: var(--muted,#6f706c); font-size: 12px; white-space: nowrap; }
 .earlyCareer input { width: 18px; height: 18px; }
-.navigation :is(a,select,input):focus-visible { outline: 3px solid #8eb5aa; outline-offset: 2px; }
+.navigation :is(a,select,input):focus-visible { outline: 3px solid #315c52; outline-offset: 2px; }
 @media(max-width:760px) {
   .navigation { grid-template-columns: minmax(0,1fr) auto; }
   .desktop { display: none; }

@@ -74,11 +74,11 @@ components:
 
 # Design System: NetworkPilot
 
-## North star: The Conversational Workbench
+## North star: The Familiar CRM Workbench
 
-NetworkPilot feels like a thoughtful exchange between Dylan and a highly capable networking assistant. The shell recedes; the current person, message, and decision occupy the center. The product borrows ChatGPT's interaction logic—quiet navigation, a centered work surface, progressive disclosure, and immediate acknowledgement—without copying its proprietary assets, exact layout, or brand treatment.
+NetworkPilot is a quiet personal CRM: Candidates is the people list, Drafts is the writing workspace, and Sent is relationship history. The shell recedes; the selected person or message occupies the center. The product borrows ChatGPT's calm hierarchy, progressive disclosure, and immediate acknowledgement without replacing familiar list-and-editor navigation.
 
-The distinguishing move is the **next-move thread**: every surface ends its active context with one plain-language state and one stable next action. Success, partial completion, and blockers replace that action in place rather than appearing as distant status machinery.
+The distinguishing move is the **next-move thread**: every CRM surface ends its active context with one plain-language state and one stable next action. Success, partial completion, and blockers replace that action in place rather than appearing as distant status machinery.
 
 ## Shell
 
@@ -136,25 +136,25 @@ Today answers only “What should I do next?” It leads with a greeting, one se
 
 Desktop is two regions: a 280px people queue and a flexible message workspace. The message, subject, resume, and lifecycle action dominate. Details opens on demand as an overlay or inline disclosure. Mobile shows the active draft first with the queue behind a single People control.
 
-The local draft → Gmail draft → send lifecycle updates in the same action region. Approving may create a Gmail draft, but never sends. Send remains an explicit confirmed external action.
+The visible lifecycle is edit message → Send → confirm recipient, exact message, and attachment → Sent. Immutable approval snapshots and Gmail-draft creation remain internal safety steps. Only the final explicit confirmation may begin the external sequence; failed or uncertain provider activity stops safely without automatic resend.
 
 ### Candidates
 
-Candidate rows show name, role/company, and one useful state. The selected candidate has a stable primary-action region: Create draft, Open draft, Review employer, Review eligibility, Already contacted, or Available in N days. The control does not disappear when blocked.
+Candidate rows show name, role/company, and one useful state. The page has one obvious sourcing action: Find people, with its possible Apollo-credit consequence stated before confirmation. The selected candidate may offer the optional Create draft action, plus Open draft, Skip, Don't show again, Already contacted, or Available in N days as appropriate.
 
-Create draft is a single-person local action. Add drafts uses only the existing actionable pool. Find more is visually separated, explicitly says it may use Apollo, and requires its own confirmation.
+Find people populates the Candidates list; it never creates drafts automatically. Unverified employer trust or missing detailed responsibility evidence is advisory in optional Details when the identity and title support a truthful introduction. Known recruiting/staffing services and real contact-policy blockers remain explicit.
 
 ### Sent
 
 Sent reads as relationship history: person, company, date, message, and outcome. Sourcing and provider mechanics stay hidden.
 
-## Add Drafts feedback contract
+## Create drafts feedback contract
 
-Every Add Drafts invocation updates within the existing action region:
+Create drafts uses existing candidates only, supports 5, 10, or custom 1–20, respects the selected bucket or explicitly selected people, and adds work without replacing edits, attachments, or ordering. Every invocation updates within the existing action region:
 
-- Success: “3 drafts added” and the queue updates immediately.
-- Partial: “2 of 5 drafts added” plus the highest-value reason supply stopped.
-- Zero: “No drafts could be added” plus grouped reasons and one best CTA such as Review employers or Find more people.
+- Success: “3 drafts created” and the queue updates immediately.
+- Partial: “2 of 5 drafts created” plus the highest-value reason supply stopped.
+- Zero: “No drafts could be created” plus grouped reasons and one best CTA. When no candidates exist: “No candidates yet. Find people first.” with a direct Candidates link.
 
 The feedback is announced and persists until Dylan acts or dismisses it. Navigation may follow only after the result is visible and understandable.
 
@@ -179,3 +179,5 @@ The feedback is announced and persists until Dylan acts or dismisses it. Navigat
 - Gradients, AI sparkles, decorative charts, glass effects, and neon accents.
 - Tiny uppercase metadata, operator-console language, or badges for healthy default state.
 - Hiding blocked actions or silently returning zero results.
+- A unified Review destination, swipe cards, automatic review carousel, forced person-by-person progression, or automatic draft creation after sourcing.
+- Requiring employer certification or responsibility research before a truthful title-based personal introduction.

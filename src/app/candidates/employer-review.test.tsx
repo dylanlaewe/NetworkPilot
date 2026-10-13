@@ -50,8 +50,8 @@ const candidate: CandidateWorkspaceRow = {
   },
 };
 
-describe("Candidates employer-trust review", () => {
-  it("shows evidence, both audited decisions, and the leave-unverified path", () => {
+describe("Candidates employer context", () => {
+  it("keeps unfamiliar-employer context optional and avoids a mandatory trust workflow", () => {
     const html = renderToStaticMarkup(
       <CandidatesWorkspace
         candidates={[candidate]}
@@ -62,21 +62,14 @@ describe("Candidates employer-trust review", () => {
         apolloReady={false}
       />,
     );
-    expect(html).toContain("Employer review required");
-    expect(html).toContain("fixture.example");
-    expect(html).toContain("Stable company identity");
-    expect(html).toContain("Trust operating employer");
-    expect(html).toContain("Mark recruiting/staffing service");
-    expect(html).toContain("Leave unverified");
-    expect(
-      readFileSync(
-        join(process.cwd(), "src/app/candidates/candidates-workspace.tsx"),
-        "utf8",
-      ),
-    ).toContain("No change saved. Employer remains unverified");
+    expect(html).toContain("Details");
+    expect(html).toContain("Employer not independently verified");
+    expect(html).toContain("Keep the message limited to the person’s verified title and company");
+    expect(html).not.toContain("Trust operating employer");
+    expect(html).not.toContain("Mark recruiting/staffing service");
+    expect(html).not.toContain("Leave unverified");
     expect(html).not.toContain("org-fixture");
-    expect(html).toContain('name="reason"');
-    expect(html).toContain('required=""');
+    expect(html).not.toContain('name="reason"');
     expect(html).not.toContain("Create Gmail Draft");
   });
 

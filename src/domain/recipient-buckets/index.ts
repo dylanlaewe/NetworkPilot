@@ -48,19 +48,66 @@ export function classifyRecipientBucket(input: { title: string; outreachTrack: "
   if (bucket === "ceos" && /\b(division|divisional|business unit|region|regional)\b/i.test(input.title)) return result(null, false, "company-and-division-scope-conflicting");
   return result(bucket, base, base ? `supported-${scope}` : "professional-context-evidence-missing");
 }
+
+const TITLE_SUPPORTED_SCOPE: Record<Exclude<RecipientBucket, "recruiters" | "peers">, RegExp> = {
+  managers: /\b(manager|supervisor|team lead)\b/i,
+  executives: /\b(director|head of|vice president|vp|chief (?:data|technology|information|analytics|product|engineering) officer)\b/i,
+  ceos: /\b(ceo|chief executive officer|president)\b/i,
+};
+
+/**
+ * A scoped provider query can support a personal-networking relationship from
+ * an exact current title without claiming unobserved people, function or
+ * company-wide responsibility. This projection is intentionally limited to a
+ * requested leadership bucket and does not manufacture responsibility evidence.
+ */
+export function projectTitleSupportedPersonalNetworking(input: {
+  classification: RecipientBucketClassification;
+  requestedScope: BucketScope;
+  title: string;
+}): RecipientBucketClassification {
+  const { classification, requestedScope, title } = input;
+  const leadershipBucket = requestedScope.bucket === "managers" || requestedScope.bucket === "executives" || requestedScope.bucket === "ceos";
+  if (
+    requestedScope.earlyCareerOnly ||
+    !leadershipBucket ||
+    classification.bucket !== null ||
+    classification.reviewState !== "review-required" ||
+    classification.explanationCodes.length !== 1 ||
+    classification.explanationCodes[0] !== "responsibility-evidence-missing"
+  ) return classification;
+
+  const requiredContext = ["professional-identity", "current-employment", "company-identity"] as const;
+  if (requiredContext.some((kind) => !verifiedBucketEvidence(classification.evidence, kind))) return classification;
+  if (requestedScope.bucket !== "ceos" && !verifiedBucketEvidence(classification.evidence, "relevant-function")) return classification;
+  if (!TITLE_SUPPORTED_SCOPE[requestedScope.bucket as keyof typeof TITLE_SUPPORTED_SCOPE].test(title)) return classification;
+  if (requestedScope.bucket !== "ceos" && /\b(ceo|chief executive officer|president)\b/i.test(title)) return classification;
+  if (requestedScope.bucket === "managers" && /\b(director|head of|vice president|vp|chief\b)/i.test(title)) return classification;
+  if (requestedScope.bucket === "ceos" && /\b(division|divisional|business unit|region|regional)\b/i.test(title)) return classification;
+
+  return {
+    ...classification,
+    bucket: requestedScope.bucket,
+    confidence: "low",
+    reviewState: "accepted",
+    explanationCodes: ["title-supported-personal-networking"],
+  };
+}
 /** Only reviewed bucket policy exceptions are removed. All other gates remain authoritative. */
 export function bucketAwareGateFailures(input: { classification: RecipientBucketClassification; gateFailures: readonly string[]; minimumYears: number | null; providerSeniority?: string }): string[] {
   const c = input.classification, failures = input.gateFailures.filter(code => !code.startsWith("recipient-bucket:"));
   if (c.reviewState !== "accepted" || !c.bucket) return [...failures, ...c.explanationCodes.map(code => `recipient-bucket:${code}`)];
   const earlyPeer = c.bucket === "peers" && c.earlyCareer && input.minimumYears !== null;
   const leadership = ["managers", "executives", "ceos"].includes(c.bucket);
+  const titleSupportedLeadership=c.explanationCodes.includes("title-supported-personal-networking");
   // A deliberate relationship path can supersede the legacy target-role
   // function inference only with human-reviewed, verified field relevance.
   // It does not assign a target role or remove any other safety gate.
-  const relationshipRelevance=leadership&&Boolean(verifiedBucketEvidence(c.evidence,"relevant-function")?.reviewedBy?.trim());
-  const providerSenioritySupportsBucket=input.providerSeniority===undefined||(c.bucket==="executives"&&["vp","head","partner","c_suite"].includes(input.providerSeniority))||(c.bucket==="ceos"&&input.providerSeniority==="c_suite");
+  const relationshipRelevance=leadership&&(titleSupportedLeadership||Boolean(verifiedBucketEvidence(c.evidence,"relevant-function")?.reviewedBy?.trim()));
+  const providerSenioritySupportsBucket=input.providerSeniority===undefined||(c.bucket==="executives"&&["director","vp","head","partner","c_suite"].includes(input.providerSeniority))||(c.bucket==="ceos"&&input.providerSeniority==="c_suite");
   const reviewedLeadershipSeniority=providerSenioritySupportsBucket&&((c.bucket==="executives"&&Boolean((verifiedBucketEvidence(c.evidence,"functional-leadership")??verifiedBucketEvidence(c.evidence,"division-leadership"))?.reviewedBy?.trim()))||(c.bucket==="ceos"&&Boolean(verifiedBucketEvidence(c.evidence,"company-leadership")?.reviewedBy?.trim())));
-  return failures.filter(code => !(earlyPeer && code === "insufficient-or-unknown-experience") && !((reviewedLeadershipSeniority || earlyPeer && input.providerSeniority === "entry") && code === "prohibited-seniority") && !(relationshipRelevance && ["recipient-function-unknown","recipient-function-unrelated"].includes(code)));
+  const titleSupportedSeniority=titleSupportedLeadership&&providerSenioritySupportsBucket;
+  return failures.filter(code => !(earlyPeer && code === "insufficient-or-unknown-experience") && !((reviewedLeadershipSeniority || titleSupportedSeniority || earlyPeer && input.providerSeniority === "entry") && code === "prohibited-seniority") && !(relationshipRelevance && ["recipient-function-unknown","recipient-function-unrelated"].includes(code)));
 }
 export function bucketProjection(classification?: RecipientBucketClassification | null) {
   return { recipientBucket: classification ?? null, bucketLabel: bucketLabel(classification), bucketReviewState: classification?.reviewState ?? "legacy-unclassified", bucketReviewReason: classification?.explanationCodes.join(", ") ?? null, bucketEvidenceReferences: classification?.evidenceReferences ?? [], bucketClassifierVersion: classification?.classifierVersion ?? null };

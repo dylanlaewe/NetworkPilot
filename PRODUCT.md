@@ -14,7 +14,7 @@ NetworkPilot is Dylan's private, local-first professional networking workspace. 
 
 ## Core purpose
 
-Turn a safely qualified person into a truthful, personal message with the least possible friction while keeping provider spend, company trust, contact policy, human approval, Gmail uncertainty, and historical evidence intact.
+Turn a relevant person into a truthful, personal message with the least possible friction while keeping provider spend, contact policy, human approval, Gmail uncertainty, and historical evidence intact.
 
 ## Product principles
 
@@ -24,19 +24,18 @@ Turn a safely qualified person into a truthful, personal message with the least 
 4. One obvious next action at each important state.
 5. Evidence appears when it is needed; healthy infrastructure recedes.
 6. Human review and explicit send confirmation are permanent safety boundaries.
-7. Trust is earned explicitly and fails closed.
+7. Sourcing confidence and permission to send a truthful introduction are separate decisions; uncertainty is disclosed, not promoted into an administrative prerequisite.
 8. Fast feedback must be truthful; animation must never disguise latency.
 9. Relationship history is durable and understandable.
 10. The daily product speaks in people, messages, and next actions—not pipeline machinery.
 
 ## Primary workflow
 
-1. **Today** answers what Dylan should do now.
-2. **Candidates** explains why a person is eligible or blocked and makes the path to a local draft unmistakable.
-3. **Drafts** centers the recipient and the writing, with operational evidence behind progressive disclosure.
-4. A reviewed local draft may become a Gmail draft through one explicit action; this never sends.
-5. Sending remains a separate, explicit, confirmed action.
-6. **Sent** is relationship history and the next relevant relationship action.
+1. **Candidates → Find people** uses the bounded sourcing flow and populates the familiar candidate list.
+2. **Drafts → Create drafts** turns selected or bucket-scoped existing candidates into additive local drafts without provider use.
+3. **Drafts → Send** keeps editing in the comfortable message workspace, then asks for one explicit recipient, message, and attachment confirmation before any external send sequence begins.
+4. **Sent** is relationship history and the next relevant relationship action.
+5. **Today** may point to this workflow, but it does not replace Candidates, Drafts, or Sent with a separate review model.
 
 ## Supporting areas
 
@@ -49,9 +48,11 @@ Turn a safely qualified person into a truthful, personal message with the least 
 - No automatic sending.
 - No hidden Gmail side effects.
 - No provider spend outside explicit authorization and accounting controls.
-- No actionability while required company or responsibility review is unresolved.
+- An unverified employer alone does not block ordinary personal-networking drafting or sending.
+- Missing detailed leadership-responsibility evidence alone does not block a truthful title-based networking introduction.
+- Known recruiting/staffing services, unsupported identity, unsupported copy claims, and contradictory scope remain blocked.
 - Preserve suppression, cooldown, duplicate protection, reconciliation semantics, immutable historical snapshots, and migration boundaries.
-- Provider-discovered company data cannot silently create company trust.
+- Provider-discovered company data cannot silently create company trust; existing trust and audit history remains unchanged.
 - UI simplification may combine safe application operations, but may not bypass or weaken their domain boundaries.
 
 ## Experience commitments
@@ -61,10 +62,11 @@ Turn a safely qualified person into a truthful, personal message with the least 
 - Familiarity comes from standard controls and restrained navigation, not from copying another product's assets or visual identity.
 - Permanent screen space is reserved for information needed to make the current decision.
 - Buckets are page-local scope, never a permanently expanded navigation tree.
-- Add Drafts always returns a visible success, partial, or zero-result explanation with the best recovery action.
-- Create draft means one selected person and no provider use; Add drafts means several people already in the actionable pool and no provider use; Find more means provider-backed sourcing and must look and read differently.
-- A selected candidate's primary-action region stays in one place across ready, drafted, employer-review, evidence-review, contacted, and cooldown states.
-- Draft review is one continuous local-draft → Gmail-draft → confirmed-send experience; no action sends automatically.
+- **Create drafts** is the only batch-drafting term. It supports 5, 10, or custom 1–20 from existing candidates and always returns visible full, partial, or zero-result feedback.
+- **Create draft** may remain as an optional selected-person action. **Find people** is provider-backed sourcing and must remain visually and verbally distinct from drafting.
+- A selected candidate's primary-action region stays in one place across ready, drafted, contacted, skipped, suppressed, and cooldown states.
+- Draft review is one continuous edit → Send → explicit confirmation → Sent experience. Approval snapshots and Gmail-draft creation remain internal safety steps.
+- The normal workflow remains a CRM list-and-editor experience. It does not use a unified Review destination, swipe cards, forced person-by-person progression, or automatic draft creation after sourcing.
 - Long names, companies, titles, explanations, attachment names, and messages must wrap or disclose safely with no overlap or horizontal page overflow.
 - Desktop and mobile are composed for their contexts; mobile is not a shrunken desktop.
 - Every interactive control exposes clear hover, selected, pressed, focus, pending, disabled, success, and error feedback as applicable.
@@ -73,19 +75,19 @@ Turn a safely qualified person into a truthful, personal message with the least 
 ## Current product evidence
 
 - Two rounds of real production use confirmed that the functionality works, but the current direction still feels clunky, confusing, mechanical, visually weak, and over-engineered.
-- Add Drafts currently fails the subjective interaction contract when a zero or partial result is not immediately legible, even when the underlying domain operation is behaving safely.
+- Multiple drafting labels and reserve terminology currently expose internal workflow mechanics that should collapse into Create drafts.
 - Drafts is the highest-priority surface: the permanent inspector overwhelms the message and makes the approval-to-Gmail-to-send path painful.
 - Candidates failed a basic discoverability test: Dylan could not determine how to create a draft for a selected person.
-- Real use established company review as a necessary daily workflow, but the application—not the operator—must carry audit, version, and idempotency complexity.
+- Company trust remains useful evidence and durable audit history, but ordinary personal networking must not require Dylan to certify every unfamiliar employer.
 - Existing architecture, targeting policy, safety controls, and data history remain authoritative unless measured UX or performance evidence proves a narrow change is required.
 
 ## Success criteria
 
 - Dylan can understand the next action on every major page without product-architecture knowledge.
-- Candidate-to-draft and local-draft-to-Gmail-draft workflows are obvious, safe, and visibly responsive.
+- Candidate sourcing, additive draft creation, and confirmed sending are obvious, safe, and visibly responsive.
 - Draft review gives the person and message overwhelming visual priority.
-- Company review is understandable without exposing implementation metadata.
+- Employer and scope uncertainty is honest in optional details without becoming research homework.
 - Major navigation and selection interactions are measurably faster or provide immediate truthful feedback.
-- A first-time daily user can distinguish Create draft, Add drafts, and Find more without a tooltip.
+- A first-time daily user can distinguish Find people, Create drafts, and Send without a tooltip.
 - All major pages work at 1440×900, 1280×800, 390×844, and 360×800, including long-content and 125% zoom stress.
 - The full offline test and browser-acceptance suite passes with zero Apollo calls and zero real Gmail calls.
