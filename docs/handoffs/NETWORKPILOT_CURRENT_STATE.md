@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-13 after the preferred CRM workflow was restored in production. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-13 after working draft creation and adjustable sourcing limits were deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `32405a0b0ff1b207a94fb862add6300067713ec7` (`feat: restore preferred CRM workflow`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `167227b9f16449fd4321a20b598f126641d60526` (`Fix draft creation and sourcing limits`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 61352 (parent `npm run app:start` PID 61331), started 2026-10-13 at 13:29:46 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 67039 (parent `npm run app:start` PID 67023), started 2026-10-13 at 17:32:32 America/New_York.
 
 ## Product-experience deployment
 
@@ -51,6 +51,15 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 - Production read-only acceptance passed on desktop and at 390x844 and 360x800 with no horizontal overflow, clipped interactive controls, or browser console warnings/errors. Candidates exposes `Find people`; Drafts exposes `Create drafts`; zero-count buckets provide a useful provider-disclosed sourcing path; and the three existing Legacy drafts retain the familiar editable message and final-confirmation workspace.
 - Production currently projects 5 current Recruiter candidates, 127 Legacy candidates, 0 current five-bucket drafts, and 3 Legacy drafts. The current candidates can create drafts without a mandatory company-trust ceremony; no candidate, draft, company, trust, or history record was changed during acceptance.
 - Sent retains 47 historical relationships. The exact active `General Resume` remains the recruiter default. Deployment and acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends.
+
+## Working drafts and sourcing-limits deployment
+
+- The reviewed working-drafts and sourcing-limits revision became live at 2026-10-13 17:32:32 EDT from exact code revision `167227b9f16449fd4321a20b598f126641d60526`. Main was fast-forwarded from `f738714f5ab0439a1c82cf6f230839d7aed352ab`; the approved feature history and all prior security work were preserved.
+- Validation passed 105 test files and 1,224 tests, strict typecheck, zero-warning lint, production build, security gate, zero production audit findings, remote-font guard, Gmail-send guard, implicit-migration guard, and `git diff --check`.
+- The rendered Drafts control was exercised against an isolated schema-0022 synthetic fixture with Apollo and Gmail disabled: 5 drafts, then 10 more for 15 total; 2-of-5 partial and zero-capacity outcomes; exact candidate-specific Open Draft; idempotency; and provider-independent creation all passed. Settings persisted raised and lowered limits while preserving existing usage and holds.
+- Production read-only acceptance shows 7 current five-bucket candidates (5 Recruiters and 2 CEOs/presidents), 127 Legacy candidates, 1 current draft, 3 Legacy drafts, and 47 historical relationships. The active `General Resume` remains the recruiter default.
+- Production retained its existing default sourcing limits of 10 credits per America/New_York day and 5 per Find people run; no override rows were written. The two completed 2026-10-13 CEO runs retain immutable authorization of 5 + 5, with 2 attempted enrichments of unknown consumption in the first and 0 attempts/exactly 0 in the second. The corrected read model holds 2 conservatively and releases only the unused 8, leaving 8 local credits in the current window without rewriting history.
+- Deployment ran no migration and made zero Apollo calls, Gmail calls, Gmail drafts, or email sends. Pre/post logical table fingerprint remained `bc49d5aaebf698f168b8f575562be379975d066cdb83d23f393b05f4c5fac56f`; database/WAL/SHM hashes and all recorded application counters were unchanged.
 
 ## Datastore topology
 
@@ -168,6 +177,7 @@ There is no deployment blocker. Dylan should use the restored production CRM wor
 - The 2026-10-12 experience-reset deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
 - The 2026-10-12 first-run workflow deployment likewise made zero Apollo calls, Gmail calls, Gmail drafts, or emails. The canonical logical database fingerprint remained `0ebcbb9f03b32019184451fee6909c569f09c9d2382a4cfd4ba48db1ab3d356f`; provider operations remained 130 with 130 total attempts, candidate refresh events remained 5, and daily refresh runs remained 8.
 - The 2026-10-13 preferred-workflow deployment ran no migration. Pre/post application table hashes matched exactly; the stable table-set fingerprint was `7f9e1442cc8cd3d1ab662ba2b2f08f1de883bfa7e6bfccaf2d97bf6c5cc3d71d`. The canonical database remained `d8b5309b022db85299a6c2e309be294494ad93b6a55c5c4f0e520e114482bd42`, WAL remained empty at `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, and SHM remained `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`. Schema remained `0022_company_trust.sql`; provider operations remained 136, candidate refresh events 6, Gmail draft operations 52, Gmail send audit rows 60, manual outreach records 47, and company-trust audit rows 0.
+- The 2026-10-13 working-drafts deployment ran no migration. The canonical database remained `88939c260e73ed31055630b35cc4b277c1acb56111842f51f02f949d6e10837b`, WAL remained empty at `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, SHM remained `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`, and the pre/post logical table fingerprint remained `bc49d5aaebf698f168b8f575562be379975d066cdb83d23f393b05f4c5fac56f`. Schema remained `0022_company_trust.sql`; provider operations remained 140 with 144 total recorded attempts, candidate refresh events 8, daily refresh runs 9, Gmail draft operations 52, Gmail send audit rows 60, manual outreach records 47, and company-trust audit rows 0.
 
 ## Engineering invariants
 
