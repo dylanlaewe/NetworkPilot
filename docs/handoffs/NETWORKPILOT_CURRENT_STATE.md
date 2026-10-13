@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-12 after the empty-candidate first-run workflow was deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-13 after the preferred CRM workflow was restored in production. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `6da384f2406df8a55b12c00a4c5fd4545cfccabe` (`fix: clarify empty candidate sourcing`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `32405a0b0ff1b207a94fb862add6300067713ec7` (`feat: restore preferred CRM workflow`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 87709 (parent `npm run app:start` PID 87693), started 2026-10-12 at 18:55:31 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 61352 (parent `npm run app:start` PID 61331), started 2026-10-13 at 13:29:46 America/New_York.
 
 ## Product-experience deployment
 
@@ -42,6 +42,15 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 - Browser acceptance passed at 1440×900, 1280×800, 390×844, and 360×800. The first click opens the scoped confirmation without provider activity; the confirmation shows its maximum credit exposure and has one unambiguous submit. The mobile panel participates in normal layout flow and remains clear of fixed navigation.
 - This was a code/UI-only deployment. No migration ran. The initial restart exposed a missing local `better-sqlite3` native binding; rebuilding the already-installed dependency and restarting the same validated revision resolved it without code, schema, or data changes.
 - Deployment and read-only acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends. Canonical provider, refresh, Gmail, outreach, trust, and logical database fingerprints remained unchanged.
+
+## Preferred CRM workflow deployment
+
+- The reviewed preferred CRM workflow became live at 2026-10-13 13:29:46 EDT from exact code revision `32405a0b0ff1b207a94fb862add6300067713ec7`. Main was fast-forwarded from `ade1fd320c57e3b26c8c071ec800a6cf649c062e`; the approved feature history and all prior security work were preserved.
+- Validation passed the reviewed baseline of 104 test files and 1,211 tests, strict typecheck, zero-warning lint, production build, security gate, zero production audit findings, remote-font guard, Gmail-send guard, implicit-migration guard, and `git diff --check`. The mocked real-service journey retained one provider send, one authoritative Sent record, duplicate-send idempotency, and reconciliation for genuinely uncertain results.
+- The previously recorded production process was no longer listening when preflight began. No database rollback was needed: the exact validated build started cleanly on port 3000, and the prior runtime build `6da384f2406df8a55b12c00a4c5fd4545cfccabe` remains the code rollback boundary.
+- Production read-only acceptance passed on desktop and at 390x844 and 360x800 with no horizontal overflow, clipped interactive controls, or browser console warnings/errors. Candidates exposes `Find people`; Drafts exposes `Create drafts`; zero-count buckets provide a useful provider-disclosed sourcing path; and the three existing Legacy drafts retain the familiar editable message and final-confirmation workspace.
+- Production currently projects 5 current Recruiter candidates, 127 Legacy candidates, 0 current five-bucket drafts, and 3 Legacy drafts. The current candidates can create drafts without a mandatory company-trust ceremony; no candidate, draft, company, trust, or history record was changed during acceptance.
+- Sent retains 47 historical relationships. The exact active `General Resume` remains the recruiter default. Deployment and acceptance made zero Apollo calls, zero Gmail calls or drafts, and zero email sends.
 
 ## Datastore topology
 
@@ -143,7 +152,7 @@ The separately authorized October 4 staged validation then moved account usage f
 
 ## Current blocker
 
-The empty-state workflow is live. The only next product gate is explicit authorization for initial production candidate sourcing. Another Apollo call, Gmail call/draft, or real email still requires separate task-specific authorization.
+There is no deployment blocker. Dylan should use the restored production CRM workflow normally. Another Apollo call, Gmail call/draft, or real email still requires separate task-specific authorization.
 
 ## Production state
 
@@ -158,6 +167,7 @@ The empty-state workflow is live. The only next product gate is explicit authori
 - Production dependency audit is zero after patching `sharp@0.35.5` and `source-map-js@1.2.2`; the exact accepted dev-only `braces` exception remains enforced.
 - The 2026-10-12 experience-reset deployment made zero Apollo calls, Gmail calls, Gmail drafts, or emails and did not change the canonical logical database fingerprint.
 - The 2026-10-12 first-run workflow deployment likewise made zero Apollo calls, Gmail calls, Gmail drafts, or emails. The canonical logical database fingerprint remained `0ebcbb9f03b32019184451fee6909c569f09c9d2382a4cfd4ba48db1ab3d356f`; provider operations remained 130 with 130 total attempts, candidate refresh events remained 5, and daily refresh runs remained 8.
+- The 2026-10-13 preferred-workflow deployment ran no migration. Pre/post application table hashes matched exactly; the stable table-set fingerprint was `7f9e1442cc8cd3d1ab662ba2b2f08f1de883bfa7e6bfccaf2d97bf6c5cc3d71d`. The canonical database remained `d8b5309b022db85299a6c2e309be294494ad93b6a55c5c4f0e520e114482bd42`, WAL remained empty at `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, and SHM remained `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`. Schema remained `0022_company_trust.sql`; provider operations remained 136, candidate refresh events 6, Gmail draft operations 52, Gmail send audit rows 60, manual outreach records 47, and company-trust audit rows 0.
 
 ## Engineering invariants
 
@@ -172,4 +182,4 @@ The empty-state workflow is live. The only next product gate is explicit authori
 
 ## Next recommended task
 
-After Dylan explicitly authorizes provider spend, run a conservative sequential initial sourcing seed: at most one enrichment attempt per bucket, validate the full canonical pipeline after each attempt, and stop immediately on any safety anomaly. Maximum Apollo enrichment exposure: five credits total. Do not call Gmail, create Gmail drafts, or send email.
+Dylan should use the restored production CRM workflow normally and report only concrete friction. Do not start another redesign or call Apollo or Gmail, create Gmail drafts, or send email without new task-specific authorization.
