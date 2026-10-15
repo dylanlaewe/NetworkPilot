@@ -25,6 +25,10 @@ related_targets:
 
 **SAFETY:** Find people discloses possible Apollo spend and requires explicit confirmation. Create drafts never calls Apollo. Only the final send confirmation may begin the external sequence. Freeze exact displayed content and attachment, recheck server-side gates, reuse idempotent Gmail operations, and stop on failed or uncertain external activity without automatic resend.
 
+**TITLE TRUTH:** Candidate rows and message context show retained source titles independently from bucket labels. CEO-only, President-only, and combined CEO/President titles remain distinct. Missing source titles are disclosed rather than replaced by a bucket name.
+
+**COMPONENT CRAFT:** Find people, Create drafts, final Send confirmation, and compact bucket/filter/overflow menus share readable type roles, 44px controls, predictable primary/secondary action placement, visible focus, safe Escape behavior, and container-width stacking. Long content wraps; local headers/action regions may become sticky with a restrained scrolled boundary; each surface owns its scroll and returns focus to its trigger.
+
 **REJECTED:** Unified Review navigation, swipe cards, forced person-by-person progression, automatic drafts immediately after sourcing, mandatory employer certification, mandatory leadership-scope research, permanent diagnostic rails, and any new architecture initiative.
 
 ## Finish criteria
@@ -34,3 +38,5 @@ related_targets:
 - Hover, pressed, selected, pending, focus, disabled, success, and error states are visible.
 - Desktop 1440×900 and 1280×800, plus mobile 390×844 and 360×800, have no overlap, clipping, hidden primary action, or horizontal overflow.
 - The exact application-service journey passes against an isolated database and mocked providers, with zero live Apollo or Gmail activity.
+- Mixed peer fixtures preserve suitable product, analysis, engineering, and implementation breadth before enrichment without overriding explicit filters or creating rigid quotas.
+- Transactional panels pass long-content, 320-CSS-pixel, enlarged-text, reduced-motion, focus-entry/return, Escape, and top/middle/bottom scroll checks without overlap or obscured actions.

@@ -120,6 +120,15 @@ Use one rhythm: 4, 8, 12, 16, 24, 32, 48px. Daily surfaces use 24–32px section
 - Blocked: keep the action region and replace the action with a clear label, one-sentence reason, and best recovery control.
 - Disabled controls are used only when the reason is visible beside them. Otherwise render explanatory text instead.
 
+## Shared transactional components
+
+- Find people, Create drafts, and final Send confirmation use the same compact dialog/panel grammar: one 20px/1.25 heading, 15px/1.6 body, 12px/1.4 labels and helper text, 44px controls, 12px control gaps, 16px grouped spacing, and 24px section spacing.
+- Primary and secondary actions remain visually distinct and keep their geometry while pending. Errors and help wrap in the content column; they never sit beneath an action button.
+- Internal container width, not outer viewport width, determines stacking. Form rows stack before labels, values, or actions collide. Long names, titles, employers, filenames, and provider-safe explanations wrap without shrinking type.
+- Dialog content owns its scroll. A quiet one-pixel boundary appears beneath a sticky header or above a sticky action footer only after content has scrolled behind it. The final content line, Cancel, and confirm action remain keyboard- and pointer-reachable.
+- Compact bucket, filter, and overflow menus constrain to the viewport, reposition near edges, use the same 44px interaction height, and return focus to their trigger on dismissal.
+- Escape closes only the active local surface. It never submits sourcing, draft creation, or sending, and it never creates nested-modal behavior.
+
 ## Density and progressive disclosure
 
 Permanent visibility is limited to identity, role/company, lifecycle state when it changes the action, the message, the selected resume, and the current next action.
@@ -144,6 +153,8 @@ Candidate rows show name, role/company, and one useful state. The page has one o
 
 Find people populates the Candidates list; it never creates drafts automatically. Unverified employer trust or missing detailed responsibility evidence is advisory in optional Details when the identity and title support a truthful introduction. Known recruiting/staffing services and real contact-policy blockers remain explicit.
 
+Candidate rows display the retained provider-supported title verbatim or a clear unavailable state; they never substitute a bucket label or fabricate a combined leadership title. Mixed practitioner sourcing interleaves suitable approved role families before paid enrichment while keeping explicit user filters authoritative.
+
 ### Sent
 
 Sent reads as relationship history: person, company, date, message, and outcome. Sourcing and provider mechanics stay hidden.
@@ -164,6 +175,7 @@ The feedback is announced and persists until Dylan acts or dismisses it. Navigat
 - The next-move thread may cross-fade and move up 2px when state changes; no entrance choreography.
 - Press feedback appears within one frame when safe.
 - Respect `prefers-reduced-motion`; state remains fully legible without animation.
+- Scroll response is structural, not decorative: sticky local headers and action regions gain a subtle boundary only while content moves behind them. No parallax, scroll hijacking, or animation-dependent control state.
 
 ## Responsive behavior
 

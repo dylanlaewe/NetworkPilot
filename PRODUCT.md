@@ -71,6 +71,10 @@ Turn a relevant person into a truthful, personal message with the least possible
 - Desktop and mobile are composed for their contexts; mobile is not a shrunken desktop.
 - Every interactive control exposes clear hover, selected, pressed, focus, pending, disabled, success, and error feedback as applicable.
 - Accessibility, keyboard operation, visible focus, reduced motion, and appropriate touch targets are release requirements.
+- Candidate titles always come from retained source evidence and remain visually distinct from recipient-bucket labels. A CEO, a President, and a combined CEO/President title are three truthful display cases, not one normalized label.
+- Peers & practitioners should reflect the approved target lanes when suitable supply exists: product and product operations, data/business/BI analysis, software/data engineering, and implementation or adjacent technical-business work. Breadth is considered before paid enrichment without imposing unsuitable-person quotas or increasing provider limits.
+- Small transactional surfaces—Find people, Create drafts, final Send confirmation, and compact menus—share one readable type hierarchy, control rhythm, focus treatment, and constrained responsive behavior.
+- Each list/editor pane owns its scrolling. Sticky context and subtle scrolled boundaries may preserve orientation, but content, focus, and final actions must remain reachable without scroll hijacking.
 
 ## Current product evidence
 
@@ -80,6 +84,8 @@ Turn a relevant person into a truthful, personal message with the least possible
 - Candidates failed a basic discoverability test: Dylan could not determine how to create a draft for a selected person.
 - Company trust remains useful evidence and durable audit history, but ordinary personal networking must not require Dylan to certify every unfamiliar employer.
 - Existing architecture, targeting policy, safety controls, and data history remain authoritative unless measured UX or performance evidence proves a narrow change is required.
+- Current production evidence contains ten visible Junior Data Analysts in Peers & practitioners: five previously recovered records and five newly sourced records. This is a retained-supply fact to diagnose, not a license to hardcode or visually normalize future peers to that title.
+- Current production feedback reports repetitive CEO/president presentation and unfinished small panels, menus, typography, overlap handling, and scroll response. The correction must preserve actual provider titles, the accepted CRM workflow, and the existing visual direction.
 
 ## Success criteria
 
@@ -91,3 +97,5 @@ Turn a relevant person into a truthful, personal message with the least possible
 - A first-time daily user can distinguish Find people, Create drafts, and Send without a tooltip.
 - All major pages work at 1440×900, 1280×800, 390×844, and 360×800, including long-content and 125% zoom stress.
 - The full offline test and browser-acceptance suite passes with zero Apollo calls and zero real Gmail calls.
+- Mixed eligible peer fixtures do not collapse to the first title family, Product remains represented, explicit user filters stay authoritative, and CEO-only, President-only, and combined-title evidence display distinctly.
+- Transactional panels remain usable at narrow internal widths, 320 CSS pixels, enlarged text, and top/middle/bottom scroll positions; focus enters and returns correctly, Escape is safe, and headers or footers never obscure content.
