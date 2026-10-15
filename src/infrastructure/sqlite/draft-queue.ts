@@ -27,6 +27,35 @@ export function readQueueCandidates(db:Database.Database,options:{includeSeconda
 export function readCurrentQueueCandidates(repository:SqliteSimulationRepository,options:{includeSecondary?:boolean}={}):ImportedCandidateSnapshot[]{
   return readQueueCandidates(repository.native,options).map((candidate)=>repository.projectCurrentCompanyTrust(candidate));
 }
+export interface ConfirmedContactIndex {
+  candidateIds: ReadonlySet<string>;
+  professionalEmails: ReadonlySet<string>;
+}
+/** Confirmed send state only; creating a Gmail draft or an uncertain send does not qualify. */
+export function readConfirmedContactIndex(repository:SqliteSimulationRepository):ConfirmedContactIndex {
+  const rows=repository.native.prepare(`SELECT m.candidate_id candidate_id,g.approved_snapshot_json snapshot
+    FROM manual_outreach_records m
+    LEFT JOIN gmail_draft_operations g ON g.operation_id=m.gmail_operation_id
+    UNION
+    SELECT json_extract(approved_snapshot_json,'$.candidateId') candidate_id,approved_snapshot_json snapshot
+    FROM gmail_draft_operations WHERE send_state='sent'`).all() as Array<{candidate_id:string|null;snapshot:string|null}>;
+  const candidateIds=new Set<string>(),professionalEmails=new Set<string>();
+  for(const row of rows){
+    if(row.candidate_id?.trim())candidateIds.add(row.candidate_id);
+    if(!row.snapshot)continue;
+    try{const email=(JSON.parse(row.snapshot) as {recipientProfessionalEmail?:string}).recipientProfessionalEmail?.trim().toLowerCase();if(email)professionalEmails.add(email);}catch{/* malformed immutable snapshots fail closed in their owning workflow */}
+  }
+  for(const candidate of repository.listImportedCandidates()){
+    if(!candidateIds.has(candidate.id)||candidate.source.email.verificationStatus!=="verified")continue;
+    const email=candidate.source.email.address.trim().toLowerCase();
+    if(email)professionalEmails.add(email);
+  }
+  return{candidateIds,professionalEmails};
+}
+export function isConfirmedContact(candidate:ImportedCandidateSnapshot,index:ConfirmedContactIndex):boolean{
+  const email=candidate.source.email.verificationStatus==="verified"?candidate.source.email.address.trim().toLowerCase():"";
+  return index.candidateIds.has(candidate.id)||Boolean(email&&index.professionalEmails.has(email));
+}
 export function readDraftGenerations(db:Database.Database):DailyRefreshResult[]{return hasTable(db,"daily_refresh_runs")?(db.prepare("SELECT result_json FROM daily_refresh_runs ORDER BY created_at_utc,generation").all() as {result_json:string}[]).map(row=>JSON.parse(row.result_json) as DailyRefreshResult):[];}
 export function readQueueOperations(repository:SqliteSimulationRepository){return (repository.native.prepare("SELECT draft_snapshot_id FROM gmail_draft_operations ORDER BY updated_at_utc,operation_id").all() as {draft_snapshot_id:string}[]).map(row=>repository.findGmailDraftOperation(row.draft_snapshot_id)!);}
 // A disposition belongs to the displayed draft, not the next scheduling day.

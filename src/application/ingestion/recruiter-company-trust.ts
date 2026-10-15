@@ -4,6 +4,42 @@ import type { CompanyTrustResolution } from "@/domain/company-trust";
 import type { ImportedCandidateSnapshot } from "./types";
 
 const dynamicRecruiterGate = (code: string) => code.startsWith("recruiter-") || code.startsWith("company-trust-") || code === "company-unreviewed" || code.startsWith("recipient-bucket:recruiter-") || code.startsWith("recipient-bucket:company-trust-");
+const relationshipReviewGate = (code: string) =>
+  code.startsWith("recipient-bucket:") ||
+  code === "discovery-scope-mismatch" ||
+  code === "company-trust-unverified" ||
+  code === "recruiter-employer-ambiguous" ||
+  code === "recruiter-company-domain-ambiguous" ||
+  code === "geography-ambiguous" ||
+  code === "provider-match-confidence-review" ||
+  code === "recipient-function-unknown" ||
+  code === "recipient-function-unrelated" ||
+  code.startsWith("experience-") ||
+  code.startsWith("employment-history-");
+
+/** Re-evaluates versioned relationship policy without rewriting stored evidence. */
+export function applyCurrentRecipientPolicy(
+  candidate: ImportedCandidateSnapshot,
+): ImportedCandidateSnapshot {
+  if (!candidate.recipientBucket) return candidate;
+  const next = structuredClone(candidate);
+  next.gateFailures = [
+    ...new Set(
+      bucketAwareGateFailures({
+        classification: next.recipientBucket!,
+        gateFailures: next.gateFailures,
+        minimumYears: next.experience.minimumSupportedYears,
+        providerSeniority: next.source.providerMetadata?.providerSeniority,
+      }),
+    ),
+  ];
+  if (next.source.consent.suppressed) next.state = "suppressed";
+  else if (!next.gateFailures.length) next.state = "eligible";
+  else if (next.gateFailures.every(relationshipReviewGate))
+    next.state = "review-required";
+  else next.state = "rejected";
+  return next;
+}
 
 export function qualifyRecruiterWithCompanyTrust(input: {
   title: string; employerName: string; employerDomain?: string; minimumExperience: number | null; maximumExperience: number | null;
@@ -43,7 +79,7 @@ export function qualifyRecruiterWithCompanyTrust(input: {
 /** Projects current company trust onto mutable candidate supply; sent snapshots are not touched. */
 export function applyCurrentCompanyTrust(candidate: ImportedCandidateSnapshot, trust: CompanyTrustResolution, expectedScope?: BucketScope): ImportedCandidateSnapshot {
   const next = structuredClone(candidate); next.employerTrust = trust;
-  if ((next.outreachTrack ?? next.recruiterClassification?.track) !== "recruiter") return next;
+  if ((next.outreachTrack ?? next.recruiterClassification?.track) !== "recruiter") return applyCurrentRecipientPolicy(next);
   const opportunity = Number(next.recruiterClassification?.explanationCodes.find((code) => code.startsWith("target-company-opportunity:"))?.split(":")[1] ?? 0);
   const result = qualifyRecruiterWithCompanyTrust({title: next.source.currentTitle, employerName: next.source.currentOrganization.name, employerDomain: next.source.currentOrganization.domain, minimumExperience: next.experience.minimumSupportedYears, maximumExperience: next.experience.maximumSupportedYears, trust, evidence: next.recipientBucket?.evidence ?? next.source.responsibilityEvidence, companyOpportunity: Number.isFinite(opportunity) ? opportunity : 0, allowUnverifiedEmployerForPersonalNetworking: expectedScope?.bucket === "recruiters"});
   next.recruiterClassification = result.classification;
@@ -73,5 +109,5 @@ export function applyCurrentCompanyTrust(candidate: ImportedCandidateSnapshot, t
   else if (hard.length) next.state = "rejected";
   else if (review.length || !result.classification.accepted) next.state = "review-required";
   else next.state = "eligible";
-  return next;
+  return applyCurrentRecipientPolicy(next);
 }

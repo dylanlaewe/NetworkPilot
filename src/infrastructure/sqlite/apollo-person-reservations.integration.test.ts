@@ -672,7 +672,9 @@ describe("canonical Apollo person reservations", () => {
         const imported = first.listImportedCandidates().find(
           (item) => item.source.providerRecordId === personId,
         )!;
-        if (scenario === "review") expect(imported.state).toBe("review-required");
+        // Missing individual-contributor responsibility is optional for an
+        // exact scoped peer title under the current relationship policy.
+        if (scenario === "review") expect(imported.state).toBe("eligible");
         if (scenario === "suppressed") expect(imported.state).toBe("suppressed");
         if (scenario === "company") {
           expect(imported.state).toBe("rejected");

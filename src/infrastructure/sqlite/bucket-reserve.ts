@@ -7,6 +7,8 @@ import {
   readDraftGenerations,
   readQueueOperations,
   renderQueueReview,
+  readConfirmedContactIndex,
+  isConfirmedContact,
 } from "./draft-queue";
 import {
   assertFiveBucketEnabled,
@@ -88,9 +90,11 @@ function projectBucketReserve(
   for (const operation of operations)
     if (operation.sendState !== "sent" && operation.snapshot.companyId) occupied.add(operation.snapshot.companyId);
   const matching = candidates.filter((candidate) => matchesBucketScope(candidate.recipientBucket, scope));
+  const confirmedContacts=readConfirmedContactIndex(repository);
+  const current = matching.filter((candidate)=>!isConfirmedContact(candidate,confirmedContacts));
   const blockCounts = emptyBlockCounts();
-  if (!matching.length) blockCounts.noQualifiedReserve = 1;
-  const eligible = matching.filter((candidate) => {
+  if (!current.length) blockCounts.noQualifiedReserve = 1;
+  const eligible = current.filter((candidate) => {
     const company = candidate.strategyCompanyMatch?.companyId;
     const contacted = events.some((event) => event.prospectId === candidate.id || event.prospectId === `authorized:${candidate.source.providerRecordId}`);
     const coolingDown = Boolean(company && events.some((event) => event.companyId === company && (event.type === "operator-reported-hard-bounce" ? event.occurredAt.toLocaleDateString("en-CA", { timeZone: "America/New_York" }) === today : event.occurredAt.getTime() >= at.getTime() - 7 * 86400000)));
@@ -119,7 +123,7 @@ function projectBucketReserve(
   return {
     active,
     eligible,
-    totalReserve: matching.filter((candidate) => !planned.has(candidate.id) && !operations.some((operation) => operation.snapshot.candidateId === candidate.id)).length,
+    totalReserve: current.filter((candidate) => !planned.has(candidate.id) && !operations.some((operation) => operation.snapshot.candidateId === candidate.id)).length,
     actionableCapacity: new Set(eligible.map((candidate) => candidate.strategyCompanyMatch!.companyId)).size,
     blockCounts,
   };

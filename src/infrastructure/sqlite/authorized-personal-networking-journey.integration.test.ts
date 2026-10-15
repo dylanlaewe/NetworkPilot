@@ -12,6 +12,7 @@ import { recordCandidateDispositionInRepository } from "./candidate-disposition"
 import { sendAndRecordCommandCenterDraft } from "./command-center-drafts";
 import { SqliteSimulationRepository } from "./database";
 import { loadQueueReviews } from "./draft-queue";
+import { isConfirmedContact, readConfirmedContactIndex } from "./draft-queue";
 import { resolveDatastoreTopology } from "./datastore-topology";
 import { loadRelationshipWorkspace } from "./relationship-workspace";
 import { SqliteScopedDiscoveryStore } from "./scoped-discovery";
@@ -124,6 +125,37 @@ describe("authorized personal-networking journey", () => {
     expect(sender.sendDraft).toHaveBeenCalledTimes(1);
     expect(repository.native.prepare("SELECT COUNT(*) count FROM manual_outreach_records WHERE candidate_id=?").get(draftedId)).toEqual({ count: 1 });
     expect(loadQueueReviews(repository, new Date(at.getTime() + 240_000), { includeSecondary: false })).toEqual([]);
+    const afterSend = bucketReserve(
+      repository,
+      { bucket: "recruiters" },
+      new Date(at.getTime() + 240_000),
+      { includeSecondary: false },
+    );
+    expect(afterSend.eligible.map((candidate) => candidate.id)).not.toContain(draftedId);
+    expect(afterSend.totalReserve).toBe(1);
+    const sentCandidate = repository.listImportedCandidates().find((candidate) => candidate.id === draftedId)!;
+    const reappearedIdentity = structuredClone(sentCandidate);
+    reappearedIdentity.id = "reappeared-provider-identity";
+    reappearedIdentity.source.providerRecordId = "reappeared-provider-record";
+    expect(
+      isConfirmedContact(
+        reappearedIdentity,
+        readConfirmedContactIndex(repository),
+      ),
+    ).toBe(true);
+    const reloaded = new SqliteSimulationRepository(canonicalPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    expect(
+      bucketReserve(
+        reloaded,
+        { bucket: "recruiters" },
+        new Date(at.getTime() + 240_000),
+        { includeSecondary: false },
+      ).eligible.map((candidate) => candidate.id),
+    ).not.toContain(draftedId);
+    reloaded.close();
     const relationships = loadRelationshipWorkspace().filter((entry) => entry.snapshotId === snapshot.snapshotId);
     expect(relationships).toHaveLength(1);
     expect(relationships[0]).toMatchObject({ outreachTrack: "recruiter", confirmationSource: "networkpilot-gmail-send", subject: edited.subject, body: edited.body, resumeLabel: "General Resume" });

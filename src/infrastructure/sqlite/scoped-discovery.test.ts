@@ -9,6 +9,7 @@ import { refreshScopedCandidateReserve, type ScopedDiscoveryProvider } from "@/a
 import { bucketFixture, FIXTURE_AT } from "@/domain/recipient-buckets/test-fixtures";
 import type { BucketScope } from "@/domain/recipient-buckets";
 import { resolveDatastoreTopology } from "./datastore-topology";
+import { emptyRefreshDiagnostics } from "@/application/candidate-refresh/diagnostics";
 
 const repos: SqliteSimulationRepository[] = [];
 beforeEach(() => vi.stubEnv("NETWORKPILOT_FIVE_BUCKET_ENABLED", "true"));
@@ -34,10 +35,38 @@ function setup() {
 describe("scoped discovery through existing persisted provider accounting", () => {
   it("preserves request scope, reports a partial result and cannot reset allowance by switching buckets", async () => {
     const { repository, recruiter, peer, run } = setup();
-    const discover = vi.fn<ScopedDiscoveryProvider["discover"]>(async input => ({ records: [input.scope.bucket === "recruiters" ? recruiter.source : peer.source], searchedCandidates: 3, rejectedCandidates: 2, enrichmentAttempts: 1, searchCalls: 1, observedCredits: 1 }));
+    const diagnostics = {
+      ...emptyRefreshDiagnostics(),
+      searchCalls: 1,
+      searchPages: [
+        {
+          query: "a".repeat(64),
+          page: 3,
+          raw: 3,
+          normalized: 3,
+        },
+      ],
+      rawCandidates: 3,
+      normalizedCandidates: 3,
+      uniqueCandidates: 1,
+      shortlistSize: 1,
+      enrichmentAttempts: 1,
+      observedCreditsUsed: 1,
+      estimatedCreditsUsed: 1,
+      rejectionReasons: { "title-outside-requested-scope": 2 },
+    };
+    const discover = vi.fn<ScopedDiscoveryProvider["discover"]>(async input => ({ records: [input.scope.bucket === "recruiters" ? recruiter.source : peer.source], searchedCandidates: 3, rejectedCandidates: 2, enrichmentAttempts: 1, searchCalls: 1, observedCredits: 1, diagnostics }));
     const provider = { preflight: vi.fn(), discover };
     const first = await run("fictional-request-one", { bucket: "recruiters" }, provider);
     expect(first).toMatchObject({ requested: 5, searchedCandidates: 3, enrichedCandidates: 1, qualifiedCandidatesAdded: 0, added: 1, rejectedCandidates: 2, confirmedCredits: 1, accountedOrHeldCredits: 1, shortfallCode: "scoped-supply-shortfall", remainingActionableCapacity: 0 });
+    const savedDiagnostics = repository.native
+      .prepare("SELECT diagnostics_json FROM candidate_refresh_events WHERE id=?")
+      .get(first.id) as { diagnostics_json: string };
+    expect(JSON.parse(savedDiagnostics.diagnostics_json)).toMatchObject({
+      searchPages: diagnostics.searchPages,
+      candidatesAdded: 1,
+    });
+    expect(savedDiagnostics.diagnostics_json).not.toContain("@");
     expect(discover.mock.calls[0][0]).toMatchObject({ scope: { bucket: "recruiters" }, maximum: 5 });
     const second = await run("fictional-request-two", { bucket: "peers", earlyCareerOnly: true }, provider);
     expect(second.providerCap).toBe(5);

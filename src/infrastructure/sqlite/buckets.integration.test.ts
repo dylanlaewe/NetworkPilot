@@ -153,6 +153,117 @@ describe("bucket persistence and reserve integration", () => {
         expect(c.classification.specificRoleId).toBeNull();
     },
   );
+  it("projects a stale experienced peer through current policy without rewriting stored evidence", () => {
+    const r = repo();
+    const imported = add(r, "peers", 801);
+    const row = r.native
+      .prepare("SELECT normalized_snapshot_json FROM imported_candidates WHERE id=?")
+      .get(imported.id) as { normalized_snapshot_json: string };
+    const stale = JSON.parse(row.normalized_snapshot_json) as typeof imported;
+    stale.state = "rejected";
+    stale.gateFailures = [
+      "insufficient-or-unknown-experience",
+      "prohibited-seniority",
+      "employment-history-incomplete",
+    ];
+    r.native
+      .prepare(
+        "UPDATE imported_candidates SET normalized_snapshot_json=?,lifecycle_state='rejected' WHERE id=?",
+      )
+      .run(JSON.stringify(stale), imported.id);
+
+    const projected = r.findImportedCandidate("bucket-fixture", "person-801")!;
+    expect(projected).toMatchObject({ state: "eligible", gateFailures: [] });
+    expect(
+      JSON.parse(
+        (
+          r.native
+            .prepare(
+              "SELECT normalized_snapshot_json FROM imported_candidates WHERE id=?",
+            )
+            .get(imported.id) as { normalized_snapshot_json: string }
+        ).normalized_snapshot_json,
+      ),
+    ).toMatchObject({ state: "rejected" });
+    expect(bucketReserve(r, { bucket: "peers" }, FIXTURE_AT).actionableCapacity).toBe(1);
+    const drafted = addBucketDraftsFromRepository(
+      r,
+      1,
+      { bucket: "peers" },
+      FIXTURE_AT,
+      { requestId: "stale-peer-policy-projection" },
+    );
+    expect(drafted.candidateIds).toEqual([imported.id]);
+    expect(drafted.draftReviews?.[0]?.body).toContain(
+      "what you've learned from your experience",
+    );
+  });
+  it("drafts an exact scoped peer without optional responsibility or career detail", () => {
+    const r = repo();
+    const fixture = bucketFixture("peers", 802);
+    fixture.source.responsibilityEvidence =
+      fixture.source.responsibilityEvidence?.filter(
+        (item) => item.kind !== "individual-contributor",
+      );
+    fixture.source.experienceEvidence = [
+      { kind: "unknown", sourceField: "provider profile" },
+    ];
+    r.native
+      .prepare(
+        "INSERT INTO target_companies(id,canonical_name,industry_id,company_tier,enabled,recognition_score,career_upside_score,technical_interest_score,geographic_relevance_json,rationale,provenance,last_reviewed_date,operator_notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      )
+      .run(
+        fixture.company.id,
+        fixture.company.canonicalName,
+        fixture.company.industryId,
+        fixture.company.tier,
+        1,
+        fixture.company.recognitionScore,
+        fixture.company.careerUpsideScore,
+        fixture.company.technicalInterestScore,
+        JSON.stringify(fixture.company.geographicRelevance),
+        fixture.company.rationale,
+        fixture.company.provenance,
+        fixture.company.lastReviewedDate,
+        fixture.company.operatorNotes,
+      );
+    importCandidateBatch(
+      r,
+      [fixture.company],
+      {
+        batchId: "fixture-peer-optional-evidence",
+        adapterId: "bucket-fixture",
+        adapterVersion: "fixture-v1",
+        datasetClassification: "provider-shaped-fixture",
+        sourceFingerprint: "fixture-peer-optional-evidence-fingerprint",
+        records: [fixture.source],
+        requestedBucketScope: { bucket: "peers" },
+        strategyCompanyDomains: {
+          [fixture.company.id]: fixture.source.currentOrganization.domain!,
+        },
+      },
+      FIXTURE_AT,
+    );
+    const candidate = r.findImportedCandidate("bucket-fixture", "person-802")!;
+    expect(candidate).toMatchObject({
+      state: "eligible",
+      gateFailures: [],
+      recipientBucket: {
+        bucket: "peers",
+        reviewState: "accepted",
+        confidence: "low",
+      },
+    });
+    const drafted = createExactCandidateDraftFromRepository(
+      r,
+      { candidateId: candidate.id, requestId: "optional-peer-draft" },
+      FIXTURE_AT,
+    );
+    expect(drafted.draftReviews?.[0]?.body).toContain(
+      "what you've learned from your experience",
+    );
+    expect(drafted.draftReviews?.[0]?.body).not.toMatch(/8 years|eight years/i);
+  });
   it("keeps a CEO review-only when verified field relevance lacks human review provenance", () => {
     const r = repo(),
       fixture = bucketFixture("ceos", 1);

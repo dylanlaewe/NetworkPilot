@@ -4,6 +4,8 @@ import {
   draftIsDismissed,
   renderQueueReview,
   bucketCopyBlockReason,
+  readConfirmedContactIndex,
+  isConfirmedContact,
 } from "./draft-queue";
 import { bucketProjection } from "@/domain/recipient-buckets";
 import { localCampaignDate } from "@/application/daily-refresh";
@@ -186,7 +188,8 @@ export function loadDailyCommandCenter(
           .all() as { candidate_id: string }[]
       ).map((r) => r.candidate_id),
     );
-    const rows = readCurrentQueueCandidates(repository).map((c) => ({
+    const confirmedContacts=readConfirmedContactIndex(repository);
+    const rows = readCurrentQueueCandidates(repository).filter((candidate)=>!isConfirmedContact(candidate,confirmedContacts)).map((c) => ({
         normalized_snapshot_json: JSON.stringify(c),
         lifecycle_state: c.state,
       })),

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ScopedDiscoveryProviderFailure } from "@/application/candidate-refresh/scoped";
 import {
+  type ApolloSearchProgressStore,
   type ApolloPersonReservationStore,
+  scopedApolloQueryKey,
   ScopedApolloProvider,
 } from "./scoped-provider";
 import type {
@@ -135,6 +137,16 @@ class Reservations implements ApolloPersonReservationStore {
   }
 }
 
+class SearchProgress implements ApolloSearchProgressStore {
+  readonly next = new Map<string, number>();
+  claimNextPage(input: { queryKey: string }): number {
+    const page = this.next.get(input.queryKey) ?? 1;
+    this.next.set(input.queryKey, page + 1);
+    return page;
+  }
+  observePage(): void {}
+}
+
 function provider(
   transport: Transport,
   options: {
@@ -142,6 +154,7 @@ function provider(
     existing?: ReadonlySet<string>;
     reservations?: ApolloPersonReservationStore;
     strictProviderShape?: boolean;
+    searchProgress?: ApolloSearchProgressStore;
   } = {},
 ) {
   return new ScopedApolloProvider({
@@ -154,6 +167,7 @@ function provider(
     personReservations: options.reservations ?? new Reservations(),
     existingProviderIds: () => options.existing ?? new Set(),
     strictProviderShape: options.strictProviderShape,
+    searchProgress: options.searchProgress,
   });
 }
 
@@ -170,6 +184,36 @@ const discover = (
   });
 
 describe("concrete scoped Apollo provider", () => {
+  it("keys progress by the full semantic query but not operation labels or page", () => {
+    const base = {
+      batchId: "operation-one",
+      specificTitles: ["CEO"],
+      emailStatuses: ["verified"],
+      includeSimilarTitles: false,
+      page: 1,
+      perPage: 20,
+    };
+    const key = scopedApolloQueryKey({
+      bucket: "ceos",
+      purpose: "company-leadership",
+      request: base,
+    });
+    expect(
+      scopedApolloQueryKey({
+        bucket: "ceos",
+        purpose: "company-leadership",
+        request: { ...base, batchId: "operation-two", page: 9 },
+      }),
+    ).toBe(key);
+    expect(
+      scopedApolloQueryKey({
+        bucket: "ceos",
+        purpose: "company-leadership",
+        request: { ...base, emailStatuses: ["verified", "likely to engage"] },
+      }),
+    ).not.toBe(key);
+  });
+
   it("searches, enriches, and normalizes an internal recruiter", async () => {
     const recruiter = person(
       "recruiter-001",
@@ -419,6 +463,65 @@ describe("concrete scoped Apollo provider", () => {
       enrichmentAttempts: 0,
       observedCredits: 0,
     });
+  });
+
+  it("advances a stable CEO query across pages and never re-enriches prior identities", async () => {
+    const regional = person("regional-001", "Regional President", "c_suite");
+    const first = person("ceo-page-two-001", "President & CEO", "c_suite");
+    const second = person("ceo-page-two-002", "Chief Executive Officer", "c_suite");
+    const third = person("ceo-page-three-001", "CEO and President", "c_suite");
+    const fourth = person("ceo-page-three-002", "President", "c_suite");
+    const progress = new SearchProgress(), reservations = new Reservations();
+    const transport = new Transport(
+      [
+        response(200, { people: [searchPerson(regional)], pagination: { total_entries: 80 } }),
+        response(200, { people: [searchPerson(first), searchPerson(second)], pagination: { total_entries: 80 } }),
+        response(200, { people: [searchPerson(third), searchPerson(fourth)], pagination: { total_entries: 80 } }),
+      ],
+      [first, second, third, fourth].map((candidate) => response(200, { person: candidate, match_confidence: "high" })),
+    );
+    const subject = provider(transport, { searchProgress: progress, reservations });
+    const firstRun = await discover(subject, "ceos", 2);
+    const secondRun = await discover(subject, "ceos", 2);
+    expect(firstRun.records.map((record) => record.providerRecordId).sort()).toEqual([first.id, second.id].sort());
+    expect(secondRun.records.map((record) => record.providerRecordId).sort()).toEqual([third.id, fourth.id].sort());
+    expect(transport.calls.filter((call) => call.path.includes("api_search")).map((call) => (call.body as { page: number }).page)).toEqual([1, 2, 3]);
+    expect(transport.calls.filter((call) => call.path.includes("people/match"))).toHaveLength(4);
+    expect(firstRun.diagnostics?.searchPages).toEqual([
+      expect.objectContaining({
+        query: expect.stringMatching(/^[a-f0-9]{64}$/),
+        page: 1,
+        raw: 1,
+        normalized: 1,
+      }),
+      expect.objectContaining({
+        query: expect.stringMatching(/^[a-f0-9]{64}$/),
+        page: 2,
+        raw: 2,
+        normalized: 2,
+      }),
+    ]);
+    expect(JSON.stringify(firstRun.diagnostics)).not.toContain(first.id);
+  });
+
+  it.each([
+    ["Founder & CEO", true],
+    ["Co-CEO", true],
+    ["Interim President", true],
+    ["Founder", false],
+    ["Regional President", false],
+    ["President, Executive Search", false],
+  ] as const)("applies company-leadership scope to %s", async (title, accepted) => {
+    const candidate = person(`ceo-title-${title.replace(/[^a-z]/gi, "-")}`, title, "c_suite");
+    const transport = new Transport(
+      [response(200, { people: [searchPerson(candidate)] })],
+      accepted
+        ? [response(200, { person: candidate, match_confidence: "high" })]
+        : [],
+    );
+    const result = await discover(provider(transport), "ceos", 1);
+    expect(result.enrichmentAttempts).toBe(accepted ? 1 : 0);
+    expect(result.records).toHaveLength(accepted ? 1 : 0);
   });
 
   it("deduplicates the same Apollo ID repeated within one search response", async () => {

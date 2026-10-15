@@ -81,15 +81,24 @@ describe("provider-independent relationship buckets", () => {
     const gates = ["recipient-function-unknown", "recipient-function-unrelated", "recipient-function-contradictory", "email-unverified", "prohibited-seniority"];
     expect(bucketAwareGateFailures({ classification, gateFailures: gates, minimumYears: 8 })).toEqual(bucket==="managers"?["recipient-function-contradictory","email-unverified","prohibited-seniority"]:["recipient-function-contradictory","email-unverified"]);
   });
-  it("removes only the reviewed early-career exception while retaining shared safety gates", () => {
+  it("keeps shared safety gates while removing target-role experience policy from accepted peers", () => {
     const { source } = bucketFixture("peers", 1, true);
     const classification = classifyRecipientBucket({ title: source.currentTitle, outreachTrack: "professional", evidence: source.responsibilityEvidence });
     const gates = ["suppressed", "opted-out", "email-unverified", "company-unreviewed", "insufficient-or-unknown-experience"];
     expect(bucketAwareGateFailures({ classification, gateFailures: gates, minimumYears: 1 })).toEqual(gates.slice(0, 4));
-    expect(bucketAwareGateFailures({ classification, gateFailures: gates, minimumYears: null })).toEqual(gates);
+    expect(bucketAwareGateFailures({ classification, gateFailures: gates, minimumYears: null })).toEqual(gates.slice(0, 4));
     const unreviewed = classifyRecipientBucket({ title: "Junior analyst", outreachTrack: "professional", evidence: source.responsibilityEvidence!.map(e => ({ ...e, reviewedBy: undefined })) });
     expect(unreviewed.earlyCareer).toBe(false);
-    expect(bucketAwareGateFailures({ classification: unreviewed, gateFailures: gates, minimumYears: 1 })).toEqual(gates);
+    expect(bucketAwareGateFailures({ classification: unreviewed, gateFailures: gates, minimumYears: 1 })).toEqual(gates.slice(0, 4));
+  });
+  it("projects a scoped peer from verified professional context without inventing optional responsibility", () => {
+    const { source } = bucketFixture("peers");
+    const evidence = source.responsibilityEvidence!.filter((item) => item.kind !== "individual-contributor");
+    const base = classifyRecipientBucket({ title: "Data Analyst", outreachTrack: "professional", evidence });
+    const projected = projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket: "peers" }, title: "Data Analyst" });
+    expect(projected).toMatchObject({ bucket: "peers", reviewState: "accepted", confidence: "low", explanationCodes: ["title-supported-personal-networking"] });
+    expect(projected.evidence.some((item) => item.kind === "individual-contributor")).toBe(false);
+    expect(projectTitleSupportedPersonalNetworking({ classification: base, requestedScope: { bucket: "peers" }, title: "Regional President" })).toBe(base);
   });
   it.each([
     ["managers", "Data Engineering Manager"],

@@ -1,6 +1,9 @@
 import type { ScopedDiscoveryProvider } from "@/application/candidate-refresh/scoped";
 import { ScopedDiscoveryProviderFailure } from "@/application/candidate-refresh/scoped";
+import { emptyRefreshDiagnostics } from "@/application/candidate-refresh/diagnostics";
 import type { CandidateSourceRecord } from "@/domain/candidates";
+import type { RecipientBucket } from "@/domain/recipient-buckets";
+import { createHash } from "node:crypto";
 import { ApolloAdapter, ApolloProviderError } from "./adapter";
 import { assertApolloEnabled } from "./config";
 import { planScopedApolloQueries } from "./scoped-query-plan";
@@ -137,9 +140,29 @@ function normalizedTitleTokens(value: string): string[] {
 function searchTitleEligible(
   record: CandidateSourceRecord,
   requestedTitles: readonly string[],
+  bucket: RecipientBucket,
 ): boolean {
   const actual = normalizedTitleTokens(record.currentTitle);
   if (actual.length === 0) return false;
+  if (bucket === "ceos") {
+    const title = record.currentTitle;
+    if (
+      /\b(regional|region|division|divisional|area|market|business unit|recruiter|recruiting|talent acquisition|executive search|staffing)\b/i.test(
+        title,
+      )
+    )
+      return false;
+    const explicitlyCeo =
+      /\bceo\b/i.test(title) ||
+      /\bchief\s+executive\s+officer\b/i.test(title);
+    const explicitlyPresident = /\bpresident\b/i.test(title);
+    // Founder-only and vice-president-only roles are outside this bucket, but
+    // explicit company-leadership combinations such as Founder & CEO, co-CEO,
+    // and Interim President remain eligible for enrichment.
+    if (!explicitlyCeo && !explicitlyPresident) return false;
+    if (!explicitlyCeo && /\b(vice president|vp)\b/i.test(title)) return false;
+    return true;
+  }
   return requestedTitles.some((requestedTitle) => {
     const requested = normalizedTitleTokens(requestedTitle);
     if (actual.join(" ") === requested.join(" ")) return true;
@@ -153,6 +176,27 @@ function searchTitleEligible(
       actual.every((token) => requested.includes(token))
     );
   });
+}
+
+export function scopedApolloQueryKey(input: {
+  bucket: RecipientBucket;
+  purpose: string;
+  request: import("./types").ApolloSearchOptions;
+}): string {
+  const request = Object.fromEntries(
+    Object.entries(input.request).filter(
+      ([key]) => key !== "batchId" && key !== "page",
+    ),
+  );
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        bucket: input.bucket,
+        purpose: input.purpose,
+        request,
+      }),
+    )
+    .digest("hex");
 }
 
 function diversifiedCandidates(
@@ -205,6 +249,18 @@ export interface ApolloPersonReservationStore {
   }): void;
 }
 
+export interface ApolloSearchProgressStore {
+  claimNextPage(input: { queryKey: string; at: Date }): number | null;
+  observePage(input: {
+    queryKey: string;
+    page: number;
+    perPage: number;
+    totalAvailable: number | null;
+    returned: number;
+    at: Date;
+  }): void;
+}
+
 export interface ScopedApolloProviderDependencies {
   config: ApolloConfig;
   transport: ApolloHttpTransport;
@@ -214,6 +270,8 @@ export interface ScopedApolloProviderDependencies {
   localDate: (date: Date) => string;
   personReservations: ApolloPersonReservationStore;
   existingProviderIds?: () => ReadonlySet<string>;
+  excludedCompanyDomains?: () => ReadonlySet<string>;
+  searchProgress?: ApolloSearchProgressStore;
   strictProviderShape?: boolean;
 }
 
@@ -272,11 +330,15 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
     );
     const existing = this.dependencies.existingProviderIds?.() ?? new Set();
     const seen = new Set(existing);
+    const excludedCompanyDomains = [...(this.dependencies.excludedCompanyDomains?.() ?? new Set())].sort();
     const candidates: CandidateSourceRecord[] = [];
+    const rawEmployers = new Set<string>();
+    let rawUnknownEmployerRecords = 0;
     let searchedCandidates = 0;
     let rejectedCandidates = 0;
     let searchCalls = 0;
     const rejectionReasons: Record<string, number> = {};
+    const diagnostics = emptyRefreshDiagnostics();
     const reject = (reason: string, count = 1) => {
       if (count < 1) return;
       rejectedCandidates += count;
@@ -284,25 +346,73 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
     };
 
     try {
-      for (const plan of plans) {
+      const exhaustedQueries = new Set<string>();
+      const searchedQueries = new Set<string>();
+      const searchCallCap = this.dependencies.searchProgress
+        ? input.maximumSearchCalls
+        : Math.min(input.maximumSearchCalls, plans.length);
+      while (searchCalls < searchCallCap) {
+        const plan = plans.find((candidate, index) => {
+          const round = Math.floor(searchCalls / plans.length);
+          return index >= searchCalls % plans.length && !exhaustedQueries.has(candidate.purpose) && (round > 0 || !searchedQueries.has(candidate.purpose));
+        }) ?? plans.find((candidate) => !exhaustedQueries.has(candidate.purpose));
+        if (!plan) break;
+        const semanticRequest = {
+          ...plan.request,
+          ...(excludedCompanyDomains.length ? { excludedCompanyDomains } : {}),
+        };
+        // The cursor identity covers every semantic filter. Operation-specific
+        // labels and the cursor page itself are intentionally excluded.
+        const queryKey = scopedApolloQueryKey({
+          bucket: plan.bucket,
+          purpose: plan.purpose,
+          request: semanticRequest,
+        });
+        const fallbackPage = 1 + Math.floor(searchCalls / plans.length);
+        const claimedPage = this.dependencies.searchProgress?.claimNextPage({
+          queryKey,
+          at: this.dependencies.now(),
+        });
+        if (claimedPage === null) {
+          exhaustedQueries.add(plan.purpose);
+          continue;
+        }
+        const page = claimedPage ?? fallbackPage;
         const result = await adapter.search({
           ...plan.request,
           batchId: `${input.operationId}:${plan.request.batchId}`,
+          ...(excludedCompanyDomains.length ? { excludedCompanyDomains } : {}),
+          page,
         });
         searchCalls += 1;
+        diagnostics.searchCalls = searchCalls;
+        searchedQueries.add(plan.purpose);
+        const perPage = plan.request.perPage ?? 25;
+        this.dependencies.searchProgress?.observePage({ queryKey, page, perPage, totalAvailable: result.totalAvailable, returned: result.records.length + (result.recordRejections?.length ?? 0), at: this.dependencies.now() });
+        if (result.totalAvailable !== null && page * perPage >= result.totalAvailable) exhaustedQueries.add(plan.purpose);
         const recordRejections = result.recordRejections ?? [];
         if (this.dependencies.strictProviderShape && recordRejections.length)
           throw new ApolloProviderError("provider-search-record-shape-anomaly");
         searchedCandidates += result.records.length + recordRejections.length;
+        diagnostics.searchPages.push({
+          query: queryKey,
+          page,
+          raw: result.records.length + recordRejections.length,
+          normalized: result.records.length,
+        });
         reject("provider-record-invalid", recordRejections.length);
         for (const record of result.records) {
+          if (plausibleEmployer(record)) rawEmployers.add(employerKey(record));
+          else rawUnknownEmployerRecords += 1;
           if (seen.has(record.providerRecordId)) { reject("duplicate-or-already-known"); continue; }
           if (!plausibleEmployer(record)) { reject("employer-evidence-insufficient"); continue; }
-          if (!searchTitleEligible(record, requestedTitles)) { reject("title-outside-requested-scope"); continue; }
+          if (!searchTitleEligible(record, requestedTitles, input.scope.bucket)) { reject("title-outside-requested-scope"); continue; }
           if (input.scope.bucket === "recruiters" && !recruiterSearchEligible(record)) { reject("recruiting-service-evidence"); continue; }
           seen.add(record.providerRecordId);
           candidates.push(record);
         }
+        const uniqueEmployers = new Set(candidates.map(employerKey)).size;
+        if (searchedQueries.size === plans.length && uniqueEmployers >= input.maximum) break;
       }
     } catch (error) {
       throw new ScopedDiscoveryProviderFailure(
@@ -315,6 +425,13 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
       candidates,
       candidates.length,
     );
+    diagnostics.rawCandidates = searchedCandidates;
+    diagnostics.normalizedCandidates = searchedCandidates - (rejectionReasons["provider-record-invalid"] ?? 0);
+    diagnostics.uniqueCandidates = candidates.length;
+    diagnostics.rawUniqueEmployers = rawEmployers.size;
+    diagnostics.rawDiscoveredEmployers = rawEmployers.size;
+    diagnostics.rawUnknownEmployerRecords = rawUnknownEmployerRecords;
+    diagnostics.shortlistSize = orderedCandidates.length;
     const records: CandidateSourceRecord[] = [];
     let enrichmentAttempts = 0;
     try {
@@ -422,6 +539,13 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
       enrichmentAttempts,
       searchCalls,
       observedCredits: budget.observedCredits(enrichmentAttempts),
+      diagnostics: {
+        ...diagnostics,
+        enrichmentAttempts,
+        observedCreditsUsed: budget.observedCredits(enrichmentAttempts),
+        estimatedCreditsUsed: enrichmentAttempts,
+        rejectionReasons: { ...rejectionReasons },
+      },
     };
   }
 }

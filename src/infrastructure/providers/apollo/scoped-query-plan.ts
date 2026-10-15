@@ -88,6 +88,9 @@ const TITLES = {
       "CEO",
       "President",
       "President and CEO",
+      "President & CEO",
+      "CEO and President",
+      "CEO & President",
     ],
   },
 } as const;
@@ -108,10 +111,12 @@ function request(
   batchId: string,
   titles: readonly string[],
   perPage: number,
+  excludedTitles: readonly string[] = [],
 ): ApolloSearchOptions {
   return {
     batchId,
     specificTitles: [...titles],
+    ...(excludedTitles.length ? { excludedTitles: [...excludedTitles] } : {}),
     seniorities: [],
     includeSimilarTitles: false,
     personLocations: [...UNITED_STATES_LOCATIONS],
