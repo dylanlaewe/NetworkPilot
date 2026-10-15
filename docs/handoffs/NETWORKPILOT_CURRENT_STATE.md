@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-13 after working draft creation and adjustable sourcing limits were deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-15 after candidate-supply, contact-lifecycle, and CRM-quality corrections were deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,11 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `167227b9f16449fd4321a20b598f126641d60526` (`Fix draft creation and sourcing limits`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `80e6d248d331c94b506282335b3ccf54e3b1b9f5` (`Keep draft dock labels visible`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 67039 (parent `npm run app:start` PID 67023), started 2026-10-13 at 17:32:32 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 38988 (parent `npm run app:start` PID 38972), started 2026-10-15 at 15:01:18 America/New_York.
 
 ## Product-experience deployment
 
@@ -60,6 +60,17 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 - Production read-only acceptance shows 7 current five-bucket candidates (5 Recruiters and 2 CEOs/presidents), 127 Legacy candidates, 1 current draft, 3 Legacy drafts, and 47 historical relationships. The active `General Resume` remains the recruiter default.
 - Production retained its existing default sourcing limits of 10 credits per America/New_York day and 5 per Find people run; no override rows were written. The two completed 2026-10-13 CEO runs retain immutable authorization of 5 + 5, with 2 attempted enrichments of unknown consumption in the first and 0 attempts/exactly 0 in the second. The corrected read model holds 2 conservatively and releases only the unused 8, leaving 8 local credits in the current window without rewriting history.
 - Deployment ran no migration and made zero Apollo calls, Gmail calls, Gmail drafts, or email sends. Pre/post logical table fingerprint remained `bc49d5aaebf698f168b8f575562be379975d066cdb83d23f393b05f4c5fac56f`; database/WAL/SHM hashes and all recorded application counters were unchanged.
+
+## Candidate supply and CRM corrections deployment
+
+- The reviewed candidate-supply, contact-lifecycle, and CRM-quality revision became live at 2026-10-15 15:01:18 EDT from exact code revision `80e6d248d331c94b506282335b3ccf54e3b1b9f5`. Main fast-forwarded cleanly from documentation-only head `f41c5da93eaf7dbcc089f25390aa95c51a166abb`, preserving the approved feature history and security patches.
+- Validation passed 106 test files and 1,240 tests, strict typecheck, zero-warning lint, production build, security gate with only the exact approved dev-only exception, remote-font guard, Gmail-send guard, implicit-migration guard, and `git diff --check`.
+- Production read-only acceptance projects 8 current candidates: 0 Recruiters, 5 Peers & practitioners, 1 Manager & team leader, 0 Executives, and 2 CEOs & presidents, plus 80 Legacy records. All five retained Junior Data Analyst peers are currently Available; obsolete seniority, company-industry, and company-review gates no longer block ordinary personal outreach.
+- Drafts projects 1 current draft and 3 Legacy drafts. Expanding Create drafts and selecting Peers shows truthful capacity of 5; no production draft was created during acceptance. Sent preserves 56 relationships while confirmed contacts remain absent from active candidate buckets and underlying candidate/outreach/audit records remain intact.
+- Candidates and Drafts passed browser acceptance at 1440x900, 1280x800, 390x844, and 360x800 with no horizontal overflow, clipped primary action, or browser console warning/error. The mobile Drafts action dock remains vertically dense but usable, scroll-safe, and nonblocking.
+- This was a code/UI-only deployment. No migration ran. Pre/post canonical database SHA-256 remained `3427300987bfe9b69656f882a3febe4673d14e14a263ea7b890d345f83c9a850`; WAL remained empty at `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`; SHM remained `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`; and logical SHA3 remained `455fcfa57a5e9065690bf61dfc9149fd562c07bd1dbc8de04738a752`.
+- Schema remained `0022_company_trust.sql`; imported candidates remained 135; provider operations 155 with 166 recorded attempts; candidate refresh events 12; daily refresh runs 12; Gmail draft operations 62; Gmail send audit rows 80; manual outreach records 56; and company-trust audit rows 0. Limits remain 50 per day and 5 per run, five-bucket mode remains enabled, and active General Resume `resume-25b41a9d-f581-4e1a-bd35-a9bafdf54bb3` remains the recruiter default.
+- Deployment and acceptance made zero Apollo calls, zero Apollo usage queries, zero Gmail calls or drafts, and zero email sends. Post-fix live CEO yield remains deliberately untested pending separate sourcing authorization.
 
 ## Datastore topology
 
