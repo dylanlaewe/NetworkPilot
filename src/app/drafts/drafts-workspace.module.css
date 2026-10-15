@@ -24,6 +24,7 @@
 .creationRegion,.sendDialog,.reconcileDialog{container-type:inline-size}
 .creationPanel{container-type:inline-size}
 .creationSubmit button{min-width:132px}
+.creationBucket select,.customQuantity input,.creationQuantity span,.creationSubmit button{min-height:44px}
 .planeLabel{position:sticky;z-index:3;top:0;background:#f4f4f1;transition:box-shadow 160ms ease-out}
 .queue[data-scrolled="true"]>.planeLabel{box-shadow:0 8px 16px -16px #20211f99}
 .queue>section>h2{position:sticky;z-index:2;top:44px;background:#f4f4f1}
