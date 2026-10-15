@@ -1206,8 +1206,9 @@ export function DraftsWorkspace({
                             name="nextCandidateId"
                             value={nextCandidateId}
                           />
-                          <button>
-                            Skip <kbd>X</kbd>
+                          <button aria-keyshortcuts="X">
+                            <span>Skip</span>
+                            <kbd aria-hidden="true">X</kbd>
                           </button>
                         </form>
                         <form ref={replaceRef} action={replaceDraft}>
@@ -1235,14 +1236,19 @@ export function DraftsWorkspace({
                               value="true"
                             />
                           ) : null}
-                          <button disabled={replacementBlocked}>
-                            Replace{" "}
-                            {scopeBucket
-                              ? `from ${({ recruiters: "recruiters", peers: "peers", managers: "managers", executives: "executives", ceos: "CEOs / presidents" } as const)[scopeBucket]}`
-                              : chooseBucketFirst
-                                ? " after choosing a bucket"
-                                : ""}{" "}
-                            <kbd>R</kbd>
+                          <button
+                            disabled={replacementBlocked}
+                            aria-keyshortcuts="R"
+                          >
+                            <span>
+                              Replace{" "}
+                              {scopeBucket
+                                ? `from ${({ recruiters: "recruiters", peers: "peers", managers: "managers", executives: "executives", ceos: "CEOs / presidents" } as const)[scopeBucket]}`
+                                : chooseBucketFirst
+                                  ? " after choosing a bucket"
+                                  : ""}
+                            </span>
+                            <kbd aria-hidden="true">R</kbd>
                           </button>
                         </form>
                         <details>

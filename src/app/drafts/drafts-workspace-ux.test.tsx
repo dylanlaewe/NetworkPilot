@@ -168,6 +168,8 @@ describe("Drafts preferred CRM workflow", () => {
     expect(html).toContain("Subject");
     expect(html).toContain("Details");
     expect(html).toContain("Send");
+    expect(html).toContain('aria-keyshortcuts="X"');
+    expect(html).toContain('aria-keyshortcuts="R"');
     expect(html).not.toContain("Context and evidence");
   });
 

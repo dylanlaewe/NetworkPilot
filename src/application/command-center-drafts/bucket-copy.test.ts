@@ -49,6 +49,26 @@ describe("approved bucket copy and explicit resume decisions", () => {
     if (bucket === "executives") expect(review.body).toContain("throw 10-15 mins on your calendar for a quick chat?");
     if (bucket === "executives" || bucket === "ceos") expect(review.body).toContain("I promise I'll pay your time forward.");
   });
+  it("humanizes internal function slugs without rewriting reviewed natural-language evidence", () => {
+    const { candidate } = setup("peers");
+    const field = candidate.recipientBucket!.evidence.find(item => item.kind === "relevant-function")!;
+    candidate.recipientBucket!.earlyCareer = false;
+    field.value = "data-analytics";
+    const internal = renderBucketCopy(candidate);
+    expect(internal.subject).toBe("Your path into data analytics");
+    expect(internal.body).toContain("experience in data analytics");
+    expect(`${internal.subject}\n${internal.body}`).not.toContain("data-analytics");
+
+    field.value = "clinical outcomes research";
+    const reviewed = renderBucketCopy(candidate);
+    expect(reviewed.subject).toBe("Your path into clinical outcomes research");
+    expect(reviewed.body).toContain("experience in clinical outcomes research");
+
+    field.value = "unknown";
+    const generic = renderBucketCopy(candidate);
+    expect(generic.subject).toBe("Your path into your field");
+    expect(generic.body).toContain("experience in your field");
+  });
   it("rejects a second ask without relying on punctuation or padding a short invitation", () => {
     const { review } = setup("managers");
     expect(() => assertDylanVoice(review.subject, `${review.body}\n\nPlease send your resume.`, { semanticAsks: true })).toThrow("dylan-voice-cta-count-invalid");

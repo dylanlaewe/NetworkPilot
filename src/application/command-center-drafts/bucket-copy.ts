@@ -2,6 +2,35 @@ import { CANONICAL, personalize, TEMPLATE_VERSION, TITLE_SUPPORTED } from "@/dom
 import { verifiedBucketEvidence } from "@/domain/recipient-buckets";
 import type { ImportedCandidateSnapshot } from "@/application/ingestion";
 import { assertDylanVoice } from "@/domain/drafting/voice";
+import type { RecipientFunctionId } from "@/domain/candidates/recipient-function";
+
+const OUTBOUND_FUNCTION_LABELS: Record<RecipientFunctionId, string> = {
+  "data-analytics": "data analytics",
+  "software-engineering": "software engineering",
+  "ai-ml": "AI and machine learning",
+  "technical-infrastructure": "technical infrastructure",
+  product: "product",
+  "project-program": "project and program management",
+  operations: "operations",
+  consulting: "consulting",
+  finance: "finance",
+  investing: "investing",
+  "commodities-energy": "commodities and energy",
+  "defense-aerospace": "defense and aerospace",
+  "business-strategy": "business strategy",
+  "other-approved-relevant-function": "your field",
+  unrelated: "your field",
+  unknown: "your field",
+};
+
+function outboundFunctionLabel(value: string): string {
+  const reviewed = value.trim();
+  const known = OUTBOUND_FUNCTION_LABELS[reviewed as RecipientFunctionId];
+  if (known) return known;
+  if (/^[a-z0-9]+(?:[-_][a-z0-9]+)+$/.test(reviewed))
+    return reviewed.replace(/[-_]+/g, " ");
+  return reviewed || "your field";
+}
 
 export function renderBucketCopy(candidate: ImportedCandidateSnapshot) {
   const classification = candidate.recipientBucket;
@@ -12,7 +41,7 @@ export function renderBucketCopy(candidate: ImportedCandidateSnapshot) {
     if (!item) throw new Error(`bucket-copy-evidence-required:${kind}`);
     return item.value;
   };
-  const field = bucket === "ceos" ? verifiedBucketEvidence(evidence, "relevant-function")?.value ?? "technology" : required("relevant-function");
+  const field = outboundFunctionLabel(bucket === "ceos" ? verifiedBucketEvidence(evidence, "relevant-function")?.value ?? "technology" : required("relevant-function"));
   const slots: Record<string, string> = { "First name": candidate.source.person.firstName, Company: candidate.source.currentOrganization.name, field, role: candidate.source.currentTitle };
   const managerTopic = verifiedBucketEvidence(evidence, "outreach-topic")?.value;
   const executiveFunction = verifiedBucketEvidence(evidence, "functional-leadership")?.value ?? verifiedBucketEvidence(evidence, "division-leadership")?.value;
