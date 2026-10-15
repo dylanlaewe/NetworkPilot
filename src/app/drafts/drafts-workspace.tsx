@@ -40,6 +40,12 @@ import {
 import { hasResumeAttachmentClaim } from "@/application/resumes/attachment-claims";
 import { NetworkNavigation } from "@/app/network-command-shell";
 import styles from "./drafts-workspace.module.css";
+import transactionStyles from "@/app/transactional-surface.module.css";
+import {
+  closeDetailsOnEscape,
+  useDismissibleLayer,
+  useOwnedScrollState,
+} from "@/app/use-transactional-surface";
 
 const stateOrder: WorkspaceDraftState[] = [
   "ready",
@@ -135,58 +141,6 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
-function useDialogFocus(
-  open: boolean,
-  onClose: () => void,
-  returnFocus?: RefObject<HTMLElement | null>,
-) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const previous =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null,
-      fallback = returnFocus?.current,
-      root = ref.current,
-      focusable = () =>
-        Array.from(
-          root?.querySelectorAll<HTMLElement>(
-            'button:not(:disabled),a[href],input:not([type="hidden"]):not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
-          ) ?? [],
-        ),
-      frame = requestAnimationFrame(() => focusable()[0]?.focus());
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const items = focusable();
-      if (!items.length) return;
-      const first = items[0],
-        last = items.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", key);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", key);
-      const target =
-        previous && previous !== document.body ? previous : fallback;
-      requestAnimationFrame(() => target?.focus());
-    };
-  }, [onClose, open, returnFocus]);
-  return ref;
-}
-
 function SafeDialog({
   open,
   label,
@@ -202,7 +156,7 @@ function SafeDialog({
   className: string;
   returnFocus?: RefObject<HTMLElement | null>;
 }) {
-  const ref = useDialogFocus(open, onClose, returnFocus);
+  const ref = useDismissibleLayer<HTMLDivElement>(open, onClose, returnFocus);
   if (!open) return null;
   return (
     <div
@@ -214,7 +168,7 @@ function SafeDialog({
     >
       <div
         ref={ref}
-        className={className}
+        className={`${className} ${transactionStyles.surface}`}
         role="dialog"
         aria-modal="true"
         aria-label={label}
@@ -228,7 +182,14 @@ function SafeDialog({
 function SendSubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button name="confirmation" value="send-draft-now" disabled={pending}>
+    <button
+      className={transactionStyles.primary}
+      name="confirmation"
+      value="send-draft-now"
+      disabled={pending}
+      aria-disabled={pending}
+      aria-busy={pending}
+    >
       {pending ? "Sending…" : "Send"}
     </button>
   );
@@ -268,7 +229,7 @@ export function DraftCreationForm({
   const requested = countMode === "custom" ? customCount : Number(countMode);
   return (
     <form
-      className={styles.createDrafts}
+      className={`${styles.createDrafts} ${transactionStyles.surface}`}
       action={action}
       aria-busy={pending}
     >
@@ -290,6 +251,7 @@ export function DraftCreationForm({
         <label className={styles.creationBucket}>
           <span>Recipient group</span>
           <select
+            className={transactionStyles.field}
             value={bucket}
             disabled={bucketLocked || pending}
             onChange={(event) =>
@@ -328,6 +290,7 @@ export function DraftCreationForm({
         <label className={styles.customQuantity}>
           <span>Custom, 1–20</span>
           <input
+            className={transactionStyles.field}
             type="number"
             min="1"
             max="20"
@@ -346,7 +309,12 @@ export function DraftCreationForm({
             ? `${capacity} ${capacity === 1 ? "candidate is" : "candidates are"} ready in this group.`
             : "No candidates are currently ready in this group."}
         </small>
-        <button ref={submitRef} disabled={pending}>
+        <button
+          ref={submitRef}
+          className={transactionStyles.primary}
+          disabled={pending}
+          aria-disabled={pending}
+        >
           {pending ? "Creating drafts…" : "Create drafts"}
         </button>
       </div>
@@ -420,11 +388,30 @@ export function DraftsWorkspace({
   );
   const visibleAdditionState = normalizedDraftAdditionState(additionState);
   const queueRef = useRef<HTMLDivElement>(null);
+  const messageRef = useRef<HTMLElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const skipRef = useRef<HTMLFormElement>(null);
   const replaceRef = useRef<HTMLFormElement>(null);
   const createDraftsRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
+  const {
+    ref: queueScrollRef,
+    scrolled: queueScrolled,
+    atEnd: queueAtEnd,
+    onScroll: onQueueScroll,
+  } = useOwnedScrollState<HTMLDivElement>(queueRef);
+  const {
+    ref: messageScrollRef,
+    scrolled: messageScrolled,
+    atEnd: messageAtEnd,
+    onScroll: onMessageScroll,
+  } = useOwnedScrollState<HTMLElement>(messageRef);
+  const {
+    ref: sendDialogScrollRef,
+    scrolled: sendDialogScrolled,
+    atEnd: sendDialogAtEnd,
+    onScroll: onSendDialogScroll,
+  } = useOwnedScrollState<HTMLDivElement>();
   useEffect(() => {
     if (initialAddOpen) createDraftsRef.current?.focus();
   }, [initialAddOpen]);
@@ -713,10 +700,11 @@ export function DraftsWorkspace({
           </div>
         </header>
         <details
-          className={styles.creationRegion}
+          className={`${styles.creationRegion} ${transactionStyles.surface}`}
           aria-label="Create drafts"
           open={creationOpen}
           onToggle={(event) => setCreationOpen(event.currentTarget.open)}
+          onKeyDown={closeDetailsOnEscape}
         >
           <summary>
             <span>
@@ -807,7 +795,10 @@ export function DraftsWorkspace({
           <>
             <div
               className={styles.queue}
-              ref={queueRef}
+              ref={queueScrollRef}
+              onScroll={onQueueScroll}
+              data-scrolled={queueScrolled ? "true" : undefined}
+              data-at-end={queueAtEnd ? "true" : undefined}
               role="listbox"
               aria-label="Active draft queue"
               tabIndex={-1}
@@ -866,8 +857,12 @@ export function DraftsWorkspace({
             {selected ? (
               <>
                 <article
+                  ref={messageScrollRef}
                   id="draft-message"
                   className={styles.message}
+                  onScroll={onMessageScroll}
+                  data-scrolled={messageScrolled ? "true" : undefined}
+                  data-at-end={messageAtEnd ? "true" : undefined}
                   data-state={selected.state}
                   tabIndex={-1}
                 >
@@ -1251,9 +1246,12 @@ export function DraftsWorkspace({
                             <kbd aria-hidden="true">R</kbd>
                           </button>
                         </form>
-                        <details>
+                        <details onKeyDown={closeDetailsOnEscape}>
                           <summary>More</summary>
-                          <form action={permanentlyExcludeDraft}>
+                          <form
+                            action={permanentlyExcludeDraft}
+                            className={`${transactionStyles.surface} ${transactionStyles.menu}`}
+                          >
                             <input
                               type="hidden"
                               name="candidateId"
@@ -1314,39 +1312,53 @@ export function DraftsWorkspace({
         className={styles.sendDialog}
         returnFocus={primaryRef}
       >
-        <small>Final review · external consequence</small>
-        <h2>Send this message?</h2>
-        <div className={styles.sendRecipient}>
-          <small>To</small>
-          <span>{selected?.recipient}</span>
-          <span>{selected?.recipientEmail}</span>
-          <em>{selected?.title}</em>
-          <strong>{selected?.company}</strong>
-        </div>
-        <div className={styles.sendSubject}>
-          <small>Subject</small>
-          <p>{editedSubject}</p>
-        </div>
-        <div className={styles.sendBody}>
-          <small>Message</small>
-          <p>{editedBody}</p>
-        </div>
-        <dl>
-          <div>
-            <dt>Attachment</dt>
-            <dd>{confirmationAttachment}</dd>
+        <header className={`${styles.dialogHeader} ${transactionStyles.heading}`}>
+          <small>Final review · external consequence</small>
+          <h2>Send this message?</h2>
+          <p>Confirm the exact recipient, message, and attachment.</p>
+        </header>
+        <div
+          ref={sendDialogScrollRef}
+          className={`${styles.dialogBody} ${transactionStyles.scrollRegion}`}
+          onScroll={onSendDialogScroll}
+          data-scrolled={sendDialogScrolled ? "true" : undefined}
+          data-at-end={sendDialogAtEnd ? "true" : undefined}
+        >
+          <div className={styles.sendRecipient}>
+            <small>To</small>
+            <span>{selected?.recipient}</span>
+            <span>{selected?.recipientEmail}</span>
+            <em>{selected?.title}</em>
+            <strong>{selected?.company}</strong>
           </div>
-          <div>
-            <dt>Email address</dt>
-            <dd>{selected?.recipientEmail}</dd>
+          <div className={styles.sendSubject}>
+            <small>Subject</small>
+            <p>{editedSubject}</p>
           </div>
-        </dl>
-        <p>
-          Send is the only external action in this flow. NetworkPilot will
-          preserve this exact message and attachment, create the Gmail draft
-          if needed, and send it after this confirmation.
-        </p>
-        <form action={sendDraft}>
+          <div className={styles.sendBody}>
+            <small>Message</small>
+            <p>{editedBody}</p>
+          </div>
+          <dl>
+            <div>
+              <dt>Attachment</dt>
+              <dd>{confirmationAttachment}</dd>
+            </div>
+            <div>
+              <dt>Email address</dt>
+              <dd>{selected?.recipientEmail}</dd>
+            </div>
+          </dl>
+          <p className={transactionStyles.helper}>
+            Send is the only external action in this flow. NetworkPilot will
+            preserve this exact message and attachment, create the Gmail draft
+            if needed, and send it after this confirmation.
+          </p>
+        </div>
+        <form
+          action={sendDraft}
+          className={`${styles.dialogActions} ${transactionStyles.actions}`}
+        >
           <input
             type="hidden"
             name="snapshotId"
@@ -1366,7 +1378,12 @@ export function DraftsWorkspace({
             name="resumeDecision"
             value={confirmationResumeDecision}
           />
-          <button autoFocus type="button" onClick={closeSend}>
+          <button
+            className={transactionStyles.secondary}
+            autoFocus
+            type="button"
+            onClick={closeSend}
+          >
             Cancel
           </button>
           <SendSubmitButton />

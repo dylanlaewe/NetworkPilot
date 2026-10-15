@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   humanScopedDiscoveryReadiness,
   type ScopedDiscoveryReadiness,
 } from "@/application/candidate-refresh/scoped-readiness";
 import { refreshCandidates } from "./actions";
+import transactionStyles from "@/app/transactional-surface.module.css";
+import { closeDetailsOnEscape } from "@/app/use-transactional-surface";
 
 const labels = {
   recruiters: "Recruiters",
@@ -19,7 +21,12 @@ const labels = {
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <button disabled={pending}>
+    <button
+      className={transactionStyles.primary}
+      disabled={pending}
+      aria-disabled={pending}
+      aria-busy={pending}
+    >
       {pending ? "Finding people…" : `Find ${label}`}
     </button>
   );
@@ -54,6 +61,32 @@ export function CandidateRefreshControl({
 }) {
   const [preset, setPreset] = useState<"5" | "10" | "custom">("5");
   const [custom, setCustom] = useState(5);
+  const [expanded, setExpanded] = useState(open);
+  const triggerRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => {
+    setExpanded(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
+  useEffect(() => {
+    if (!expanded) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const root = panelRef.current?.closest("details");
+      if (root && event.target instanceof Node && !root.contains(event.target))
+        close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [close, expanded]);
   const desired = preset === "custom" ? custom : Number(preset);
   const remaining = Math.max(0, maximumPerDay - exposure);
   const maximumAuthorized = Math.max(
@@ -95,16 +128,27 @@ export function CandidateRefreshControl({
     );
 
   return (
-    <details className="refresh-candidates" open={open}>
-      <summary>Find people</summary>
-      <div>
-        <h3>Find {label}</h3>
+    <details
+      className={`refresh-candidates ${transactionStyles.surface}`}
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      onKeyDown={(event) => {
+        closeDetailsOnEscape(event);
+        if (event.key === "Escape") close();
+      }}
+    >
+      <summary ref={triggerRef}>Find people</summary>
+      <div ref={panelRef} className={transactionStyles.menu}>
+        <header className={transactionStyles.heading}>
+          <h3>Find {label}</h3>
+          <p>Choose a useful target, then confirm the maximum provider exposure.</p>
+        </header>
         <div
           className="sourcing-target"
           role="group"
           aria-label="Desired candidate quantity"
         >
-          <span>Desired candidates</span>
+          <span className={transactionStyles.label}>Desired candidates</span>
           {(["5", "10", "custom"] as const).map((value) => (
             <button
               key={value}
@@ -119,6 +163,7 @@ export function CandidateRefreshControl({
             <label>
               <span>Custom quantity, 1–20</span>
               <input
+                className={transactionStyles.field}
                 type="number"
                 min="1"
                 max="20"
@@ -144,13 +189,13 @@ export function CandidateRefreshControl({
           <div><dt>People in this group</dt><dd>{totalReserve}</dd></div>
           <div><dt>Ready for drafts</dt><dd>{available}</dd></div>
         </dl>
-        <p>
+        <p className={transactionStyles.helper}>
           {earlyCareerOnly ? "Scope: Early-career peers only. " : ""}
           The requested quantity is a target, not a guaranteed yield. This
           scoped search may use Apollo, up to the displayed maximum. Existing
           people are deduplicated before enrichment.
         </p>
-        <form action={refreshCandidates}>
+        <form action={refreshCandidates} className={transactionStyles.actions}>
           <input type="hidden" name="confirmation" value="confirmed" />
           <input type="hidden" name="allowProvider" value="yes" />
           <input type="hidden" name="requested" value={desired} />

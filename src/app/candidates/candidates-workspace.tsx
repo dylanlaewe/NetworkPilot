@@ -22,6 +22,12 @@ import {
   skipCandidate,
 } from "./actions";
 import { candidateSourcingStatus } from "./sourcing-status";
+import transactionStyles from "@/app/transactional-surface.module.css";
+import {
+  closeDetailsOnEscape,
+  useDismissibleLayer,
+  useOwnedScrollState,
+} from "@/app/use-transactional-surface";
 
 export type CandidateWorkspaceRow = ReserveCandidate & {
   companyTrustReview?: { commandId: string; reviewedAt: string };
@@ -229,9 +235,12 @@ function CandidateDispositionActions({
         <input type="hidden" name="earlyCareerOnly" value={String(earlyCareerOnly)} />
         <CandidateDispositionSubmit>Skip</CandidateDispositionSubmit>
       </form>
-      <details>
+      <details onKeyDown={closeDetailsOnEscape}>
         <summary>Don&apos;t show again</summary>
-        <form action={permanentlyExcludeCandidate}>
+        <form
+          action={permanentlyExcludeCandidate}
+          className={`${transactionStyles.surface} ${transactionStyles.menu}`}
+        >
           <input type="hidden" name="candidateId" value={candidateId} />
           <input type="hidden" name="nextCandidateId" value={nextCandidateId} />
           <input type="hidden" name="bucket" value={bucket} />
@@ -350,6 +359,7 @@ export function CandidatesWorkspace({
     [search, setSearch] = useState(""),
     [filters, setFilters] = useState<Filters>(initialFilters);
   const inspectorRef = useRef<HTMLElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const roles = useMemo(
       () => [...new Set(candidates.map((row) => row.functionName))].sort(),
@@ -450,6 +460,24 @@ export function CandidatesWorkspace({
     setMobileDetail(false);
     requestAnimationFrame(() => returnFocusRef.current?.focus());
   }, []);
+  const closeFilter = useCallback(() => setFilterOpen(false), []);
+  const filterLayerRef = useDismissibleLayer<HTMLDivElement>(
+    filterOpen,
+    closeFilter,
+    filterButtonRef,
+  );
+  const {
+    ref: listScrollRef,
+    scrolled: listScrolled,
+    atEnd: listAtEnd,
+    onScroll: onListScroll,
+  } = useOwnedScrollState<HTMLDivElement>();
+  const {
+    ref: inspectorScrollRef,
+    scrolled: inspectorScrolled,
+    atEnd: inspectorAtEnd,
+    onScroll: onInspectorScroll,
+  } = useOwnedScrollState<HTMLElement>(inspectorRef);
   useEffect(() => {
     if (!mobileDetail) return;
     const root = inspectorRef.current;
@@ -631,6 +659,7 @@ export function CandidatesWorkspace({
               />
             </label>
             <button
+              ref={filterButtonRef}
               type="button"
               onClick={() => setFilterOpen((open) => !open)}
               aria-expanded={filterOpen}
@@ -652,16 +681,21 @@ export function CandidatesWorkspace({
           </div>
         {filterOpen ? (
           <div
-            className={styles.sheet}
+            ref={filterLayerRef}
+            className={`${styles.sheet} ${transactionStyles.surface} ${transactionStyles.menu}`}
             role="dialog"
             aria-label="Filter candidates"
           >
-            <header>
+            <header className={transactionStyles.heading}>
               <div>
                 <small>Candidate view</small>
                 <strong>Filter candidates</strong>
               </div>
-              <button type="button" onClick={() => setFilterOpen(false)}>
+              <button
+                className={transactionStyles.secondary}
+                type="button"
+                onClick={closeFilter}
+              >
                 Done
               </button>
             </header>
@@ -849,6 +883,10 @@ export function CandidatesWorkspace({
         <div className={styles.work}>
           <div
             className={styles.list}
+            ref={listScrollRef}
+            onScroll={onListScroll}
+            data-scrolled={listScrolled ? "true" : undefined}
+            data-at-end={listAtEnd ? "true" : undefined}
             role="listbox"
             aria-label="Candidate supply"
             aria-hidden={mobileDetail ? "true" : undefined}
@@ -917,7 +955,10 @@ export function CandidatesWorkspace({
           </div>
           {selected ? (
             <aside
-              ref={inspectorRef}
+              ref={inspectorScrollRef}
+              onScroll={onInspectorScroll}
+              data-scrolled={inspectorScrolled ? "true" : undefined}
+              data-at-end={inspectorAtEnd ? "true" : undefined}
               className={`${styles.inspector} ${mobileDetail ? styles.detailOpen : ""}`}
               role={mobileDetail ? "dialog" : undefined}
               aria-modal={mobileDetail ? "true" : undefined}
@@ -1066,7 +1107,11 @@ function Filter({
   return (
     <label className={styles.filter} data-active={active ? "true" : undefined}>
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        className={transactionStyles.field}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
         {options.map(([key, text]) => (
           <option key={key} value={key}>
             {text}

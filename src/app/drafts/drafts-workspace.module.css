@@ -19,3 +19,48 @@
 }
 @media(max-width:390px){.workspace{padding-inline:12px}.contextBar{gap:10px}.contextBar>div:first-child{width:100%}.createDrafts{grid-template-columns:1fr;padding:12px}.creationIntro,.creationSubmit{grid-column:1}.creationQuantity{flex-wrap:wrap}.creationSubmit{grid-template-columns:1fr}.creationSubmit button{width:100%}.messageHeader strong{font-size:18px}.dock{grid-template-columns:72px minmax(0,1fr)}.secondaryActions button{padding-inline:6px}.sendDialog,.reconcileDialog{padding:20px}.sendDialog dl{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.shell *,.shell *::before,.shell *::after{transition:none!important;animation-duration:.01ms!important}}
+
+/* Shared transactional craft: container-aware composition and owned scrolling. */
+.creationRegion,.sendDialog,.reconcileDialog{container-type:inline-size}
+.creationPanel{container-type:inline-size}
+.creationSubmit button{min-width:132px}
+.planeLabel{position:sticky;z-index:3;top:0;background:#f4f4f1;transition:box-shadow 160ms ease-out}
+.queue[data-scrolled="true"]>.planeLabel{box-shadow:0 8px 16px -16px #20211f99}
+.queue>section>h2{position:sticky;z-index:2;top:44px;background:#f4f4f1}
+.message{overscroll-behavior:contain;scrollbar-gutter:stable}
+.mobileBack{position:sticky;z-index:4;top:0;transition:box-shadow 160ms ease-out}
+.message[data-scrolled="true"] .mobileBack{box-shadow:0 8px 16px -16px #20211f99}
+.secondaryActions details>form{right:auto;left:0;max-width:min(300px,calc(100vw - 24px));overflow-wrap:anywhere}
+.secondaryActions details>form button{white-space:normal;text-align:left}
+
+.sendDialog{display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;padding:0}
+.dialogHeader{padding:24px 24px 18px}
+.dialogHeader>small{color:var(--danger);font-size:12px;font-weight:560}
+.dialogHeader h2{margin:0}
+.dialogHeader p{font-size:13px}
+.dialogBody{padding:0 24px 18px;transition:box-shadow 160ms ease-out}
+.dialogBody[data-scrolled="true"]{box-shadow:inset 0 10px 15px -18px #20211fcc}
+.dialogBody:not([data-at-end="true"]){box-shadow:inset 0 10px 15px -18px #20211fcc,inset 0 -10px 15px -18px #20211fcc}
+.dialogActions{padding:16px 24px 20px;border-top:1px solid transparent;background:#fff;transition:border-color 160ms ease-out}
+.dialogBody:not([data-at-end="true"])+.dialogActions{border-top-color:var(--line)}
+.sendBody p{max-height:none;overflow:visible}
+.sendDialog dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sendDialog form{justify-content:flex-end}
+
+@container (max-width:760px){
+  .createDrafts{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end}
+  .creationIntro{grid-column:1/-1}
+  .creationSubmit{grid-column:1/-1;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-items:start}
+  .creationSubmit small{text-align:left}
+}
+@container (max-width:520px){
+  .createDrafts{grid-template-columns:minmax(0,1fr)}
+  .creationIntro,.creationSubmit{grid-column:1}
+  .creationQuantity{flex-wrap:wrap}
+  .creationSubmit{grid-template-columns:minmax(0,1fr)}
+  .creationSubmit button{width:100%}
+  .sendDialog dl{grid-template-columns:1fr}
+  .dialogHeader{padding:20px 20px 16px}
+  .dialogBody{padding-inline:20px}
+  .dialogActions{padding:14px 20px 18px}
+}
