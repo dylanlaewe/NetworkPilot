@@ -162,10 +162,15 @@ describe("bucket persistence and reserve integration", () => {
     const stale = JSON.parse(row.normalized_snapshot_json) as typeof imported;
     stale.state = "rejected";
     stale.gateFailures = [
+      "company-industry-unsupported",
+      "company-unreviewed",
       "insufficient-or-unknown-experience",
       "prohibited-seniority",
       "employment-history-incomplete",
     ];
+    stale.strategyCompanyMatch = null;
+    stale.source.datasetClassification = "authorized-provider";
+    stale.source.currentOrganization.providerId = "provider-company-801";
     r.native
       .prepare(
         "UPDATE imported_candidates SET normalized_snapshot_json=?,lifecycle_state='rejected' WHERE id=?",
@@ -173,7 +178,15 @@ describe("bucket persistence and reserve integration", () => {
       .run(JSON.stringify(stale), imported.id);
 
     const projected = r.findImportedCandidate("bucket-fixture", "person-801")!;
-    expect(projected).toMatchObject({ state: "eligible", gateFailures: [] });
+    expect(projected).toMatchObject({
+      state: "eligible",
+      gateFailures: [],
+      employerTrust: { state: "unverified" },
+      strategyCompanyMatch: {
+        canonicalName: stale.source.currentOrganization.name,
+        method: "discovered-provider",
+      },
+    });
     expect(
       JSON.parse(
         (

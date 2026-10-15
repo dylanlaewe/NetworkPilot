@@ -1,6 +1,6 @@
 import { bucketAwareGateFailures, classifyRecipientBucket, verifiedBucketEvidence, type BucketScope } from "@/domain/recipient-buckets";
 import { classifyRecruiter, classifyRecruiterEmployerDomain, type RecruiterClassification, type RecruitingDomain } from "@/domain/recruiters";
-import type { CompanyTrustResolution } from "@/domain/company-trust";
+import { discoveredCompanyIdentity, type CompanyTrustResolution } from "@/domain/company-trust";
 import type { ImportedCandidateSnapshot } from "./types";
 
 const dynamicRecruiterGate = (code: string) => code.startsWith("recruiter-") || code.startsWith("company-trust-") || code === "company-unreviewed" || code.startsWith("recipient-bucket:recruiter-") || code.startsWith("recipient-bucket:company-trust-");
@@ -23,11 +23,39 @@ export function applyCurrentRecipientPolicy(
 ): ImportedCandidateSnapshot {
   if (!candidate.recipientBucket) return candidate;
   const next = structuredClone(candidate);
+  const recipientBucket = next.recipientBucket!;
+  let projectedProviderCompany = false;
+  if (
+    recipientBucket.bucket !== "recruiters" &&
+    recipientBucket.reviewState === "accepted" &&
+    !next.strategyCompanyMatch &&
+    next.source.datasetClassification === "authorized-provider"
+  ) {
+    const companyId = discoveredCompanyIdentity({
+      employerDomain: next.source.currentOrganization.domain,
+      providerNamespace: next.source.sourceProviderId,
+      providerEmployerId: next.source.currentOrganization.providerId,
+    });
+    if (companyId) {
+      projectedProviderCompany = true;
+      next.strategyCompanyMatch = {
+        companyId,
+        canonicalName: next.source.currentOrganization.name,
+        method: "discovered-provider",
+      };
+    }
+  }
   next.gateFailures = [
     ...new Set(
       bucketAwareGateFailures({
         classification: next.recipientBucket!,
-        gateFailures: next.gateFailures,
+        gateFailures: projectedProviderCompany
+          ? next.gateFailures.filter(
+              (code) =>
+                code !== "company-industry-unsupported" &&
+                code !== "company-unreviewed",
+            )
+          : next.gateFailures,
         minimumYears: next.experience.minimumSupportedYears,
         providerSeniority: next.source.providerMetadata?.providerSeniority,
       }),

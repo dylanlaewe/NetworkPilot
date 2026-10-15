@@ -101,6 +101,7 @@ export function projectTitleSupportedPersonalNetworking(input: {
 export function bucketAwareGateFailures(input: { classification: RecipientBucketClassification; gateFailures: readonly string[]; minimumYears: number | null; providerSeniority?: string }): string[] {
   const c = input.classification, failures = input.gateFailures.filter(code => !code.startsWith("recipient-bucket:"));
   if (c.reviewState !== "accepted" || !c.bucket) return [...failures, ...c.explanationCodes.map(code => `recipient-bucket:${code}`)];
+  const personalRelationship = c.bucket !== "recruiters";
   const relationshipPeer = c.bucket === "peers";
   const leadership = ["managers", "executives", "ceos"].includes(c.bucket);
   const titleSupportedLeadership=c.explanationCodes.includes("title-supported-personal-networking");
@@ -111,7 +112,7 @@ export function bucketAwareGateFailures(input: { classification: RecipientBucket
   const providerSenioritySupportsBucket=input.providerSeniority===undefined||(c.bucket==="executives"&&["director","vp","head","partner","c_suite"].includes(input.providerSeniority))||(c.bucket==="ceos"&&input.providerSeniority==="c_suite");
   const reviewedLeadershipSeniority=providerSenioritySupportsBucket&&((c.bucket==="executives"&&Boolean((verifiedBucketEvidence(c.evidence,"functional-leadership")??verifiedBucketEvidence(c.evidence,"division-leadership"))?.reviewedBy?.trim()))||(c.bucket==="ceos"&&Boolean(verifiedBucketEvidence(c.evidence,"company-leadership")?.reviewedBy?.trim())));
   const titleSupportedSeniority=titleSupportedLeadership&&providerSenioritySupportsBucket;
-  return failures.filter(code => !(relationshipPeer && (code === "insufficient-or-unknown-experience" || code === "prohibited-seniority" || code === "prohibited-target-seniority" || code.startsWith("experience-") || code.startsWith("employment-history-"))) && !((reviewedLeadershipSeniority || titleSupportedSeniority) && code === "prohibited-seniority") && !(relationshipRelevance && ["recipient-function-unknown","recipient-function-unrelated"].includes(code)));
+  return failures.filter(code => !(personalRelationship && code === "company-trust-unverified") && !(relationshipPeer && (code === "insufficient-or-unknown-experience" || code === "prohibited-seniority" || code === "prohibited-target-seniority" || code.startsWith("experience-") || code.startsWith("employment-history-"))) && !((reviewedLeadershipSeniority || titleSupportedSeniority) && code === "prohibited-seniority") && !(relationshipRelevance && ["recipient-function-unknown","recipient-function-unrelated"].includes(code)));
 }
 export function bucketProjection(classification?: RecipientBucketClassification | null) {
   return { recipientBucket: classification ?? null, bucketLabel: bucketLabel(classification), bucketReviewState: classification?.reviewState ?? "legacy-unclassified", bucketReviewReason: classification?.explanationCodes.join(", ") ?? null, bucketEvidenceReferences: classification?.evidenceReferences ?? [], bucketClassifierVersion: classification?.classifierVersion ?? null };
