@@ -211,6 +211,15 @@ describe("Drafts preferred CRM workflow", () => {
     expect(source).not.toContain("sendGmailDraft");
   });
 
+  it("returns focus to the Create drafts summary after Escape", () => {
+    const source = workspace();
+    expect(source).toContain("createDraftsSummaryRef");
+    expect(source).toContain("closeDraftCreation");
+    expect(source).toContain('event.key !== "Escape"');
+    expect(source).toContain("createDraftsSummaryRef.current?.focus()");
+    expect(source).toContain('event.target.closest("details")');
+  });
+
   it("uses the exact empty-state handoff to Candidates", () => {
     const source = workspace();
     expect(source).toContain("No drafts yet");

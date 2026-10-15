@@ -393,6 +393,7 @@ export function DraftsWorkspace({
   const skipRef = useRef<HTMLFormElement>(null);
   const replaceRef = useRef<HTMLFormElement>(null);
   const createDraftsRef = useRef<HTMLButtonElement>(null);
+  const createDraftsSummaryRef = useRef<HTMLElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const {
     ref: queueScrollRef,
@@ -415,6 +416,10 @@ export function DraftsWorkspace({
   useEffect(() => {
     if (initialAddOpen) createDraftsRef.current?.focus();
   }, [initialAddOpen]);
+  const closeDraftCreation = useCallback(() => {
+    setCreationOpen(false);
+    requestAnimationFrame(() => createDraftsSummaryRef.current?.focus());
+  }, []);
   const closeSend = useCallback(() => {
     setSendOpen(false);
     requestAnimationFrame(() => primaryRef.current?.focus());
@@ -572,6 +577,13 @@ export function DraftsWorkspace({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (
+        event.key === "Escape" &&
+        event.target instanceof Element &&
+        event.target.closest("details")
+      )
+        return;
       if (event.key === "Escape") {
         if (sendOpen) closeSend();
         else if (reconcileOpen) closeReconcile();
@@ -704,9 +716,14 @@ export function DraftsWorkspace({
           aria-label="Create drafts"
           open={creationOpen}
           onToggle={(event) => setCreationOpen(event.currentTarget.open)}
-          onKeyDown={closeDetailsOnEscape}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || !event.currentTarget.open) return;
+            event.preventDefault();
+            event.stopPropagation();
+            closeDraftCreation();
+          }}
         >
-          <summary>
+          <summary ref={createDraftsSummaryRef}>
             <span>
               <strong>Create drafts</strong>
               <small>

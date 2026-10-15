@@ -22,6 +22,7 @@ describe("shared transactional component craft", () => {
     expect(behavior).toContain('event.key === "Escape"');
     expect(behavior).toContain("returnFocus?.current");
     expect(behavior).toContain("last.focus()");
+    expect(behavior).toContain("requestAnimationFrame(() => summary?.focus())");
     expect(candidates).toContain("useDismissibleLayer<HTMLDivElement>");
     expect(drafts).toContain("useDismissibleLayer<HTMLDivElement>");
     expect(drafts).toContain("closeDetailsOnEscape");

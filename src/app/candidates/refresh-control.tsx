@@ -70,6 +70,13 @@ export function CandidateRefreshControl({
   }, []);
   useEffect(() => {
     if (!expanded) return;
+    const focusFrame = requestAnimationFrame(() => {
+      panelRef.current
+        ?.querySelector<HTMLElement>(
+          'button:not(:disabled),input:not(:disabled),select:not(:disabled)',
+        )
+        ?.focus();
+    });
     const onPointerDown = (event: PointerEvent) => {
       const root = panelRef.current?.closest("details");
       if (root && event.target instanceof Node && !root.contains(event.target))
@@ -83,6 +90,7 @@ export function CandidateRefreshControl({
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };

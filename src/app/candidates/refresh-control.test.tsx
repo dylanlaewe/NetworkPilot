@@ -1,8 +1,18 @@
 import {renderToStaticMarkup} from "react-dom/server";
+import {readFileSync} from "node:fs";
+import {join} from "node:path";
 import {describe,expect,it} from "vitest";
 import {CandidateRefreshControl} from "./refresh-control";
 
 describe("bucket-scoped Find people control",()=>{
+  it("moves focus into an opened panel and supports document-level Escape with focus return",()=>{
+    const source=readFileSync(join(process.cwd(),"src/app/candidates/refresh-control.tsx"),"utf8");
+    expect(source).toContain("requestAnimationFrame");
+    expect(source).toContain("panelRef.current");
+    expect(source).toContain("document.addEventListener(\"keydown\", onKeyDown)");
+    expect(source).toContain('event.key !== "Escape"');
+    expect(source).toContain("triggerRef.current?.focus()");
+  });
   it("shows the selected bucket, peer scope, and stable request token in its confirmation form",()=>{
     const html=renderToStaticMarkup(<CandidateRefreshControl available={0} totalReserve={2} fiveBucketEnabled bucket="peers" earlyCareerOnly requestId="fixture-request-id"/>);
     expect(html).toContain("Find people");

@@ -100,6 +100,8 @@ export function closeDetailsOnEscape(event: ReactKeyboardEvent<HTMLDetailsElemen
   if (event.key !== "Escape" || !event.currentTarget.open) return;
   event.preventDefault();
   event.stopPropagation();
-  event.currentTarget.open = false;
-  event.currentTarget.querySelector<HTMLElement>("summary")?.focus();
+  const details = event.currentTarget;
+  const summary = details.querySelector<HTMLElement>("summary");
+  details.open = false;
+  requestAnimationFrame(() => summary?.focus());
 }
