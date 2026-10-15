@@ -336,6 +336,7 @@ export function DraftsWorkspace({
   bucketNavigation,
   addRequestId,
   initialAddOpen = false,
+  sendAction = sendDraft,
 }: {
   drafts: WorkspaceDraft[];
   resumes: WorkspaceResume[];
@@ -350,6 +351,7 @@ export function DraftsWorkspace({
   bucketNavigation?: BucketNavigationData;
   addRequestId: string;
   initialAddOpen?: boolean;
+  sendAction?: (formData: FormData) => void | Promise<void>;
 }) {
   const [bucketSelection, setBucketSelection] = useState<BucketSelection>(bucketNavigation?.selected ?? "all");
   const [earlyCareerOnly, setEarlyCareerOnly] = useState(Boolean(bucketNavigation?.earlyCareerOnly));
@@ -1373,7 +1375,7 @@ export function DraftsWorkspace({
           </p>
         </div>
         <form
-          action={sendDraft}
+          action={sendAction}
           className={`${styles.dialogActions} ${transactionStyles.actions}`}
         >
           <input

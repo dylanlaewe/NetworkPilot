@@ -200,6 +200,8 @@ describe("Drafts preferred CRM workflow", () => {
       expect(source).toContain(`name="${field}"`);
     }
     expect(source).toContain('value="send-draft-now"');
+    expect(source).toContain("sendAction = sendDraft");
+    expect(source).toContain("action={sendAction}");
     expect(source).toContain("selected?.recipient");
     expect(source).toContain("selected?.recipientEmail");
     expect(source).toContain("editedSubject");
