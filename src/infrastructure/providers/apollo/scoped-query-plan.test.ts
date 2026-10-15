@@ -106,6 +106,59 @@ describe("scoped Apollo query plans", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps every approved peer lane in the default search while honoring the explicit early-career filter", () => {
+    const broad = planScopedApolloQueries({
+      scope: { bucket: "peers" },
+      maximum: 5,
+      maximumSearchCalls: 5,
+    });
+    expect(broad[0]!.request.specificTitles).toEqual(
+      expect.arrayContaining([
+        "Product Analyst",
+        "Product Operations Analyst",
+        "Data Analyst",
+        "Business Intelligence Analyst",
+        "Business Analyst",
+        "Software Engineer",
+        "Data Engineer",
+        "Implementation Engineer",
+        "Technical Business Analyst",
+      ]),
+    );
+    const earlyCareer = planScopedApolloQueries({
+      scope: { bucket: "peers", earlyCareerOnly: true },
+      maximum: 5,
+      maximumSearchCalls: 5,
+    });
+    expect(earlyCareer).toHaveLength(1);
+    expect(earlyCareer[0]!.request.specificTitles).toContain(
+      "Junior Data Analyst",
+    );
+    expect(earlyCareer[0]!.request.specificTitles).not.toContain(
+      "Product Analyst",
+    );
+  });
+
+  it("expresses CEO or President as distinct Apollo OR terms with local negative filters", () => {
+    const request = planScopedApolloQueries({
+      scope: { bucket: "ceos" },
+      maximum: 5,
+      maximumSearchCalls: 5,
+    })[0]!.request;
+    expect(request.specificTitles).toEqual(
+      expect.arrayContaining(["CEO", "C.E.O.", "President"]),
+    );
+    expect(request.excludedTitles).toEqual(
+      expect.arrayContaining([
+        "Vice President",
+        "Regional President",
+        "Divisional President",
+        "Executive Recruiter",
+      ]),
+    );
+    expect(request.includeSimilarTitles).toBe(false);
+  });
+
   it("rejects an unsupported bucket instead of falling back", () => {
     expect(() =>
       planScopedApolloQueries({

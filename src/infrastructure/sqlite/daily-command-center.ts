@@ -103,6 +103,13 @@ export function candidatePresentationName(
     last = candidate.source.person.lastName.trim();
   return `${first || "Unknown"}${last ? ` ${last[0]}.` : ""}`;
 }
+
+/** Display only retained title evidence; a bucket label is never a title. */
+export function candidatePresentationTitle(
+  candidate: ImportedCandidateSnapshot,
+): string {
+  return candidate.source.currentTitle.trim() || "Title unavailable";
+}
 export function recruiterSelectionRationale(input: {
   trustState: "unverified" | "trusted-operating" | "disallowed-recruiting-service";
   technicalRecruiting: boolean;
@@ -285,7 +292,7 @@ export function loadDailyCommandCenter(
             providerEmployerId:
               c.source.currentOrganization.providerId ?? null,
           },
-          title: c.source.currentTitle,
+          title: candidatePresentationTitle(c),
           industry: c.source.industrySignals[0] ?? "Unclassified",
           geography: c.source.location,
           functionName:

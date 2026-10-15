@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { recruiterSelectionRationale } from "./daily-command-center";
+import type { ImportedCandidateSnapshot } from "@/application/ingestion";
+import {
+  candidatePresentationTitle,
+  recruiterSelectionRationale,
+} from "./daily-command-center";
+
+const candidateWithTitle = (title: string) =>
+  ({ source: { currentTitle: title } }) as ImportedCandidateSnapshot;
+
+describe("candidate title projection", () => {
+  it("displays retained provider title evidence without normalizing it to the bucket", () => {
+    expect(
+      candidatePresentationTitle(
+        candidateWithTitle("President & Chief Executive Officer (CEO)"),
+      ),
+    ).toBe("President & Chief Executive Officer (CEO)");
+    expect(candidatePresentationTitle(candidateWithTitle("CEO"))).toBe("CEO");
+    expect(candidatePresentationTitle(candidateWithTitle("President"))).toBe(
+      "President",
+    );
+  });
+
+  it("uses an explicit unavailable state instead of fabricating a combined title", () => {
+    const title = candidatePresentationTitle(candidateWithTitle("   "));
+    expect(title).toBe("Title unavailable");
+    expect(title).not.toBe("CEO & President");
+    expect(title).not.toBe("CEOs & presidents");
+  });
+});
 
 describe("recruiter selection rationale", () => {
   it("never describes an unverified provider employer as reviewed", () => {

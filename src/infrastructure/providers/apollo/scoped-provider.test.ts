@@ -3,6 +3,7 @@ import { ScopedDiscoveryProviderFailure } from "@/application/candidate-refresh/
 import {
   type ApolloSearchProgressStore,
   type ApolloPersonReservationStore,
+  companyLeadershipTitleKind,
   scopedApolloQueryKey,
   ScopedApolloProvider,
 } from "./scoped-provider";
@@ -184,6 +185,26 @@ const discover = (
   });
 
 describe("concrete scoped Apollo provider", () => {
+  it.each([
+    ["CEO", "ceo"],
+    ["Chief Executive Officer", "ceo"],
+    ["C.E.O.", "ceo"],
+    ["Co-CEO", "ceo"],
+    ["President", "president"],
+    ["Interim President", "president"],
+    ["CEO & President", "combined"],
+    ["President and Chief Executive Officer", "combined"],
+    ["Vice President", null],
+    ["Vice-President", null],
+    ["V.P.", null],
+    ["Regional President", null],
+    ["President, Executive Search", null],
+    ["Executive Recruiter", null],
+    ["Founder", null],
+  ] as const)("classifies company-leadership title %s", (title, expected) => {
+    expect(companyLeadershipTitleKind(title)).toBe(expected);
+  });
+
   it("keys progress by the full semantic query but not operation labels or page", () => {
     const base = {
       batchId: "operation-one",
@@ -387,6 +408,114 @@ describe("concrete scoped Apollo provider", () => {
     ).toBe(false);
   });
 
+  it("interleaves mixed peer role families before committing enrichment spend", async () => {
+    const juniorOne = person("a-junior-001", "Junior Data Analyst", "entry");
+    const juniorTwo = person("b-junior-002", "Junior Data Analyst", "entry");
+    const juniorThree = person("c-junior-003", "Junior Data Analyst", "entry");
+    const product = person("z-product-001", "Product Operations Analyst", "senior");
+    const engineering = person("y-engineering-001", "Software Engineer", "senior");
+    const business = person("w-business-001", "Technical Business Analyst", "senior");
+    const implementation = person("x-implementation-001", "Implementation Engineer", "senior");
+    const expected = [juniorOne, product, engineering, business, juniorTwo];
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [
+            searchPerson(juniorOne),
+            searchPerson(juniorTwo),
+            searchPerson(juniorThree),
+            searchPerson(product),
+            searchPerson(engineering),
+            searchPerson(business),
+            searchPerson(implementation),
+          ],
+        }),
+        response(200, { people: [] }),
+      ],
+      expected.map((candidate) =>
+        response(200, {
+          person: candidate,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ),
+    );
+    const result = await discover(provider(transport), "peers", 5);
+    expect(result.records.map((record) => record.currentTitle)).toEqual([
+      "Junior Data Analyst",
+      "Product Operations Analyst",
+      "Software Engineer",
+      "Technical Business Analyst",
+      "Junior Data Analyst",
+    ]);
+    expect(result.records.map((record) => record.providerRecordId)).toEqual(
+      expected.map((candidate) => candidate.id),
+    );
+  });
+
+  it("honors the explicit early-career peer filter even if a broad role leaks into provider results", async () => {
+    const broad = person("a-product-001", "Product Analyst", "senior");
+    const early = person("z-junior-001", "Junior Data Analyst", "entry");
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [searchPerson(broad), searchPerson(early)],
+        }),
+      ],
+      [
+        response(200, {
+          person: early,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ],
+    );
+    const result = await provider(transport).discover({
+      scope: { bucket: "peers", earlyCareerOnly: true },
+      maximum: 1,
+      operationId: "offline-peers-early-career",
+      maximumSearchCalls: 5,
+    });
+    expect(result).toMatchObject({
+      enrichmentAttempts: 1,
+      rejectedCandidates: 1,
+      records: [expect.objectContaining({ providerRecordId: early.id })],
+    });
+  });
+
+  it("interleaves CEO-only, President-only, and combined-title supply without relabeling it", async () => {
+    const combinedOne = person("a-combined-001", "CEO & President", "c_suite");
+    const combinedTwo = person("b-combined-002", "President and CEO", "c_suite");
+    const president = person("y-president-001", "President", "c_suite");
+    const ceo = person("z-ceo-001", "C.E.O.", "c_suite");
+    const expected = [ceo, president, combinedOne];
+    const transport = new Transport(
+      [
+        response(200, {
+          people: [
+            searchPerson(combinedOne),
+            searchPerson(combinedTwo),
+            searchPerson(president),
+            searchPerson(ceo),
+          ],
+        }),
+      ],
+      expected.map((candidate) =>
+        response(200, {
+          person: candidate,
+          match_confidence: "high",
+          credits_consumed: 1,
+        }),
+      ),
+    );
+    const result = await discover(provider(transport), "ceos", 3);
+    expect(result.records.map((record) => record.currentTitle)).toEqual([
+      "C.E.O.",
+      "President",
+      "CEO & President",
+    ]);
+  });
+
   it.each([
     ["executives", "VP of Data", "vp"],
     ["ceos", "Chief Executive Officer", "c_suite"],
@@ -478,7 +607,7 @@ describe("concrete scoped Apollo provider", () => {
         response(200, { people: [searchPerson(first), searchPerson(second)], pagination: { total_entries: 80 } }),
         response(200, { people: [searchPerson(third), searchPerson(fourth)], pagination: { total_entries: 80 } }),
       ],
-      [first, second, third, fourth].map((candidate) => response(200, { person: candidate, match_confidence: "high" })),
+      [second, first, fourth, third].map((candidate) => response(200, { person: candidate, match_confidence: "high" })),
     );
     const subject = provider(transport, { searchProgress: progress, reservations });
     const firstRun = await discover(subject, "ceos", 2);

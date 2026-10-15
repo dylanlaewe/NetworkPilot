@@ -137,6 +137,34 @@ function normalizedTitleTokens(value: string): string[] {
   return tokens;
 }
 
+type CompanyLeadershipTitleKind = "ceo" | "president" | "combined";
+
+const CEO_TITLE = /\b(?:ceo|c[.\s]*e[.\s]*o|chief\s+executive\s+officer)\b/i;
+const PRESIDENT_TITLE = /\bpresident\b/i;
+const VICE_PRESIDENT_TITLE = /\b(?:vice[\s-]*president|v[.\s]*p)\b/i;
+
+/**
+ * Apollo title filters are OR terms, but the retained current title is still
+ * the authority for local scope. This keeps standalone CEO and President
+ * records distinct and rejects substring/scope collisions before enrichment.
+ */
+export function companyLeadershipTitleKind(
+  title: string,
+): CompanyLeadershipTitleKind | null {
+  if (
+    /\b(regional|region|division|divisional|area|market|business unit|recruiter|recruiting|talent acquisition|executive search|staffing)\b/i.test(
+      title,
+    )
+  )
+    return null;
+  const ceo = CEO_TITLE.test(title);
+  const president = PRESIDENT_TITLE.test(title);
+  if (!ceo && !president) return null;
+  if (!ceo && VICE_PRESIDENT_TITLE.test(title)) return null;
+  if (ceo && president) return "combined";
+  return ceo ? "ceo" : "president";
+}
+
 function searchTitleEligible(
   record: CandidateSourceRecord,
   requestedTitles: readonly string[],
@@ -145,23 +173,7 @@ function searchTitleEligible(
   const actual = normalizedTitleTokens(record.currentTitle);
   if (actual.length === 0) return false;
   if (bucket === "ceos") {
-    const title = record.currentTitle;
-    if (
-      /\b(regional|region|division|divisional|area|market|business unit|recruiter|recruiting|talent acquisition|executive search|staffing)\b/i.test(
-        title,
-      )
-    )
-      return false;
-    const explicitlyCeo =
-      /\bceo\b/i.test(title) ||
-      /\bchief\s+executive\s+officer\b/i.test(title);
-    const explicitlyPresident = /\bpresident\b/i.test(title);
-    // Founder-only and vice-president-only roles are outside this bucket, but
-    // explicit company-leadership combinations such as Founder & CEO, co-CEO,
-    // and Interim President remain eligible for enrichment.
-    if (!explicitlyCeo && !explicitlyPresident) return false;
-    if (!explicitlyCeo && /\b(vice president|vp)\b/i.test(title)) return false;
-    return true;
+    return companyLeadershipTitleKind(record.currentTitle) !== null;
   }
   return requestedTitles.some((requestedTitle) => {
     const requested = normalizedTitleTokens(requestedTitle);
@@ -176,6 +188,65 @@ function searchTitleEligible(
       actual.every((token) => requested.includes(token))
     );
   });
+}
+
+type PeerSelectionFamily =
+  | "data-analysis"
+  | "product"
+  | "engineering"
+  | "implementation-business"
+  | "other";
+
+const PEER_FAMILY_ORDER: readonly PeerSelectionFamily[] = [
+  "data-analysis",
+  "product",
+  "engineering",
+  "implementation-business",
+  "other",
+];
+
+function peerSelectionFamily(title: string): PeerSelectionFamily {
+  const normalized = ` ${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")} `;
+  if (normalized.includes(" product ")) return "product";
+  if (
+    /\b(?:implementation|solutions?|technical business|operations?|program|project)\b/.test(
+      normalized,
+    )
+  )
+    return "implementation-business";
+  if (
+    /\b(?:engineer|engineering|software|developer|machine learning)\b/.test(
+      normalized,
+    )
+  )
+    return "engineering";
+  if (
+    /\b(?:data|analytics?|analyst|business intelligence|bi|scientist)\b/.test(
+      normalized,
+    )
+  )
+    return "data-analysis";
+  return "other";
+}
+
+function candidateSelectionFamily(
+  candidate: CandidateSourceRecord,
+  bucket: RecipientBucket,
+): string {
+  if (bucket === "peers") return peerSelectionFamily(candidate.currentTitle);
+  if (bucket === "ceos")
+    return companyLeadershipTitleKind(candidate.currentTitle) ?? "other";
+  return "all";
+}
+
+function selectionFamilyOrder(bucket: RecipientBucket): readonly string[] {
+  if (bucket === "peers") return PEER_FAMILY_ORDER;
+  if (bucket === "ceos") return ["ceo", "president", "combined", "other"];
+  return ["all"];
 }
 
 export function scopedApolloQueryKey(input: {
@@ -202,27 +273,53 @@ export function scopedApolloQueryKey(input: {
 function diversifiedCandidates(
   candidates: readonly CandidateSourceRecord[],
   maximum: number,
+  bucket: RecipientBucket,
 ): CandidateSourceRecord[] {
   if (maximum === 0) return [];
   const ranked = [...candidates].sort((left, right) =>
     left.providerRecordId.localeCompare(right.providerRecordId),
   );
+  const families = selectionFamilyOrder(bucket);
+  const queues = new Map(
+    families.map((family) => [
+      family,
+      ranked.filter(
+        (candidate) => candidateSelectionFamily(candidate, bucket) === family,
+      ),
+    ]),
+  );
   const selected: CandidateSourceRecord[] = [];
   const selectedIds = new Set<string>();
   const perEmployer = new Map<string, number>();
-  for (const candidate of ranked) {
-    const employer = employerKey(candidate);
-    if ((perEmployer.get(employer) ?? 0) >= 2) continue;
-    selected.push(candidate);
-    selectedIds.add(candidate.providerRecordId);
-    perEmployer.set(employer, (perEmployer.get(employer) ?? 0) + 1);
-    if (selected.length === maximum) return selected;
-  }
-  for (const candidate of ranked) {
-    if (selectedIds.has(candidate.providerRecordId)) continue;
-    selected.push(candidate);
-    if (selected.length === maximum) break;
-  }
+  const appendInterleaved = (respectEmployerCap: boolean) => {
+    let advanced = true;
+    while (selected.length < maximum && advanced) {
+      advanced = false;
+      for (const family of families) {
+        const queue = queues.get(family)!;
+        const index = queue.findIndex((candidate) => {
+          if (selectedIds.has(candidate.providerRecordId)) return false;
+          return (
+            !respectEmployerCap ||
+            (perEmployer.get(employerKey(candidate)) ?? 0) < 2
+          );
+        });
+        if (index < 0) continue;
+        const [candidate] = queue.splice(index, 1);
+        if (!candidate) continue;
+        const employer = employerKey(candidate);
+        selected.push(candidate);
+        selectedIds.add(candidate.providerRecordId);
+        perEmployer.set(employer, (perEmployer.get(employer) ?? 0) + 1);
+        advanced = true;
+        if (selected.length === maximum) break;
+      }
+    }
+  };
+  // This is ordering, not a family quota: empty families are skipped and any
+  // suitable remaining supply fills the run after each deterministic round.
+  appendInterleaved(true);
+  appendInterleaved(false);
   return selected;
 }
 
@@ -424,6 +521,7 @@ export class ScopedApolloProvider implements ScopedDiscoveryProvider {
     const orderedCandidates = diversifiedCandidates(
       candidates,
       candidates.length,
+      input.scope.bucket,
     );
     diagnostics.rawCandidates = searchedCandidates;
     diagnostics.normalizedCandidates = searchedCandidates - (rejectionReasons["provider-record-invalid"] ?? 0);
