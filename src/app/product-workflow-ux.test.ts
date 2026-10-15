@@ -64,7 +64,8 @@ describe("v1 daily workflow UX", () => {
     expect(review).toContain('name="subject"');
     expect(review).toContain('name="body"');
     expect(review).toContain("Send this message?");
-    expect(review).toContain("action={sendDraft}");
+    expect(review).toContain("sendAction = sendDraft");
+    expect(review).toContain("action={sendAction}");
     expect(review).toContain('value="send-draft-now"');
     expect(projection).toContain(
       'state!=="ready"?review.operation?.snapshot:null',
