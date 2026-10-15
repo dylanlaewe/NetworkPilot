@@ -11,6 +11,11 @@ const workspace = () =>
     join(process.cwd(), "src/app/drafts/drafts-workspace.tsx"),
     "utf8",
   );
+const workspaceStyles = () =>
+  readFileSync(
+    join(process.cwd(), "src/app/drafts/drafts-workspace.module.css"),
+    "utf8",
+  );
 
 describe("Drafts preferred CRM workflow", () => {
   it("renders the real primary Create drafts form with visible scope and quantity selections", () => {
@@ -170,6 +175,10 @@ describe("Drafts preferred CRM workflow", () => {
     expect(html).toContain("Send");
     expect(html).toContain('aria-keyshortcuts="X"');
     expect(html).toContain('aria-keyshortcuts="R"');
+    expect(html).toContain('<span>Skip</span><kbd aria-hidden="true">X</kbd>');
+    expect(workspaceStyles()).toContain(
+      ".dock .secondaryActions button>span{color:inherit;font:inherit}",
+    );
     expect(html).not.toContain("Context and evidence");
   });
 
