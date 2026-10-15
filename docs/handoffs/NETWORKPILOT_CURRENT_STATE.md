@@ -1,6 +1,6 @@
 # NetworkPilot current engineering state
 
-Updated 2026-10-15 after candidate-supply, contact-lifecycle, and CRM-quality corrections were deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
+Updated 2026-10-15 after targeting-breadth and component-craft corrections were deployed. This document is the canonical starting point for a fresh engineering conversation; verify current Git and runtime state before acting.
 
 ## Product
 
@@ -10,11 +10,23 @@ The five relationship buckets are Recruiters, Peers & practitioners, Managers & 
 
 ## Current Git and runtime state
 
-- Activated runtime build: `80e6d248d331c94b506282335b3ccf54e3b1b9f5` (`Keep draft dock labels visible`). The handoff update is a later documentation-only commit.
+- Activated runtime build: `5b16ae8758b1077757aeb56445c1f28ccbb61f4f` (`Align send confirmation contract test`). The handoff update is a later documentation-only commit.
 - `v1.2.0` remains at `01586350c87bb49dc2b056d8fd7e55831a4f4663`; do not move existing tags.
 - Five-bucket production integration, explicit migration boundary, datastore/capability preflight, production scoped Apollo adapter, audited company trust, and bounded security exception are merged.
 - `NETWORKPILOT_FIVE_BUCKET_ENABLED` still defaults fail-closed but is deliberately configured `true` in the local production environment.
-- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 38988 (parent `npm run app:start` PID 38972), started 2026-10-15 at 15:01:18 America/New_York.
+- The validated Next.js 16.3.8 production build is listening on port 3000 as PID 17617 (parent `npm run app:start` PID 17601), started 2026-10-15 at 17:49:08 America/New_York.
+
+## Targeting-breadth and component-craft deployment
+
+- Main fast-forwarded cleanly from `269daca10d3a65582770f55fdf2eb6571313370a` through the reviewed feature history to deployed build `5b16ae8758b1077757aeb56445c1f28ccbb61f4f`. The prior runtime build `80e6d248d331c94b506282335b3ccf54e3b1b9f5` remains the code/build rollback boundary.
+- The actual Drafts application component was browser-tested against isolated synthetic state and a mocked send action at desktop and narrow/mobile widths. Recipient, subject, body, attachment, long owned scrolling, focus trap/return, Escape, Cancel, pending, error, uncertainty, changed-selection safety, and duplicate suppression all passed. Cancel/Escape produced zero mocked work; explicit final confirmation produced exactly one mocked send. Follow-up SHA `5b16ae8758b1077757aeb56445c1f28ccbb61f4f` received independent PASS review.
+- Integrated validation passed 107 test files and 1,267 tests, strict typecheck, zero-warning lint, two production builds, the security gate with only exact approved dev-only advisory `GHSA-vfj7-8cjw-p6xm`, zero production audit findings, remote-font guard, Gmail-send guard, implicit-migration guard, and `git diff --check`.
+- Production acceptance passed at 1440x900, 1280x800, 390x844, and 360x800 with no horizontal overflow, internal overlap, clipped primary action, or browser warning/error. Candidates preserves retained `Junior Data Analyst` title evidence, selected Peers/filter state, a readable desktop filter panel, and clear Find people/Open draft states. Drafts preserves 11 current plus 3 Legacy drafts, visible General Resume attachment/default context, editable message dominance, and accessible action rows. Settings, Resume Library, and 56 existing relationship-history records remain intact.
+- The running build includes diversified peer selection across analysis, product, engineering, and implementation/business families; CEO-only, President-only, and combined CEO/President query terms remain distinct, with regional/divisional and vice-president collisions rejected locally before enrichment. `candidatePresentationTitle` shows retained provider evidence and falls back to `Title unavailable`; no live sourcing/yield claim was made.
+- This was a code/UI-only deployment. No migration ran. Schema remains `0022_company_trust.sql`; limits remain 50 credits per local day and 5 per run; five-bucket mode remains enabled; and active `General Resume` `resume-25b41a9d-f581-4e1a-bd35-a9bafdf54bb3` remains the recruiter default.
+- Pre/post canonical database SHA-256 remained `f351b084a02e851b4225de571601efdfd151cb1a7435ccdbb403a30f9d911aa5`; WAL remained empty at `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`; SHM remained `fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb`; and logical SHA3 remained `990f7c904727927256ba9b5e530ab6de9a0d7c8c28741678943c356a`. Integrity is `ok`; all recorded provider, refresh, Gmail, outreach, trust, candidate, and configuration counters were unchanged.
+- The two confirmed Gmail-send operations at 2026-10-15 19:50:46Z and 19:50:56Z remain intact and are excluded from the active candidate pool. A pre-existing history gap remains: neither operation has a corresponding `manual_outreach_records` row, so the Sent relationship workspace still shows 56 records and does not surface those two confirmations. This deployment did not backfill or rewrite production history.
+- Deployment and acceptance made zero Apollo calls, zero Apollo usage checks, zero Gmail calls or drafts, and zero email sends. The Impeccable surface sidecar remains intentionally unrefreshed relative to the final send-action test seam; do not start a tooling/design task solely to refresh it.
 
 ## Product-experience deployment
 
