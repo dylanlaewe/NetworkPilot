@@ -154,8 +154,9 @@ describe("Candidates pool states", () => {
       ".expandedSourcingEmpty { min-height: 0; place-content: start center; padding-top: 12px; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }",
     );
     expect(css).toContain(
-      ".sourcingDisclosure :global(.refresh-candidates > div) { position: static; inset: auto; z-index: auto; width: 100%;",
+      ".sourcingDisclosure :global(.refresh-candidates > div) { container-type:inline-size; position: static;",
     );
+    expect(css).toContain("inset: auto; z-index: auto; width: 100%;");
     expect(workspace).toContain(
       'showScopedConfirmation ? styles.expandedSourcingEmpty : ""',
     );

@@ -25,14 +25,20 @@ describe("v1 daily workflow UX", () => {
   });
   it("keeps dialogs keyboard-contained and respects reduced motion", () => {
     const workspace = source("src/app/drafts/drafts-workspace.tsx"),
-      css = source("src/app/drafts/drafts-workspace.module.css");
-    expect(workspace).toContain('input:not([type="hidden"]):not(:disabled)');
-    expect(workspace).toContain('event.key !== "Tab"');
-    expect(workspace).toContain("returnFocus");
+      dialogBehavior = source("src/app/use-transactional-surface.ts"),
+      css = source("src/app/drafts/drafts-workspace.module.css"),
+      sharedCss = source("src/app/transactional-surface.module.css");
+    expect(dialogBehavior).toContain(
+      'input:not([type="hidden"]):not(:disabled)',
+    );
+    expect(dialogBehavior).toContain('event.key !== "Tab"');
+    expect(dialogBehavior).toContain("returnFocus");
+    expect(workspace).toContain("useDismissibleLayer<HTMLDivElement>");
     expect(workspace).toContain("closeMobileReview");
     expect(workspace).toContain('document.getElementById(`queue-${candidateId}`)?.focus()');
     expect(css).not.toContain("@keyframes");
     expect(css).toContain("prefers-reduced-motion:reduce");
+    expect(sharedCss).toContain("prefers-reduced-motion: reduce");
   });
   it("keeps the four primary destinations and a secondary system destination", () => {
     const nav = source("src/app/network-command-shell.tsx");
