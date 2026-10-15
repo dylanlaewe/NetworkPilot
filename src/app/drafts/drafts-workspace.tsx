@@ -281,7 +281,7 @@ export function DraftCreationForm({
         <input type="hidden" name="earlyCareerOnly" value="true" />
       ) : null}
       <div className={styles.creationIntro}>
-        <strong>Create drafts</strong>
+        <strong>From existing candidates</strong>
         <span>
           Uses ready candidates already in NetworkPilot. No Apollo or Gmail call.
         </span>
@@ -415,6 +415,9 @@ export function DraftsWorkspace({
     "5" | "10" | "custom"
   >("5");
   const [customCreationCount, setCustomCreationCount] = useState(5);
+  const [creationOpen, setCreationOpen] = useState(
+    initialAddOpen || viewDrafts.length === 0,
+  );
   const visibleAdditionState = normalizedDraftAdditionState(additionState);
   const queueRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
@@ -708,60 +711,68 @@ export function DraftsWorkspace({
                 : ""}
             </span>
           </div>
-          <div className={styles.counts} aria-label="Draft state counts">
-            {queueGroups.map((group) => (
-              <span key={group.key}>
-                {group.label}{" "}
-                <b>
-                  {group.states.reduce((sum, state) => sum + counts[state], 0)}
-                </b>
-              </span>
-            ))}
-          </div>
         </header>
-        <section className={styles.creationRegion} aria-label="Create drafts">
-          <DraftCreationForm
-            action={additionAction}
-            requestId={addRequestId}
-            bucketEnabled={Boolean(bucketNavigation)}
-            bucket={creationBucket}
-            bucketLocked={Boolean(
-              bucketNavigation &&
-                bucketSelection !== "all" &&
-                bucketSelection !== "legacy",
-            )}
-            earlyCareerOnly={creationEarlyCareer}
-            capacity={creationCapacity}
-            countMode={creationCountMode}
-            customCount={customCreationCount}
-            pending={additionPending}
-            submitRef={createDraftsRef}
-            onBucketChange={setCreationBucket}
-            onCountModeChange={setCreationCountMode}
-            onCustomCountChange={setCustomCreationCount}
-          />
-          {visibleAdditionState.status !== "idle" ? (
-            <div
-              className={styles.additionResult}
-              data-status={visibleAdditionState.status}
-              role={visibleAdditionState.status === "error" ? "alert" : "status"}
-            >
-              <strong>{creationLanguage(visibleAdditionState.message)}</strong>
-              {visibleAdditionState.reasons.length ? (
-                <ul>
-                  {visibleAdditionState.reasons.map((reason) => (
-                    <li key={reason}>{creationLanguage(reason)}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {visibleAdditionState.recovery ? (
-                <Link href={visibleAdditionState.recovery.href}>
-                  {visibleAdditionState.recovery.label}
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
+        <details
+          className={styles.creationRegion}
+          aria-label="Create drafts"
+          open={creationOpen}
+          onToggle={(event) => setCreationOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <span>
+              <strong>Create drafts</strong>
+              <small>
+                {creationCapacity > 0
+                  ? `${creationCapacity} ready in this group`
+                  : "No ready candidates in this group"}
+              </small>
+            </span>
+            <span>{creationOpen ? "Hide" : "Choose group and quantity"}</span>
+          </summary>
+          <div className={styles.creationPanel}>
+            <DraftCreationForm
+              action={additionAction}
+              requestId={addRequestId}
+              bucketEnabled={Boolean(bucketNavigation)}
+              bucket={creationBucket}
+              bucketLocked={Boolean(
+                bucketNavigation &&
+                  bucketSelection !== "all" &&
+                  bucketSelection !== "legacy",
+              )}
+              earlyCareerOnly={creationEarlyCareer}
+              capacity={creationCapacity}
+              countMode={creationCountMode}
+              customCount={customCreationCount}
+              pending={additionPending}
+              submitRef={createDraftsRef}
+              onBucketChange={setCreationBucket}
+              onCountModeChange={setCreationCountMode}
+              onCustomCountChange={setCustomCreationCount}
+            />
+            {visibleAdditionState.status !== "idle" ? (
+              <div
+                className={styles.additionResult}
+                data-status={visibleAdditionState.status}
+                role={visibleAdditionState.status === "error" ? "alert" : "status"}
+              >
+                <strong>{creationLanguage(visibleAdditionState.message)}</strong>
+                {visibleAdditionState.reasons.length ? (
+                  <ul>
+                    {visibleAdditionState.reasons.map((reason) => (
+                      <li key={reason}>{creationLanguage(reason)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {visibleAdditionState.recovery ? (
+                  <Link href={visibleAdditionState.recovery.href}>
+                    {visibleAdditionState.recovery.label}
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </details>
         {feedback ? (
           <p
             className={styles.feedback}
@@ -802,7 +813,7 @@ export function DraftsWorkspace({
               tabIndex={-1}
             >
               <div className={styles.planeLabel}>
-                <span>Queue</span>
+                <span>Messages</span>
                 <kbd>J / K</kbd>
               </div>
               {queueGroups.map((queueGroup) => {
@@ -864,7 +875,7 @@ export function DraftsWorkspace({
                     className={styles.mobileBack}
                     onClick={closeMobileReview}
                   >
-                    ← Queue{" "}
+                    ← Drafts{" "}
                     <span>
                       {selectedIndex + 1} of {viewDrafts.length}
                     </span>
@@ -972,27 +983,6 @@ export function DraftsWorkspace({
                         </small>
                       </label>
                     </header>
-                    {bucketNavigation ? (
-                      <p
-                        className={styles.bucketStamp}
-                        data-review-needed={
-                          selected.bucketReviewState === "review-required"
-                            ? "true"
-                            : undefined
-                        }
-                      >
-                        <span>Recipient bucket</span>
-                        <strong>{selected.bucketLabel}</strong>
-                        <small>
-                          {selected.bucketReviewState === "review-required"
-                            ? "Review needed"
-                            : selected.bucketReviewState ===
-                                "legacy-unclassified"
-                              ? "Historical / unclassified"
-                              : "Evidence reviewed"}
-                        </small>
-                      </p>
-                    ) : null}
                     {selected.state !== "ready" ? (
                       <div className={styles.sealed}>
                         <span>Saved message</span>
@@ -1090,7 +1080,7 @@ export function DraftsWorkspace({
                       />
                     </label>
                     <details className={styles.mobileEvidence}>
-                      <summary>Context and evidence</summary>
+                      <summary>Details</summary>
                       <Inspector
                         draft={selected}
                         showBucketDetails={Boolean(bucketNavigation)}

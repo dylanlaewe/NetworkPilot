@@ -54,7 +54,8 @@ describe("Network Command experience reset", () => {
     ])
       expect(workspace).toContain(text);
     expect(workspace).toContain("window.history.replaceState");
-    expect(workspace).toContain("data-density={density}");
+    expect(workspace).toContain("styles.controlBar");
+    expect(workspace).not.toContain("data-density={density}");
     expect(workspace).toContain("evidenceGroups");
     expect(workspace.indexOf("CandidateDraftAction candidate={selected}")).toBeLessThan(
       workspace.indexOf("evidenceGroups"),

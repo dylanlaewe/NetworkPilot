@@ -282,6 +282,48 @@ describe("Candidates pool states", () => {
     expect(html).not.toContain("No candidates are ready for drafts");
   });
 
+  it("keeps long person, role, company, and status copy in the rendered list", () => {
+    const html = render(
+      [
+        candidate("long-peer", {
+          recipient: "Alexandria Montgomery-Worthington",
+          title:
+            "Junior Data Analyst, Population Health Research and Clinical Outcomes",
+          company:
+            "American Association of Community Health Research Professionals",
+          track: "professional",
+          recipientBucket: {
+            bucket: "peers",
+            classifierVersion: "recipient-bucket-v1",
+            confidence: "high",
+            reviewState: "accepted",
+            explanationCodes: [],
+            evidence: [],
+            evidenceReferences: [],
+            earlyCareer: true,
+          },
+          bucketLabel: "Peers & practitioners",
+        }),
+      ],
+      1,
+      0,
+      "all",
+    );
+
+    expect(html).toContain("Alexandria Montgomery-Worthington");
+    expect(html).toContain(
+      "Junior Data Analyst, Population Health Research and Clinical Outcomes",
+    );
+    expect(html).toContain(
+      "American Association of Community Health Research Professionals",
+    );
+    expect(html).toContain("Peers &amp; practitioners");
+    expect(html).toContain("Available");
+    expect(html).toContain("Candidate");
+    expect(html).toContain("Status");
+    expect(html).not.toContain("Why now");
+  });
+
   it("keeps Legacy explicit while offering it from the first-run state", () => {
     const legacy = candidate("legacy", {
       recipientBucket: null,

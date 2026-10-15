@@ -28,7 +28,6 @@ export type CandidateWorkspaceRow = ReserveCandidate & {
   draftRequestId?: string;
 };
 
-type Density = "comfortable" | "compact";
 type Filters = {
   track: string;
   role: string;
@@ -342,7 +341,6 @@ export function CandidatesWorkspace({
       initialSelectedId ?? candidates[0]?.id ?? "",
     ),
     [mobileDetail, setMobileDetail] = useState(false),
-    [density, setDensity] = useState<Density>("comfortable"),
     [filterOpen, setFilterOpen] = useState(initialFilterOpen),
     [sourcingBucket, setSourcingBucket] = useState<RecipientBucket>(
       bucketNavigation && bucketNavigation.selected !== "all" && bucketNavigation.selected !== "legacy"
@@ -604,8 +602,7 @@ export function CandidatesWorkspace({
     </button>
   );
   return (
-    <div className={styles.candidates} data-density={density}>
-      {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}
+    <div className={styles.candidates}>
       <header className={styles.header}>
         <div>
           <h1>Candidates</h1>
@@ -618,7 +615,11 @@ export function CandidatesWorkspace({
             ) : null}
           </p>
         </div>
-        {!isFirstRun ? (
+        {!isFirstRun ? findPeopleControl : null}
+      </header>
+      {bucketNavigation ? <div className={styles.bucketNavigation}><RecipientBucketNavigation data={bucketNavigation} selected={bucketSelection} earlyCareerOnly={earlyCareerOnly} onSelect={selectBucket} /></div> : null}
+      {!isFirstRun ? (
+        <div className={styles.controlBar}>
           <div className={styles.tools}>
             <label className={styles.search}>
               <span className={styles.srOnly}>Search candidates</span>
@@ -636,38 +637,20 @@ export function CandidatesWorkspace({
             >
               Filter{active.length ? ` (${active.length})` : ""}
             </button>
-            <div className={styles.density} aria-label="Candidate density">
-              <button
-                type="button"
-                aria-pressed={density === "comfortable"}
-                onClick={() => setDensity("comfortable")}
-              >
-                Comfortable
-              </button>
-              <button
-                type="button"
-                aria-pressed={density === "compact"}
-                onClick={() => setDensity("compact")}
-              >
-                Compact
-              </button>
-            </div>
-            {findPeopleControl}
           </div>
-        ) : null}
-        {!isFirstRun ? <div className={styles.summary}>
+          <div className={styles.summary}>
           <span>
             {active.length
               ? active.join(" · ")
-              : "Available candidates across all tracks, lanes, and regions"}
+              : "Showing all available people in this recipient view"}
           </span>
           {active.length || search ? (
             <button type="button" onClick={clear}>
               Clear
             </button>
           ) : null}
-        </div> : null}
-        {filterOpen && !isFirstRun ? (
+          </div>
+        {filterOpen ? (
           <div
             className={styles.sheet}
             role="dialog"
@@ -760,7 +743,8 @@ export function CandidatesWorkspace({
             </button>
           </div>
         ) : null}
-      </header>
+        </div>
+      ) : null}
       {refreshResult ? (
         <div className={styles.result} role="status">
           <p>{refreshResult}</p>
@@ -870,9 +854,8 @@ export function CandidatesWorkspace({
             aria-hidden={mobileDetail ? "true" : undefined}
           >
             <div className={styles.columns}>
-              <span>Person and current work</span>
-              <span>Why now</span>
-              <span>Context</span>
+              <span>Candidate</span>
+              <span>Status</span>
             </div>
             {rows.map((candidate) => (
               <button
@@ -905,19 +888,12 @@ export function CandidatesWorkspace({
                 <span className={styles.profile}>
                   <span className={styles.identity}>
                     <strong>{candidate.recipient}</strong>
-                    <small>
-                      {candidate.track ?? "professional"} ·{" "}
-                      {candidate.bucketLabel ?? "Legacy / unclassified"}
-                    </small>
-                  </span>
-                  <span className={styles.current}>
-                    <strong>{candidate.title}</strong>
+                    <small>{candidate.title}</small>
                     <small>{candidate.company}</small>
                   </span>
                 </span>
-                <span className={styles.cue}>{relevance(candidate)}</span>
                 <span className={styles.meta}>
-                  <span>{roleLabel(candidate.functionName)}</span>
+                  <span>{candidate.bucketLabel ?? "Legacy / unclassified"}</span>
                   <em
                     data-suppressed={
                       candidate.stage === "suppressed" ? "true" : undefined
